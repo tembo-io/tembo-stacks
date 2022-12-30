@@ -1,7 +1,8 @@
-use kube::api::{DeleteParams, ListParams, ObjectList, Patch, PatchParams};
-use kube::{Api, CustomResource};
+use kube::api::{DeleteParams, ListParams, Patch, PatchParams};
+use kube::{Api, Client, CustomResource};
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
+use std::fmt;
 use thiserror::Error;
 
 #[derive(Error, Debug)]
@@ -34,19 +35,23 @@ pub struct PostgresClusterSpec {}
 pub struct CoreDBDeploymentService {}
 
 impl CoreDBDeploymentService {
-    pub async fn get_all(pg_cluster_api: Api<PostgresCluster>) -> Vec<ObjectList<PostgresCluster>> {
-        let mut pg_cluster_vec: Vec<ObjectList<PostgresCluster>> = Vec::new();
-
-        while let Ok(pg) = pg_cluster_api.list(&ListParams::default()).await {
-            pg_cluster_vec.push(pg);
-        }
-        pg_cluster_vec
+    pub async fn get_all(client: Client) -> Vec<PostgresCluster> {
+        let pg_cluster_api: Api<PostgresCluster> = Api::default_namespaced(client);
+        let mut pg_cluster_vec: Vec<PostgresCluster> = Vec::new();
+        let pg_list = pg_cluster_api
+            .list(&ListParams::default())
+            .await
+            .expect("could not get PostgresCluster");
+        pg_list.items
     }
 
+    // TODO(ianstanton) pull name from deployment JSON
     pub async fn create(
-        pg_cluster_api: Api<PostgresCluster>,
+        client: Client,
+        namespace: String,
         deployment: serde_json::Value,
     ) -> Result<(), Error> {
+        let pg_cluster_api: Api<PostgresCluster> = Api::default_namespaced(client);
         let params = PatchParams::apply("deployment-service").force();
         let _o = pg_cluster_api
             .patch("dummy", &params, &Patch::Apply(&deployment))
@@ -55,10 +60,13 @@ impl CoreDBDeploymentService {
         Ok(())
     }
 
+    // TODO(ianstanton) pull name from deployment JSON
     pub async fn delete(
-        pg_cluster_api: Api<PostgresCluster>,
+        client: Client,
+        namespace: String,
         deployment: serde_json::Value,
     ) -> Result<(), Error> {
+        let pg_cluster_api: Api<PostgresCluster> = Api::default_namespaced(client);
         let params = DeleteParams::default();
         let _o = pg_cluster_api
             .delete("dummy", &params)
