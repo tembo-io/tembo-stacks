@@ -46,7 +46,7 @@ impl CoreDBDeploymentService {
     }
 
     // TODO(ianstanton) pull name from deployment JSON
-    pub async fn create(
+    pub async fn create_or_update(
         client: Client,
         namespace: String,
         deployment: serde_json::Value,

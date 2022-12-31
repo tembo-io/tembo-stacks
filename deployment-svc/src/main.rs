@@ -7,7 +7,8 @@ use std::{thread, time};
 #[tokio::main]
 async fn run() -> Result<(), Box<dyn std::error::Error>> {
     // Poll queue for new events  (format?)
-    // create pg_clusters api in each function, namespace specific
+    // Based on action in message, create, update, delete PostgresCluster
+    // When do we need get_all()?
 
     // Infer the runtime environment and try to create a Kubernetes Client
     let client = Client::try_default().await?;
@@ -24,7 +25,7 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
     }
 
     // // create PostgresCluster
-    // CoreDBDeploymentService::create(pg_clusters.clone(), deployment.clone())
+    // CoreDBDeploymentService::create_or_update(pg_clusters.clone(), deployment.clone())
     //     .await
     //     .expect("error creating PostgresCluster");
 
