@@ -1,6 +1,8 @@
+mod postgresclusters;
+
 use kube::api::{DeleteParams, ListParams, Patch, PatchParams};
 use kube::{Api, Client, CustomResource};
-use schemars::JsonSchema;
+use postgresclusters::PostgresCluster;
 use serde::{Deserialize, Serialize};
 use std::fmt;
 use thiserror::Error;
@@ -21,16 +23,6 @@ impl Error {
         format!("{self:?}").to_lowercase()
     }
 }
-
-// TODO(ianstanton) This may not be necessary, but for now we need to define Api type PostgresCluster somewhere
-#[derive(CustomResource, Clone, Debug, Deserialize, Serialize, JsonSchema)]
-#[kube(
-    group = "postgres-operator.crunchydata.com",
-    version = "v1beta1",
-    kind = "PostgresCluster",
-    namespaced
-)]
-pub struct PostgresClusterSpec {}
 
 pub struct CoreDBDeploymentService {}
 

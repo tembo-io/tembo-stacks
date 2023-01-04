@@ -1,11 +1,15 @@
-use deployment_svc::{CoreDBDeploymentService, PostgresCluster};
-use kube::{Api, Client};
+mod postgresclusters;
+
+use deployment_svc::CoreDBDeploymentService;
+use kube::{Api, Client, Resource, ResourceExt};
 use log::info;
+use postgresclusters::PostgresCluster;
 use std::fmt::Debug;
 use std::{thread, time};
 
 #[tokio::main]
 async fn run() -> Result<(), Box<dyn std::error::Error>> {
+    // Connect to queue
     // Poll queue for new events  (format?)
     // Based on action in message, create, update, delete PostgresCluster
     // When do we need get_all()?
@@ -17,7 +21,7 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
         let vec = CoreDBDeploymentService::get_all(client.clone());
 
         for pg in vec.await.iter() {
-            println!("found PostgresCluster");
+            println!("found PostgresCluster {}", pg.name_any());
         }
 
         // sleep for 10s
