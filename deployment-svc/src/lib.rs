@@ -1,10 +1,8 @@
 mod postgresclusters;
 
 use kube::api::{DeleteParams, ListParams, Patch, PatchParams};
-use kube::{Api, Client, CustomResource};
+use kube::{Api, Client};
 use postgresclusters::PostgresCluster;
-use serde::{Deserialize, Serialize};
-use std::fmt;
 use thiserror::Error;
 
 #[derive(Error, Debug)]
@@ -29,7 +27,6 @@ pub struct CoreDBDeploymentService {}
 impl CoreDBDeploymentService {
     pub async fn get_all(client: Client) -> Vec<PostgresCluster> {
         let pg_cluster_api: Api<PostgresCluster> = Api::default_namespaced(client);
-        let mut pg_cluster_vec: Vec<PostgresCluster> = Vec::new();
         let pg_list = pg_cluster_api
             .list(&ListParams::default())
             .await
