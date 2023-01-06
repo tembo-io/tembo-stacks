@@ -40,10 +40,10 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
             Some("create") | Some("update") => {
                 let spec = read_msg.message["spec"].clone();
 
-                // create PostgresCluster
+                // create or update PostgresCluster
                 create_or_update(client.clone(), "default".to_owned(), spec)
                     .await
-                    .expect("error creating PostgresCluster");
+                    .expect("error creating or updating PostgresCluster");
             }
             Some("delete") => {
                 let name: String =
@@ -58,15 +58,21 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
             None | _ => println!("action was not in expected format"),
         }
 
+        // TODO(ianstanton) This is here as an example for now. We want to use
+        //  this to ensure a PostgresCluster exists before we attempt to delete it.
         // Get all existing PostgresClusters
-        let vec = get_all(client.clone());
+        let vec = get_all(client.clone(), "default".to_owned());
         for pg in vec.await.iter() {
             println!("found PostgresCluster {}", pg.name_any());
         }
         thread::sleep(time::Duration::from_secs(1));
 
         // Delete message from queue
-        let deleted = queue.delete(&read_msg.msg_id).await;
+        let deleted = queue
+            .delete(&read_msg.msg_id)
+            .await
+            .expect("error deleting message from queue");
+        // TODO(ianstanton) Improve logging everywhere
         println!("deleted: {:?}", deleted);
     }
 }
