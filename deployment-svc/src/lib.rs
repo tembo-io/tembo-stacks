@@ -42,6 +42,7 @@ impl CoreDBDeploymentService {
         let pg_cluster_api: Api<PostgresCluster> = Api::namespaced(client, &namespace);
         let params = PatchParams::apply("deployment-service").force();
         let name: String = serde_json::from_value(deployment["metadata"]["name"].clone()).unwrap();
+        println!("\nCreating or updating PostgresCluster: {}", name);
         let _o = pg_cluster_api
             .patch(
                 &name,
@@ -56,6 +57,7 @@ impl CoreDBDeploymentService {
     pub async fn delete(client: Client, namespace: String, name: String) -> Result<(), Error> {
         let pg_cluster_api: Api<PostgresCluster> = Api::namespaced(client, &namespace);
         let params = DeleteParams::default();
+        println!("\nDeleting PostgresCluster: {}", name);
         let _o = pg_cluster_api
             .delete(&name, &params)
             .await

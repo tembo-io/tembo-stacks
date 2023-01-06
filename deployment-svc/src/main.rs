@@ -56,13 +56,13 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
                 .expect("error creating PostgresCluster");
             }
             Some("delete") => {
-                let name = read_msg.message["spec"]["metadata"]["name"].clone();
+                let name: String = serde_json::from_value(read_msg.message["spec"]["metadata"]["name"].clone()).unwrap();
 
                 // delete PostgresCluster
                 CoreDBDeploymentService::delete(
                     client.clone(),
                     "default".to_owned(),
-                    name.to_string(),
+                    name,
                 )
                 .await
                 .expect("error deleting PostgresCluster");
