@@ -2,7 +2,7 @@ extern crate core;
 
 mod postgresclusters;
 
-use deployment_svc::CoreDBDeploymentService;
+use deployment_svc::{create_or_update, delete, get_all};
 use kube::{Client, ResourceExt};
 use log::info;
 use pgmq::{PGMQueue, PGMQueueConfig};
@@ -45,13 +45,9 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
                 let spec = read_msg.message["spec"].clone();
 
                 // create PostgresCluster
-                CoreDBDeploymentService::create_or_update(
-                    client.clone(),
-                    "default".to_owned(),
-                    spec,
-                )
-                .await
-                .expect("error creating PostgresCluster");
+                create_or_update(client.clone(), "default".to_owned(), spec)
+                    .await
+                    .expect("error creating PostgresCluster");
             }
             Some("delete") => {
                 let name: String =
@@ -59,7 +55,7 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
                         .unwrap();
 
                 // delete PostgresCluster
-                CoreDBDeploymentService::delete(client.clone(), "default".to_owned(), name)
+                delete(client.clone(), "default".to_owned(), name)
                     .await
                     .expect("error deleting PostgresCluster");
             }
@@ -67,7 +63,7 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
         }
 
         // Get all existing PostgresClusters
-        let vec = CoreDBDeploymentService::get_all(client.clone());
+        let vec = get_all(client.clone());
         for pg in vec.await.iter() {
             println!("found PostgresCluster {}", pg.name_any());
         }
