@@ -5,11 +5,9 @@ mod postgresclusters;
 use deployment_svc::CoreDBDeploymentService;
 use kube::{Client, ResourceExt};
 use log::info;
-use pgmq::{Message, PGMQueue, PGMQueueConfig};
+use pgmq::{PGMQueue, PGMQueueConfig};
 use std::env;
-use std::future::Future;
 use std::{thread, time};
-use tokio_postgres::NoTls;
 
 #[tokio::main]
 async fn run() -> Result<(), Box<dyn std::error::Error>> {
@@ -31,9 +29,9 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
     loop {
         // Read from queue (check for new message)
         let read_msg = match queue.read().await {
-            Some(Message) => {
-                print!("read_msg: {:?}", Message);
-                Message
+            Some(message) => {
+                print!("read_msg: {:?}", message);
+                message
             }
             None => {
                 thread::sleep(time::Duration::from_secs(1));
@@ -56,16 +54,14 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
                 .expect("error creating PostgresCluster");
             }
             Some("delete") => {
-                let name: String = serde_json::from_value(read_msg.message["spec"]["metadata"]["name"].clone()).unwrap();
+                let name: String =
+                    serde_json::from_value(read_msg.message["spec"]["metadata"]["name"].clone())
+                        .unwrap();
 
                 // delete PostgresCluster
-                CoreDBDeploymentService::delete(
-                    client.clone(),
-                    "default".to_owned(),
-                    name,
-                )
-                .await
-                .expect("error deleting PostgresCluster");
+                CoreDBDeploymentService::delete(client.clone(), "default".to_owned(), name)
+                    .await
+                    .expect("error deleting PostgresCluster");
             }
             None | _ => println!("action was not in expected format"),
         }
@@ -81,8 +77,6 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
         let deleted = queue.delete(&read_msg.msg_id).await;
         println!("deleted: {:?}", deleted);
     }
-
-    Ok(())
 }
 
 fn main() {

@@ -44,11 +44,7 @@ impl CoreDBDeploymentService {
         let name: String = serde_json::from_value(deployment["metadata"]["name"].clone()).unwrap();
         println!("\nCreating or updating PostgresCluster: {}", name);
         let _o = pg_cluster_api
-            .patch(
-                &name,
-                &params,
-                &Patch::Apply(&deployment),
-            )
+            .patch(&name, &params, &Patch::Apply(&deployment))
             .await
             .map_err(Error::KubeError)?;
         Ok(())
