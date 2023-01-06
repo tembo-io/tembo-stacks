@@ -1,8 +1,8 @@
-mod postgresclusters;
+mod pg_cluster_crd;
 
 use kube::api::{DeleteParams, ListParams, Patch, PatchParams};
 use kube::{Api, Client};
-use postgresclusters::PostgresCluster;
+use pg_cluster_crd::PostgresCluster;
 use thiserror::Error;
 
 #[derive(Error, Debug)]

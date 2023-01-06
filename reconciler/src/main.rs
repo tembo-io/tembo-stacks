@@ -1,11 +1,7 @@
-extern crate core;
-
-mod postgresclusters;
-
-use deployment_svc::{create_or_update, delete, get_all};
 use kube::{Client, ResourceExt};
 use log::info;
 use pgmq::{PGMQueue, PGMQueueConfig};
+use reconciler::{create_or_update, delete, get_all};
 use std::env;
 use std::{thread, time};
 
