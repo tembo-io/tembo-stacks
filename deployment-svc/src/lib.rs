@@ -34,31 +34,30 @@ impl CoreDBDeploymentService {
         pg_list.items
     }
 
-    // TODO(ianstanton) pull name from deployment JSON
     pub async fn create_or_update(
         client: Client,
         namespace: String,
         deployment: serde_json::Value,
     ) -> Result<(), Error> {
-        let pg_cluster_api: Api<PostgresCluster> = Api::default_namespaced(client);
+        let pg_cluster_api: Api<PostgresCluster> = Api::namespaced(client, &namespace);
         let params = PatchParams::apply("deployment-service").force();
+        let name: String = serde_json::from_value(deployment["metadata"]["name"].clone()).unwrap();
         let _o = pg_cluster_api
-            .patch("dummy", &params, &Patch::Apply(&deployment))
+            .patch(
+                &name,
+                &params,
+                &Patch::Apply(&deployment),
+            )
             .await
             .map_err(Error::KubeError)?;
         Ok(())
     }
 
-    // TODO(ianstanton) pull name from deployment JSON
-    pub async fn delete(
-        client: Client,
-        namespace: String,
-        deployment: serde_json::Value,
-    ) -> Result<(), Error> {
-        let pg_cluster_api: Api<PostgresCluster> = Api::default_namespaced(client);
+    pub async fn delete(client: Client, namespace: String, name: String) -> Result<(), Error> {
+        let pg_cluster_api: Api<PostgresCluster> = Api::namespaced(client, &namespace);
         let params = DeleteParams::default();
         let _o = pg_cluster_api
-            .delete("dummy", &params)
+            .delete(&name, &params)
             .await
             .map_err(Error::KubeError);
         Ok(())
