@@ -19,6 +19,7 @@ pub async fn generate_spec(body: Value) -> Value {
     let image: String = serde_json::from_value(body["postgres_image"].clone()).unwrap();
     let cpu: String = serde_json::from_value(body["cpu"].clone()).unwrap();
     let memory: String = serde_json::from_value(body["memory"].clone()).unwrap();
+    let storage: String = serde_json::from_value(body["storage"].clone()).unwrap();
 
     let spec = serde_json::json!({
         "apiVersion": "postgres-operator.crunchydata.com/v1beta1",
@@ -34,7 +35,7 @@ pub async fn generate_spec(body: Value) -> Value {
                     "name": "instance1",
                     "dataVolumeClaimSpec": {
                         "accessModes": ["ReadWriteOnce"],
-                        "resources": {"requests": {"storage": "1Gi"}},
+                        "resources": {"requests": {"storage": format!("{}", storage)}},
                     },
                     "resources": {
                         "limits": {
