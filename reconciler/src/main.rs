@@ -31,7 +31,7 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
                 continue;
             }
         };
-
+// test
         // Based on message_type in message, create, update, delete PostgresCluster
         match serde_json::from_str(&read_msg.message["message_type"].to_string()).unwrap() {
             Some("SnapShot") => {
