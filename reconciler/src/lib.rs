@@ -98,7 +98,7 @@ pub async fn create_ing_route_tcp(client: Client, name: String) -> Result<(), Er
                 },
             ],
             "tls": {
-                "passthrough": "true",
+                "passthrough": true,
             },
         },
     });
