@@ -12,8 +12,10 @@ use std::{thread, time};
 async fn run() -> Result<(), Box<dyn std::error::Error>> {
     // // Read connection info from environment variable
     let pg_conn_url = env::var("PG_CONN_URL").expect("PG_CONN_URL must be set");
-    let control_plane_events_queue = env::var("CONTROL_PLANE_EVENTS_QUEUE").expect("CONTROL_PLANE_EVENTS_QUEUE must be set");
-    let data_plane_events_queue = env::var("DATA_PLANE_EVENTS_QUEUE").expect("DATA_PLANE_EVENTS_QUEUE must be set");
+    let control_plane_events_queue =
+        env::var("CONTROL_PLANE_EVENTS_QUEUE").expect("CONTROL_PLANE_EVENTS_QUEUE must be set");
+    let data_plane_events_queue =
+        env::var("DATA_PLANE_EVENTS_QUEUE").expect("DATA_PLANE_EVENTS_QUEUE must be set");
 
     // Connect to pgmq
     let queue: PGMQueue = PGMQueue::new(pg_conn_url).await;
@@ -59,16 +61,16 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
                     .await
                     .expect("error creating or updating PostgresCluster");
                 // get connection string values from secret
-                // let s = get_pg_conn(client.clone(), namespace.clone())
-                //     .await
-                //     .expect("error getting secret");
+                let connection_string = get_pg_conn(client.clone(), namespace.clone())
+                    .await
+                    .expect("error getting secret");
 
                 // enqueue connection string
                 let msg = serde_json::json!({
                     "data_plane_id": "foo",
                     "event_id": "one.two.three.four",
                     "event_meta": {
-                        "connection_string": "postgresql://<user>:<password>@<host>:5432",
+                        "connection_string": format!("{}", connection_string),
                     }
                 });
                 let msg_id = queue.enqueue(&data_plane_events_queue, &msg).await;
