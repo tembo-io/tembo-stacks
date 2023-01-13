@@ -1,11 +1,17 @@
 mod pg_cluster_crd;
 
-use k8s_openapi::api::core::v1::Namespace;
+use base64::{
+    alphabet,
+    engine::{self, general_purpose},
+    Engine as _,
+};
+use k8s_openapi::api::core::v1::{Namespace, Secret};
 use kube::api::{DeleteParams, ListParams, Patch, PatchParams};
 use kube::{Api, Client};
 use log::info;
 use pg_cluster_crd::PostgresCluster;
 use serde_json::Value;
+use std::fmt::Debug;
 use thiserror::Error;
 
 #[derive(Error, Debug)]
@@ -135,4 +141,33 @@ pub async fn delete_namespace(client: Client, name: String) -> Result<(), Error>
         .await
         .map_err(Error::KubeError);
     Ok(())
+}
+
+pub async fn get_pg_conn(client: Client, name: String) -> Result<String, Error> {
+    // read secret <name>-pguser-name
+    // let secret_name = format!("{}-pguser-{}", name, name);
+    // let secret_api: Api<Secret> = Api::namespaced(client, &name.clone());
+    // let secret = secret_api
+    //     .get(secret_name.as_str())
+    //     .await
+    //     .expect("error getting Secret");
+    // let data = secret.data.unwrap();
+    // let user = data.get("user");
+    // let new_user = user.unwrap().to_owned();
+    // // let another_new_user: String = serde_json::from_str(&new_user).unwrap();
+    // println!("\nnew_user {}", new_user.to_string());
+    //
+    // let decoded_user = general_purpose::STANDARD.decode(new_user);
+    // let password = data.get("password").unwrap();
+    //
+    // println!("\nUser {:?}", decoded_user.unwrap());
+    // // get values from secret:
+    // // user
+    // // password
+    // // host will be <name>.coredb-development.com
+    // // wait for secret
+    // // decode values
+    // // string will look like postgresql://<user>:<password>@<host>:5432
+
+    Ok("conn-string".to_owned())
 }
