@@ -75,7 +75,7 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
                     "data_plane_id": "foo",
                     "event_id": "one.two.three.four",
                     "event_meta": {
-                        "connection_string": format!("{}", connection_string),
+                        "connection": format!("{}", connection_string),
                     }
                 });
                 let msg_id = queue.enqueue(&data_plane_events_queue, &msg).await;
