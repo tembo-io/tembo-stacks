@@ -195,6 +195,7 @@ pub async fn get_pg_conn(client: Client, name: String) -> Result<String, Error> 
 
     let data = secret.data.unwrap();
 
+    // TODO(ianstanton) There has to be a better way to do this
     let user_data = data.get("user").unwrap();
     let byte_user = to_string(user_data).unwrap();
     let string_user: String = from_str(&byte_user).unwrap();
