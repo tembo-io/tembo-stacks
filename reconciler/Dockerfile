@@ -2,5 +2,5 @@ FROM rust:1.66.0
 COPY Cargo.toml Cargo.lock ./
 COPY src ./src
 RUN cargo build --release
-RUN target/release/reconciler ./
+RUN mv target/release/reconciler ./
 RUN cargo clean
