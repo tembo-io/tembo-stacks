@@ -36,7 +36,7 @@ Once the reconciler performs these actions, the reconciler will send the followi
   "data_plane_id": "org_02s3owPQskuGXHE8vYsGSY",
   "event_id": "coredb-poc1.org_02s3owPQskuGXHE8vYsGSY.CoreDB.inst_02s4UKVbRy34SAYVSwZq2H",
   "event_meta": {
-    "connection": "postgresql"
+    "connection": "postgresql://example:password@example.coredb-development.com:5432"
   }
 }
 ```
