@@ -29,8 +29,8 @@ The reconciler will perform the following actions based on `message_type`:
   - Delete `PostgresCluster`.
   - Delete namespace.
 
-Once the reconciler performs these actions, the reconciler will send the following information back to a queue from which
-`cp-service` will ready and flow back up to the UI:
+Once the reconciler performs these actions, it will send the following information back to a queue from which
+`cp-service` will read and flow back up to the UI:
 ```json
 {
   "data_plane_id": "org_02s3owPQskuGXHE8vYsGSY",
@@ -42,18 +42,51 @@ Once the reconciler performs these actions, the reconciler will send the followi
 ```
 
 ## Local development
-- env vars
-- how to run locally
-- how to run in cluster
+Prerequisites:
+- rust / cargo
+- docker
+- kind
 
-- example application for posting messages to queue
+1. Start a local `kind` cluster
+
+   `❯ kind create cluster`
+
+
+1. Install Crunchy PGO on the cluster
+   1. Fork and clone https://github.com/CrunchyData/postgres-operator-examples
+   2. `❯ cd postgres-operator-examples`
+   3. `❯ kubectl apply -k kustomize/install/namespace`
+   4. `❯ kubectl apply --server-side -k kustomize/install/default`
+
+
+1. Set up local postgres queue
+
+   `❯ docker run -d --name pgmq -e POSTGRES_PASSWORD=postgres -p 5432:5432 postgres`
+
+
+1. Set the following environment variables:
+   - `PG_CONN_URL`
+   - `CONTROL_PLANE_EVENTS_QUEUE`
+   - `DATA_PLANE_EVENTS_QUEUE`
+
+
+1. Run the reconciler
+
+   `❯ cargo run`
+
+
+1. Next, you'll need to post some messages to the queue for the reconciler to pick up. This could be performed a number of ways.
+   The following is an example rust application that writes a message to a queue.
+
+    Run `❯ cargo run` to post the message to the given queue. Edit the message and repeat the process for development purposes.
+
 ```rust
 use pgmq::{PGMQueue};
 
 #[tokio::main]
 async fn run() -> Result<(), sqlx::Error> {
     let queue: PGMQueue =
-        PGMQueue::new("postgres://postgres:postgres@0.0.0.0:5433".to_owned()).await;
+        PGMQueue::new("postgres://postgres:postgres@0.0.0.0:5432".to_owned()).await;
 
     let myqueue = "myqueue".to_owned();
     queue.create(&myqueue).await?;
