@@ -2,7 +2,7 @@
 
 The reconciler is responsible for creating, updating, deleting database instances (custom resource) on a kubernetes cluster.
 It runs in each data plane and performs these actions based on messages written to a queue in the control plane.
-Upon connecting to this queue, it will continuously poll for new messages posted by the `cp-service` component. 
+Upon connecting to this queue, it will continuously poll for new messages posted by the `cp-service` component.
 These messages are expected to be in the following format:
 ```json
 {
@@ -52,11 +52,8 @@ Prerequisites:
    `❯ kind create cluster`
 
 
-1. Install Crunchy PGO on the cluster
-   1. Fork and clone https://github.com/CrunchyData/postgres-operator-examples
-   2. `❯ cd postgres-operator-examples`
-   3. `❯ kubectl apply -k kustomize/install/namespace`
-   4. `❯ kubectl apply --server-side -k kustomize/install/default`
+1. Install CoreDB operator in the cluster
+   1. `coredb install` or kubectl apply crd.yaml and install.yaml from the release branch for which this verison of the reconciler is compatible. https://github.com/CoreDB-io/coredb/tree/main/coredb-operator/yaml
 
 
 1. Set up local postgres queue
