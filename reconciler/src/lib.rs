@@ -24,49 +24,13 @@ pub type Result<T, E = Error> = std::result::Result<T, E>;
 
 pub async fn generate_spec(event_body: &types::EventBody) -> Value {
     let spec = serde_json::json!({
-        "apiVersion": "postgres-operator.crunchydata.com/v1beta1",
-        "kind": "PostgresCluster",
+        "apiVersion": "coredb.io/v1alpha1",
+        "kind": "CoreDB",
         "metadata": {
             "name": format!("{}", event_body.resource_name),
         },
         "spec": {
-            "image": "registry.developers.crunchydata.com/crunchydata/crunchy-postgres:ubi8-14.6-2".to_owned(),
-            "postgresVersion": 14,
-            "instances": [
-                {
-                    "name": "instance1",
-                    "dataVolumeClaimSpec": {
-                        "accessModes": ["ReadWriteOnce"],
-                        "resources": {"requests": {"storage": format!("{}", event_body.storage)}},
-                    },
-                    "resources": {
-                        "limits": {
-                            "cpu": format!("{}", event_body.cpu),
-                            "memory": format!("{}", event_body.memory),
-                        },
-                        "requests": {
-                            "cpu": format!("{}", event_body.cpu),
-                            "memory": format!("{}", event_body.memory),
-                        },
-                    },
-                },
-            ],
-            "backups": {
-                "pgbackrest": {
-                    "image": "registry.developers.crunchydata.com/crunchydata/crunchy-pgbackrest:ubi8-2.41-2",
-                    "repos": [
-                        {
-                            "name": "repo1",
-                            "volume": {
-                                "volumeClaimSpec": {
-                                    "accessModes": ["ReadWriteOnce"],
-                                    "resources": {"requests": {"storage": "1Gi"}},
-                                },
-                            },
-                        },
-                    ],
-                }
-            },
+            "replicas": 1,
         },
     });
     spec
@@ -89,7 +53,7 @@ pub async fn create_ing_route_tcp(client: Client, name: String) -> Result<(), Er
                     "match": format!("HostSNI(`{}.coredb.io`) || HostSNI(`{}.coredb-development.com`)", name, name),
                     "services": [
                         {
-                            "name": format!("{}-primary", name),
+                            "name": format!("{}", name),
                             "port": 5432,
                         },
                     ],
