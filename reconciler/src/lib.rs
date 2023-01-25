@@ -11,7 +11,7 @@ use kube::api::{DeleteParams, ListParams, Patch, PatchParams};
 use kube::runtime::wait::{await_condition, Condition};
 use kube::{Api, Client};
 use log::info;
-#[allow(unused_imports)]  // Remove after COR-166
+#[allow(unused_imports)] // Remove after COR-166
 use serde_json::{from_str, to_string, Value};
 use std::fmt::Debug;
 use thiserror::Error;
