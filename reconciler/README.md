@@ -52,8 +52,13 @@ Prerequisites:
 
 
 1. Install CoreDB operator in the cluster
-   1. `coredb install` or kubectl apply crd.yaml and install.yaml from the release branch for which this verison of the reconciler is compatible. https://github.com/CoreDB-io/coredb/tree/main/coredb-operator/yaml
+   1. `cargo install coredb-cli`
+   2. `coredb-cli install`
 
+1. Install Traefik in the cluster
+   1. `helm repo add traefik https://traefik.github.io/charts`
+   2. `helm repo update`
+   3. `helm install --namespace=traefik-v2 --values ./tests/traefik-values.yaml traefik traefik/traefik`
 
 1. Set up local postgres queue
 
