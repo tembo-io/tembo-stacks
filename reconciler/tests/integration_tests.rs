@@ -14,32 +14,15 @@ mod test {
 
     use pgmq::PGMQueue;
     use k8s_openapi::{
-        api::core::v1::{Namespace, Pod},
+        api::core::v1::{Pod},
         apiextensions_apiserver::pkg::apis::apiextensions::v1::CustomResourceDefinition,
     };
     use kube::{
-        api::{Patch, PatchParams},
         runtime::wait::{await_condition, conditions, Condition},
         Api, Client, Config,
     };
+    use rand::Rng;
     use std::str;
-
-    const API_VERSION: &str = "coredb.io/v1alpha1";
-
-    fn is_pod_ready() -> impl Condition<Pod> + 'static {
-        move |obj: Option<&Pod>| {
-            if let Some(pod) = &obj {
-                if let Some(status) = &pod.status {
-                    if let Some(conds) = &status.conditions {
-                        if let Some(pcond) = conds.iter().find(|c| c.type_ == "ContainersReady") {
-                            return pcond.status == "True";
-                        }
-                    }
-                }
-            }
-            false
-        }
-    }
 
     #[tokio::test]
     #[ignore]
@@ -50,15 +33,19 @@ mod test {
         let myqueue = "myqueue_control_plane".to_owned();
         queue.create(&myqueue).await;
 
+        // Configurations
+        let mut rng = rand::thread_rng();
+        let name = &format!("test-coredb-{}", rng.gen_range(0..100000));
+        let namespace = name.clone();
 
         let msg = serde_json::json!({
         "body": {
-          "cpu": "1",
-          "memory": "2Gi",
-          "postgres_image": "registry.developers.crunchydata.com/crunchydata/crunchy-postgres:ubi8-14.6-2",
-          "resource_name": "example",
-          "resource_type": "CoreDB",
-          "storage": "1Gi"
+           "cpu": "1",
+           "memory": "2Gi",
+           "postgres_image": "registry.developers.crunchydata.com/crunchydata/crunchy-postgres:ubi8-14.6-2",
+           "resource_name": name,
+           "resource_type": "CoreDB",
+           "storage": "1Gi"
         },
         "data_plane_id": "org_02s3owPQskuGXHE8vYsGSY",
         "event_id": "coredb-poc1.org_02s3owPQskuGXHE8vYsGSY.CoreDB.inst_02s4UKVbRy34SAYVSwZq2H",
@@ -66,5 +53,54 @@ mod test {
 });
         let msg_id = queue.enqueue(&myqueue, &msg).await;
         println!("msg_id: {:?}", msg_id);
+
+        let client = kube_client().await;
+
+        let pods: Api<Pod> = Api::namespaced(client.clone(), &namespace);
+
+        let timeout_seconds_start_pod = 30;
+
+        let pod_name = format!("{}-0", name);
+
+        let _check_for_pod = tokio::time::timeout(
+            std::time::Duration::from_secs(timeout_seconds_start_pod),
+            await_condition(pods.clone(), &pod_name, conditions::is_pod_running()),
+        )
+        .await
+        .expect(&format!(
+            "Did not find the pod {} to be running after waiting {} seconds",
+            pod_name, timeout_seconds_start_pod
+        ));
+
     }
+
+    async fn kube_client() -> kube::Client {
+        // Get the name of the currently selected namespace
+        let kube_config = Config::infer()
+            .await
+            .expect("Please configure your Kubernetes context.");
+
+        // Initialize the Kubernetes client
+        let client = Client::try_from(kube_config.clone()).expect("Failed to initialize Kubernetes client");
+
+        // Next, check that the currently selected namespace is labeled
+        // to allow the running of tests.
+
+        // Check that the CRD is installed
+        let custom_resource_definitions: Api<CustomResourceDefinition> = Api::all(client.clone());
+
+        let _check_for_crd = tokio::time::timeout(
+            std::time::Duration::from_secs(2),
+            await_condition(
+                custom_resource_definitions,
+                "coredbs.kube.rs",
+                conditions::is_crd_established(),
+            ),
+        )
+        .await
+        .expect("Custom Resource Definition for CoreDB was not found, do you need to install that before running the tests?");
+
+        return client;
+    }
+
 }
