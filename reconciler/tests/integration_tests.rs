@@ -39,6 +39,9 @@ mod test {
 
         let msg = serde_json::json!({
         "body": {
+           "cpu": "100m",
+           "mem": "500Mi",
+           "storage": "1Gi",
            "resource_name": name,
            "resource_type": "CoreDB",
         },

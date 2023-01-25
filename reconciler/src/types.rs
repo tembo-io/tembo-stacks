@@ -12,5 +12,8 @@ pub struct CRUDevent {
 pub struct EventBody {
     pub resource_type: String,
     pub resource_name: String,
+    pub storage: Option<String>,
+    pub memory: Option<String>,
+    pub cpu: Option<String>,
     pub extensions: Option<Vec<String>>,
 }
