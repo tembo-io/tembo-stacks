@@ -7,9 +7,11 @@ use coredb_crd::CoreDB;
 use ingress_route_tcp_crd::IngressRouteTCP;
 use k8s_openapi::api::core::v1::{Namespace, Secret};
 use kube::api::{DeleteParams, ListParams, Patch, PatchParams};
+#[allow(unused_imports)] // Remove after COR-166
 use kube::runtime::wait::{await_condition, Condition};
 use kube::{Api, Client};
 use log::info;
+#[allow(unused_imports)]  // Remove after COR-166
 use serde_json::{from_str, to_string, Value};
 use std::fmt::Debug;
 use thiserror::Error;
@@ -137,6 +139,8 @@ pub async fn delete_namespace(client: Client, name: String) -> Result<(), Error>
     Ok(())
 }
 
+// remove after COR-166
+#[allow(unused_variables)]
 pub async fn get_pg_conn(client: Client, name: String) -> Result<String, Error> {
     // read secret <name>-pguser-name
     let secret_name = format!("{}-pguser-{}", name, name);
@@ -175,6 +179,7 @@ pub async fn get_pg_conn(client: Client, name: String) -> Result<String, Error> 
     Ok(connection_string)
 }
 
+#[allow(dead_code)] // remove after COR-166
 fn b64_decode(b64_encoded: &str) -> String {
     let bytes = general_purpose::STANDARD.decode(b64_encoded).unwrap();
     std::str::from_utf8(&bytes).unwrap().to_owned()

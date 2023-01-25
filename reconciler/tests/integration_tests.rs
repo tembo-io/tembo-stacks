@@ -17,12 +17,11 @@ mod test {
         apiextensions_apiserver::pkg::apis::apiextensions::v1::CustomResourceDefinition,
     };
     use kube::{
-        runtime::wait::{await_condition, conditions, Condition},
+        runtime::wait::{await_condition, conditions},
         Api, Client, Config,
     };
     use pgmq::PGMQueue;
     use rand::Rng;
-    use std::str;
 
     #[tokio::test]
     #[ignore]
@@ -31,7 +30,7 @@ mod test {
             PGMQueue::new("postgres://postgres:postgres@0.0.0.0:5432".to_owned()).await;
 
         let myqueue = "myqueue_control_plane".to_owned();
-        queue.create(&myqueue).await;
+        let _ = queue.create(&myqueue).await;
 
         // Configurations
         let mut rng = rand::thread_rng();
