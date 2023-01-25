@@ -1,5 +1,5 @@
 mod ingress_route_tcp_crd;
-mod pg_cluster_crd;
+mod coredb_crd;
 pub mod types;
 
 use base64::{engine::general_purpose, Engine as _};
@@ -9,7 +9,7 @@ use kube::api::{DeleteParams, ListParams, Patch, PatchParams};
 use kube::runtime::wait::{await_condition, Condition};
 use kube::{Api, Client};
 use log::info;
-use pg_cluster_crd::PostgresCluster;
+use coredb_crd::CoreDB;
 use serde_json::{from_str, to_string, Value};
 use std::fmt::Debug;
 use thiserror::Error;
@@ -72,12 +72,12 @@ pub async fn create_ing_route_tcp(client: Client, name: String) -> Result<(), Er
     Ok(())
 }
 
-pub async fn get_all(client: Client, namespace: String) -> Vec<PostgresCluster> {
-    let pg_cluster_api: Api<PostgresCluster> = Api::namespaced(client, &namespace);
+pub async fn get_all(client: Client, namespace: String) -> Vec<CoreDB> {
+    let pg_cluster_api: Api<CoreDB> = Api::namespaced(client, &namespace);
     let pg_list = pg_cluster_api
         .list(&ListParams::default())
         .await
-        .expect("could not get PostgresClusters");
+        .expect("could not get CoreDBs");
     pg_list.items
 }
 
@@ -86,10 +86,10 @@ pub async fn create_or_update(
     namespace: String,
     deployment: serde_json::Value,
 ) -> Result<(), Error> {
-    let pg_cluster_api: Api<PostgresCluster> = Api::namespaced(client, &namespace);
+    let pg_cluster_api: Api<CoreDB> = Api::namespaced(client, &namespace);
     let params = PatchParams::apply("reconciler").force();
     let name: String = serde_json::from_value(deployment["metadata"]["name"].clone()).unwrap();
-    info!("\nCreating or updating PostgresCluster: {}", name);
+    info!("\nCreating or updating CoreDB: {}", name);
     let _o = pg_cluster_api
         .patch(&name, &params, &Patch::Apply(&deployment))
         .await
@@ -98,9 +98,9 @@ pub async fn create_or_update(
 }
 
 pub async fn delete(client: Client, namespace: String, name: String) -> Result<(), Error> {
-    let pg_cluster_api: Api<PostgresCluster> = Api::namespaced(client, &namespace);
+    let pg_cluster_api: Api<CoreDB> = Api::namespaced(client, &namespace);
     let params = DeleteParams::default();
-    info!("\nDeleting PostgresCluster: {}", name);
+    info!("\nDeleting CoreDB: {}", name);
     let _o = pg_cluster_api
         .delete(&name, &params)
         .await
