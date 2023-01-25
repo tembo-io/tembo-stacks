@@ -13,7 +13,4 @@ pub struct EventBody {
     pub resource_type: String,
     pub resource_name: String,
     pub extensions: Option<Vec<String>>,
-    pub storage: String,
-    pub memory: String,
-    pub cpu: String,
 }

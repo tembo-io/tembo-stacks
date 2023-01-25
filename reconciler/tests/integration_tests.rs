@@ -40,12 +40,8 @@ mod test {
 
         let msg = serde_json::json!({
         "body": {
-           "cpu": "1",
-           "memory": "2Gi",
-           "postgres_image": "registry.developers.crunchydata.com/crunchydata/crunchy-postgres:ubi8-14.6-2",
            "resource_name": name,
            "resource_type": "CoreDB",
-           "storage": "1Gi"
         },
         "data_plane_id": "org_02s3owPQskuGXHE8vYsGSY",
         "event_id": "coredb-poc1.org_02s3owPQskuGXHE8vYsGSY.CoreDB.inst_02s4UKVbRy34SAYVSwZq2H",
