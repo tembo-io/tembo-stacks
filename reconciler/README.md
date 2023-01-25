@@ -50,7 +50,6 @@ Prerequisites:
 
    `❯ kind create cluster`
 
-
 1. Install CoreDB operator in the cluster
    1. `cargo install coredb-cli`
    2. `coredb-cli install`
@@ -64,16 +63,13 @@ Prerequisites:
 
    `❯ docker run -d --name pgmq -e POSTGRES_PASSWORD=postgres -p 5432:5432 postgres`
 
-
 1. Set the following environment variables:
    - `PG_CONN_URL`
    - `CONTROL_PLANE_EVENTS_QUEUE`
    - `DATA_PLANE_EVENTS_QUEUE`
 
-
 1. Run the reconciler
 
    `❯ cargo run`
-
 
 1. Next, you'll need to post some messages to the queue for the reconciler to pick up. That can be performed in functional testing like this `cargo test -- --ignored`
