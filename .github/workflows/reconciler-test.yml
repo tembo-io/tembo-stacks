@@ -107,6 +107,7 @@ jobs:
           export DATA_PLANE_EVENTS_QUEUE=myqueue_data_plane
 
           # Start the reconciler in the background
+          cargo build
           cargo run &
 
           # Run the tests
@@ -119,11 +120,12 @@ jobs:
           echo "=========="
           kubectl get pods --all-namespaces
           echo "=========="
-          kubectl get -o yaml sts
+          kubectl get -o yaml sts --all-namespaces
           echo "=========="
-          kubectl get -o yaml svc
+          kubectl get -o yaml svc --all-namespaces
           echo "=========="
-          kubectl get -o yaml pods
+          kubectl get -o yaml pods --all-namespaces
           echo "=========="
-          kubectl get -o yaml coredb
+          kubectl get -o yaml coredb --all-namespaces
           echo "=========="
+          kubectl logs -n default $(kubectl get pods -n default | grep coredb-controller | cut -d' ' -f1)
