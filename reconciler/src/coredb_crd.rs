@@ -3,7 +3,7 @@
 // kopium version: 0.14.0
 
 use kube::CustomResource;
-use serde::{Serialize, Deserialize};
+use serde::{Deserialize, Serialize};
 
 #[derive(CustomResource, Serialize, Deserialize, Clone, Debug)]
 #[kube(group = "kube.rs", version = "v1", kind = "CoreDB", plural = "coredbs")]
@@ -25,4 +25,3 @@ pub struct CoreDBSpec {
 pub struct CoreDBStatus {
     pub running: bool,
 }
-

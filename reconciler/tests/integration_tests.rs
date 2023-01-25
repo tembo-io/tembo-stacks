@@ -12,15 +12,15 @@
 #[cfg(test)]
 mod test {
 
-    use pgmq::PGMQueue;
     use k8s_openapi::{
-        api::core::v1::{Pod},
+        api::core::v1::Pod,
         apiextensions_apiserver::pkg::apis::apiextensions::v1::CustomResourceDefinition,
     };
     use kube::{
         runtime::wait::{await_condition, conditions, Condition},
         Api, Client, Config,
     };
+    use pgmq::PGMQueue;
     use rand::Rng;
     use std::str;
 
@@ -50,7 +50,8 @@ mod test {
         "data_plane_id": "org_02s3owPQskuGXHE8vYsGSY",
         "event_id": "coredb-poc1.org_02s3owPQskuGXHE8vYsGSY.CoreDB.inst_02s4UKVbRy34SAYVSwZq2H",
         "message_type": "Create"
-});
+        });
+
         let msg_id = queue.enqueue(&myqueue, &msg).await;
         println!("msg_id: {:?}", msg_id);
 
@@ -71,7 +72,6 @@ mod test {
             "Did not find the pod {} to be running after waiting {} seconds",
             pod_name, timeout_seconds_start_pod
         ));
-
     }
 
     async fn kube_client() -> kube::Client {
@@ -81,7 +81,8 @@ mod test {
             .expect("Please configure your Kubernetes context.");
 
         // Initialize the Kubernetes client
-        let client = Client::try_from(kube_config.clone()).expect("Failed to initialize Kubernetes client");
+        let client =
+            Client::try_from(kube_config.clone()).expect("Failed to initialize Kubernetes client");
 
         // Next, check that the currently selected namespace is labeled
         // to allow the running of tests.
@@ -102,5 +103,4 @@ mod test {
 
         return client;
     }
-
 }

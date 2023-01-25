@@ -1,15 +1,15 @@
-mod ingress_route_tcp_crd;
 mod coredb_crd;
+mod ingress_route_tcp_crd;
 pub mod types;
 
 use base64::{engine::general_purpose, Engine as _};
+use coredb_crd::CoreDB;
 use ingress_route_tcp_crd::IngressRouteTCP;
 use k8s_openapi::api::core::v1::{Namespace, Secret};
 use kube::api::{DeleteParams, ListParams, Patch, PatchParams};
 use kube::runtime::wait::{await_condition, Condition};
 use kube::{Api, Client};
 use log::info;
-use coredb_crd::CoreDB;
 use serde_json::{from_str, to_string, Value};
 use std::fmt::Debug;
 use thiserror::Error;
