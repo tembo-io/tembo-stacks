@@ -83,10 +83,19 @@ jobs:
       - name: Run functional / integration tests
         run: |
           set -xe
+
           # Install the CoreDB operator
-          cargo install coredb-cli
+          cargo install --version 2023.1.23 coredb-cli
           coredb-cli install
           kubectl get crds
+
+          # Start local postgres for the Nile queues
+          docker run -d --name pgmq -e POSTGRES_PASSWORD=postgres -p 5432:5432 postgres
+
+          # Set ENVs for reconciler
+          export PG_CONN_URL=postgres://postgres:postgres@localhost:5432/postgres
+          export CONTROL_PLANE_EVENTS_QUEUE=myqueue_control_plane
+          export DATA_PLANE_EVENTS_QUEUE=myqueue_data_plane
 
           # Start the reconciler in the background
           cargo run &
