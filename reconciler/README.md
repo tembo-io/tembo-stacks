@@ -4,18 +4,6 @@
 The reconciler is responsible for creating, updating, deleting database instances (custom resource) on a kubernetes cluster.
 It runs in each data plane and performs these actions based on messages written to a queue in the control plane.
 Upon connecting to this queue, it will continuously poll for new messages posted by the `cp-service` component.
-These messages are expected to be in the following format:
-```json
-{
-    "body": {
-      "resource_name": "example",
-      "resource_type": "CoreDB"
-    },
-    "data_plane_id": "org_02s3owPQskuGXHE8vYsGSY",
-    "event_id": "coredb-poc1.org_02s3owPQskuGXHE8vYsGSY.CoreDB.inst_02s4UKVbRy34SAYVSwZq2H",
-    "message_type": "Create"
-}
-```
 
 The reconciler will perform the following actions based on `message_type`:
 - `Create` or `Update`
@@ -27,16 +15,9 @@ The reconciler will perform the following actions based on `message_type`:
   - Delete namespace.
 
 Once the reconciler performs these actions, it will send the following information back to a queue from which
-`cp-service` will read and flow back up to the UI:
-```json
-{
-  "data_plane_id": "org_02s3owPQskuGXHE8vYsGSY",
-  "event_id": "coredb-poc1.org_02s3owPQskuGXHE8vYsGSY.CoreDB.inst_02s4UKVbRy34SAYVSwZq2H",
-  "event_meta": {
-    "connection": "postgresql://example:password@example.coredb-development.com:5432"
-  }
-}
-```
+`cp-service` will read and flow back up to the UI.
+
+Try running the functional tests locally and then connect into the database to view the structure of these messages.
 
 ## Local development
 
