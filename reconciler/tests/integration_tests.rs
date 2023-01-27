@@ -27,7 +27,7 @@ mod test {
     #[ignore]
     async fn functional_test_basic_create() {
         let queue: PGMQueue =
-            PGMQueue::new("postgres://postgres:postgres@0.0.0.0:5432".to_owned()).await;
+            PGMQueue::new("postgres://postgres:postgres@0.0.0.0:5432".to_owned()).await.unwrap();
 
         let myqueue = "myqueue_control_plane".to_owned();
         let _ = queue.create(&myqueue).await;
