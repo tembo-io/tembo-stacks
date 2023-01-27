@@ -31,7 +31,10 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
 
     loop {
         // Read from queue (check for new message)
-        let read_msg: Message = match queue.read(&control_plane_events_queue, Some(&30_u32)).await? {
+        let read_msg: Message = match queue
+            .read(&control_plane_events_queue, Some(&30_u32))
+            .await?
+        {
             Some(message) => {
                 info!("read_msg: {:?}", message);
                 message
