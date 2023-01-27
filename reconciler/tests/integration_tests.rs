@@ -92,7 +92,7 @@ mod test {
             std::time::Duration::from_secs(2),
             await_condition(
                 custom_resource_definitions,
-                "coredbs.kube.rs",
+                "coredbs.coredb.io",
                 conditions::is_crd_established(),
             ),
         )
