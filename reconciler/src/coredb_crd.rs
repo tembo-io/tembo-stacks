@@ -3,15 +3,24 @@
 // kopium version: 0.14.0
 
 use kube::CustomResource;
-use serde::{Serialize, Deserialize};
+use serde::{Deserialize, Serialize};
 
 #[derive(CustomResource, Serialize, Deserialize, Clone, Debug)]
-#[kube(group = "coredb.io", version = "v1alpha1", kind = "CoreDB", plural = "coredbs")]
+#[kube(
+    group = "coredb.io",
+    version = "v1alpha1",
+    kind = "CoreDB",
+    plural = "coredbs"
+)]
 #[kube(namespaced)]
 #[kube(status = "CoreDBStatus")]
 #[kube(schema = "disabled")]
 pub struct CoreDBSpec {
-    #[serde(default, skip_serializing_if = "Option::is_none", rename = "enabledExtensions")]
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        rename = "enabledExtensions"
+    )]
     pub enabled_extensions: Option<Vec<String>>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub image: Option<String>,
@@ -27,4 +36,3 @@ pub struct CoreDBSpec {
 pub struct CoreDBStatus {
     pub running: bool,
 }
-
