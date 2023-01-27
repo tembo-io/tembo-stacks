@@ -44,6 +44,7 @@ mod test {
            "storage": "1Gi",
            "resource_name": name,
            "resource_type": "CoreDB",
+           "enabled_extensions": ["pg_cron"],
         },
         "data_plane_id": "org_02s3owPQskuGXHE8vYsGSY",
         "event_id": "coredb-poc1.org_02s3owPQskuGXHE8vYsGSY.CoreDB.inst_02s4UKVbRy34SAYVSwZq2H",
