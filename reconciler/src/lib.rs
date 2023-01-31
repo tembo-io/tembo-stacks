@@ -144,7 +144,7 @@ pub async fn delete_namespace(client: Client, name: String) -> Result<(), Error>
 #[allow(unused_variables)]
 pub async fn get_pg_conn(client: Client, name: String) -> Result<String, Error> {
     // read secret <name>-pguser-name
-    let secret_name = format!("{}-pguser-{}", name, name);
+    let secret_name = format!("{}-connection", name);
 
     let secret_api: Api<Secret> = Api::namespaced(client, &name.clone());
 
