@@ -143,7 +143,7 @@ pub async fn delete_namespace(client: Client, name: String) -> Result<(), Error>
 // remove after COR-166
 #[allow(unused_variables)]
 pub async fn get_pg_conn(client: Client, name: String) -> Result<String, Error> {
-    // read secret <name>-pguser-name
+    // read secret <name>-connection
     let secret_name = format!("{}-connection", name);
 
     let secret_api: Api<Secret> = Api::namespaced(client, &name.clone());
