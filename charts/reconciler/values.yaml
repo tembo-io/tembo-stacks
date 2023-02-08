@@ -28,7 +28,6 @@ resources:
     memory: 128Mi
 
 serviceAccount:
-  create: true
   annotations: {}
   # Defaults to match name of deployment,
   # when this is set to empty string.
