@@ -121,7 +121,7 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
                 let msg_id = queue.send(&data_plane_events_queue, &msg).await?;
                 info!("msg_id: {:?}", msg_id);
             }
-            None | _ => warn!("action was not in expected format"),
+            _ => warn!("action was not in expected format"),
         }
 
         // TODO (ianstanton) This is here as an example for now. We want to use
