@@ -27,7 +27,7 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
     queue.create(&data_plane_events_queue).await?;
 
     // Infer the runtime environment and try to create a Kubernetes Client
-    // let client = Client::try_default().await?;
+    let client = Client::try_default().await?;
 
     loop {
         // Read from queue (check for new message)
@@ -59,28 +59,28 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
                     serde_json::from_value::<types::EventBody>(read_msg.message["body"].clone())
                         .expect("error parsing body");
                 // create namespace if it does not exist
-                // let namespace: String = crud_event_body.resource_name.clone();
+                let namespace: String = crud_event_body.resource_name.clone();
 
-                // create_namespace(client.clone(), namespace.clone())
-                //     .await
-                //     .expect("error creating namespace");
+                create_namespace(client.clone(), namespace.clone())
+                    .await
+                    .expect("error creating namespace");
 
-                // // create IngressRouteTCP
-                // create_ing_route_tcp(client.clone(), namespace.clone())
-                //     .await
-                //     .expect("error creating IngressRouteTCP");
+                // create IngressRouteTCP
+                create_ing_route_tcp(client.clone(), namespace.clone())
+                    .await
+                    .expect("error creating IngressRouteTCP");
 
-                // // generate PostgresCluster spec based on values in body
-                // let spec = generate_spec(&crud_event_body).await;
+                // generate PostgresCluster spec based on values in body
+                let spec = generate_spec(&crud_event_body).await;
 
-                // // create or update PostgresCluster
-                // create_or_update(client.clone(), namespace.clone(), spec)
-                //     .await
-                //     .expect("error creating or updating PostgresCluster");
-                // // get connection string values from secret
-                // let connection_string = get_pg_conn(client.clone(), namespace.clone())
-                //     .await
-                //     .expect("error getting secret");
+                // create or update PostgresCluster
+                create_or_update(client.clone(), namespace.clone(), spec)
+                    .await
+                    .expect("error creating or updating PostgresCluster");
+                // get connection string values from secret
+                let connection_string = get_pg_conn(client.clone(), namespace.clone())
+                    .await
+                    .expect("error getting secret");
 
                 // report state
                 let msg = types::StateToControlPlane {
@@ -100,14 +100,14 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
                         .unwrap();
 
                 // // delete PostgresCluster
-                // delete(client.clone(), name.clone(), name.clone())
-                //     .await
-                //     .expect("error deleting PostgresCluster");
+                delete(client.clone(), name.clone(), name.clone())
+                    .await
+                    .expect("error deleting PostgresCluster");
 
-                // // delete namespace
-                // delete_namespace(client.clone(), name.clone())
-                //     .await
-                //     .expect("error deleting namespace");
+                // delete namespace
+                delete_namespace(client.clone(), name.clone())
+                    .await
+                    .expect("error deleting namespace");
 
                 // report state
                 let msg = types::StateToControlPlane {
@@ -127,10 +127,10 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
         // TODO (ianstanton) This is here as an example for now. We want to use
         //  this to ensure a PostgresCluster exists before we attempt to delete it.
         // Get all existing PostgresClusters
-        // let vec = get_all(client.clone(), "default".to_owned());
-        // for pg in vec.await.iter() {
-        //     info!("found PostgresCluster {}", pg.name_any());
-        // }
+        let vec = get_all(client.clone(), "default".to_owned());
+        for pg in vec.await.iter() {
+            info!("found PostgresCluster {}", pg.name_any());
+        }
         thread::sleep(time::Duration::from_secs(1));
 
         // archive message from queue
