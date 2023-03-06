@@ -19,9 +19,9 @@ pub struct CoreDBSpec {
     #[serde(
         default,
         skip_serializing_if = "Option::is_none",
-        rename = "enabledExtensions"
+        rename = "extensions"
     )]
-    pub enabled_extensions: Option<Vec<String>>,
+    pub extensions: Option<Vec<String>>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub image: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
