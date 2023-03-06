@@ -87,7 +87,7 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
                     data_plane_id,
                     event_id,
                     state: types::State {
-                        connection: Some("xyz".to_owned()),
+                        connection: Some(connection_string),
                         status: types::Status::Up,
                     },
                 };
@@ -99,7 +99,7 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
                     serde_json::from_value(read_msg.message["body"]["resource_name"].clone())
                         .unwrap();
 
-                // // delete PostgresCluster
+                // delete PostgresCluster
                 delete(client.clone(), name.clone(), name.clone())
                     .await
                     .expect("error deleting PostgresCluster");
