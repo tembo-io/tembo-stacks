@@ -6,6 +6,7 @@ use base64::{engine::general_purpose, Engine as _};
 use coredb_crd::CoreDB;
 use ingress_route_tcp_crd::IngressRouteTCP;
 use k8s_openapi::api::core::v1::{Namespace, Secret};
+use k8s_openapi::api::networking::v1::Ingress;
 use kube::api::{DeleteParams, ListParams, Patch, PatchParams};
 #[allow(unused_imports)] // Remove after COR-166
 use kube::runtime::wait::{await_condition, Condition};
@@ -70,6 +71,50 @@ pub async fn create_ing_route_tcp(client: Client, name: String) -> Result<(), Er
     info!("\nCreating or updating IngressRouteTCP: {}", name);
     let _o = ing_api
         .patch(&name, &params, &Patch::Apply(&ing))
+        .await
+        .map_err(Error::KubeError)?;
+    Ok(())
+}
+
+pub async fn create_metrics_ingress(client: Client, name: String) -> Result<(), Error> {
+    let ing_api: Api<Ingress> = Api::namespaced(client, &name);
+    let params = PatchParams::apply("reconciler").force();
+    let ingress = serde_json::json!({
+        "apiVersion": "networking.k8s.io/v1",
+        "kind": "Ingress",
+        "metadata": {
+            "name": format!("{}", name),
+            "namespace": format!("{}", name),
+        },
+        "spec": {
+            "ingressClassName": "traefik",
+            "rules": [
+                {
+                    "host": format!("{}.coredb.io", name),
+                    "http": {
+                        "paths": [
+                            {
+                                "path": "/metrics",
+                                "pathType": "Prefix",
+                                "backend": {
+                                    "service": {
+                                        "name": format!("{}-metrics", name),
+                                        "port": {
+                                            "number": 80,
+                                        },
+                                    },
+                                },
+                            },
+                        ],
+                    },
+                },
+            ],
+        },
+    });
+
+    info!("\nCreating or updating Ingress: {}", name);
+    let _o = ing_api
+        .patch(&name, &params, &Patch::Apply(&ingress))
         .await
         .map_err(Error::KubeError)?;
     Ok(())
