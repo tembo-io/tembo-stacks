@@ -1,5 +1,5 @@
 [![reconciler-deploy workflow](https://github.com/CoreDB-io/data-plane/actions/workflows/reconciler-deploy.yml/badge.svg?branch=main)](https://github.com/CoreDB-io/data-plane/actions/workflows/reconciler-deploy.yml)
-# Data Plane (POC)
+# Data Plane
 
 The data plane (tentatively) consists of the following components:
 
