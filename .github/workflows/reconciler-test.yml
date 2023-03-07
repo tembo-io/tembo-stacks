@@ -23,10 +23,11 @@ env:
 
 jobs:
   codegen:
-    name: Check codegen
-    runs-on: ubuntu-20.04
+    name: Run codegen check
+    runs-on: ubuntu-latest
+    steps:
       - uses: actions/checkout@v3
-      - name: Install Rust toolchain
+      - name: Install minimal nightly with rustfmt
         uses: actions-rs/toolchain@v1
         with:
           profile: minimal
