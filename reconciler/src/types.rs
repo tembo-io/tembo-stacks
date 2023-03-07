@@ -1,5 +1,6 @@
 use serde::{Deserialize, Serialize};
 
+use crate::coredb_crd;
 /// incoming message from control plane
 #[derive(Debug, Deserialize, Serialize)]
 pub struct CRUDevent {
@@ -9,6 +10,12 @@ pub struct CRUDevent {
     pub body: EventBody,
 }
 
+pub enum UpdateEvent {
+    ToggleExtension,
+    UpdateInfra,
+    InstallExtension,
+}
+
 #[derive(Debug, Deserialize, Serialize)]
 pub struct EventBody {
     pub resource_type: String,
@@ -16,7 +23,7 @@ pub struct EventBody {
     pub storage: Option<String>,
     pub memory: Option<String>,
     pub cpu: Option<String>,
-    pub extensions: Option<Vec<String>>,
+    pub extensions: Option<Vec<coredb_crd::CoreDBExtensions>>,
 }
 
 /// message returned to control plane
