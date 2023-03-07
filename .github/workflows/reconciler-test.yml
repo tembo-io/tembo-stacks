@@ -19,7 +19,7 @@ on:
       - release**
 
 env:
-  COREDB_OPERATOR_VERSION: "2023.3.6"
+  COREDB_OPERATOR_VERSION: 2023.3.6
 
 jobs:
   codegen:
