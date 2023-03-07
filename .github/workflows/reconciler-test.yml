@@ -40,9 +40,9 @@ jobs:
           kopium -f crd.yaml > src/coredb_crd.rs
           cargo fmt
           if git diff --quiet -- src/coredb_crd.rs; then
-              echo "File has not changed"
+              echo "Codegen is up to date"
           else
-              echo "File has changed"
+              echo "Codegen is stale"
               git diff src/coredb_crd.rs
               exit 1
           fi
