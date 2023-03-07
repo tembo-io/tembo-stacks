@@ -94,9 +94,20 @@ jobs:
           helm install --namespace=traefik-v2 --values ./tests/traefik-values.yaml traefik traefik/traefik
 
           # Install the CoreDB operator
-          cargo install --version 2023.3.6 coredb-cli
+          export COREDB_OPERATOR_VERSION=2023.3.6
+          cargo install --version ${COREDB_OPERATOR_VERSION} coredb-cli
           coredb-cli install
           kubectl get crds
+
+          # verify codegen up to date
+          cargo install kopium
+          wget https://raw.githubusercontent.com/CoreDB-io/coredb/release/${COREDB_OPERATOR_VERSION}/coredb-operator/yaml/crd.yaml
+          kopium -f crd.yaml > src/coredb_crd.rs
+          git status --porcelain
+          if git diff --quiet HEAD^ -- src/coredb_crd.rs; then
+            echo "Codegen is not up to date. Run 'kopium -f crd.yaml > src/coredb_crd.rs' and commit the changes."
+            exit 1
+          fi
 
           # Start local postgres for the Nile queues
           docker run -d --name pgmq -e POSTGRES_PASSWORD=postgres -p 5432:5432 postgres
