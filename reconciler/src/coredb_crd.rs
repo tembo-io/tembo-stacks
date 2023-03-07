@@ -47,7 +47,7 @@ pub struct CoreDBSpec {
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct CoreDBExtensions {
-    pub enabled: String,
+    pub enabled: bool,
     pub name: String,
     pub schema: String,
     pub version: String,
