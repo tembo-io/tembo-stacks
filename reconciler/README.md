@@ -66,7 +66,7 @@ Install `kopium` if you don't have it already.
 
 Download the specified CoreDB spec.
 
-`https://raw.githubusercontent.com/CoreDB-io/coredb/release/2023.3.6/coredb-operator/yaml/crd.yaml`
+`wget https://raw.githubusercontent.com/CoreDB-io/coredb/release/2023.3.6/coredb-operator/yaml/crd.yaml`
 
 Generate the Rust code:
 
