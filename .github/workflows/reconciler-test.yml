@@ -23,7 +23,7 @@ env:
 
 jobs:
   codegen:
-    name: Run codegen check
+    name: codegen check
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v3
