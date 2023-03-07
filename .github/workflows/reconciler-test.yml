@@ -22,15 +22,16 @@ env:
   COREDB_OPERATOR_VERSION: "2023.3.6"
 
 jobs:
-  validate-codegen:
+  codegen:
     name: Check codegen
     runs-on: ubuntu-20.04
       - uses: actions/checkout@v3
-      - name: Install toolchain
+      - name: Install Rust toolchain
         uses: actions-rs/toolchain@v1
         with:
           profile: minimal
           toolchain: nightly
+          components: rustfmt
       - name: Codegen check
         run: |
           cargo install kopium
@@ -44,7 +45,6 @@ jobs:
               git diff src/coredb_crd.rs
               exit 1
           fi
-
   lint:
     name: Run linters
     runs-on: ubuntu-latest
