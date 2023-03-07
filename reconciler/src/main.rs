@@ -2,9 +2,8 @@ use kube::{Client, ResourceExt};
 use log::{info, warn};
 use pgmq::{Message, PGMQueue};
 use reconciler::{
-    create_ing_route_tcp, create_namespace, create_or_update, delete, delete_namespace,
-    generate_spec, get_all, get_pg_conn,
-    create_metrics_ingress
+    create_ing_route_tcp, create_metrics_ingress, create_namespace, create_or_update, delete,
+    delete_namespace, generate_spec, get_all, get_pg_conn,
 };
 use std::env;
 use std::{thread, time};
