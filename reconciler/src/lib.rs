@@ -142,7 +142,7 @@ pub async fn create_or_update(
     Ok(())
 }
 
-pub async fn delete(client: Client, namespace: String, name: String) -> Result<(), Error> {
+pub async fn delete(client: Client, namespace: &str, name: &str) -> Result<(), Error> {
     let pg_cluster_api: Api<CoreDB> = Api::namespaced(client, &namespace);
     let params = DeleteParams::default();
     info!("\nDeleting CoreDB: {}", name);
@@ -171,7 +171,7 @@ pub async fn create_namespace(client: Client, name: &str) -> Result<(), Error> {
     Ok(())
 }
 
-pub async fn delete_namespace(client: Client, name: String) -> Result<(), Error> {
+pub async fn delete_namespace(client: Client, name: &str) -> Result<(), Error> {
     let ns_api: Api<Namespace> = Api::all(client);
     let params = DeleteParams::default();
     info!("\nDeleting namespace: {}", name);

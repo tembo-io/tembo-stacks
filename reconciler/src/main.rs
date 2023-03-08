@@ -55,7 +55,7 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
 
         // Based on message_type in message, create, update, delete PostgresCluster
         match read_msg.message.event_type {
-            Event::Create | Event::Update => {
+            (Event::Create | Event::Update) => {
                 info!("Doing nothing for now");
                 create_namespace(client.clone(), &read_msg.message.dbname)
                     .await
@@ -83,42 +83,44 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
                     .await
                     .expect("error getting secret");
 
-                // report state
+                let report_event = match read_msg.message.event_type {
+                    Event::Create => Event::Created,
+                    Event::Update => Event::Updated,
+                    _ => unreachable!(),
+                };
                 let msg = types::StateToControlPlane {
-                    data_plane_id,
-                    event_id,
-                    state: types::State {
-                        connection: Some(connection_string),
-                        status: types::Status::Up,
-                    },
+                    data_plane_id: read_msg.message.data_plane_id,
+                    event_id: read_msg.message.event_id,
+                    event_type: report_event,
+                    spec: Some(read_msg.message.spec.clone()),
+                    connection: Some(connection_string),
                 };
                 let msg_id = queue.send(&data_plane_events_queue, &msg).await?;
                 info!("msg_id: {:?}", msg_id);
             }
             Event::Delete => {
                 info!("Doing nothing for now");
-                let name: String =
-                    serde_json::from_value(read_msg.message["body"]["resource_name"].clone())
-                        .unwrap();
-
                 // delete PostgresCluster
-                delete(client.clone(), name.clone(), name.clone())
-                    .await
-                    .expect("error deleting PostgresCluster");
+                delete(
+                    client.clone(),
+                    &read_msg.message.dbname,
+                    &read_msg.message.dbname,
+                )
+                .await
+                .expect("error deleting PostgresCluster");
 
                 // delete namespace
-                delete_namespace(client.clone(), name.clone())
+                delete_namespace(client.clone(), &read_msg.message.dbname)
                     .await
                     .expect("error deleting namespace");
 
                 // report state
                 let msg = types::StateToControlPlane {
-                    data_plane_id,
-                    event_id,
-                    state: types::State {
-                        connection: None,
-                        status: types::Status::Deleted,
-                    },
+                    data_plane_id: read_msg.message.data_plane_id,
+                    event_id: read_msg.message.event_id,
+                    event_type: Event::Deleted,
+                    spec: None,
+                    connection: None,
                 };
                 let msg_id = queue.send(&data_plane_events_queue, &msg).await?;
                 info!("msg_id: {:?}", msg_id);
