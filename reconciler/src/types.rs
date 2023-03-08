@@ -1,3 +1,4 @@
+use coredb_crd as crd;
 use serde::{Deserialize, Serialize};
 
 use crate::coredb_crd;
@@ -6,14 +7,26 @@ use crate::coredb_crd;
 pub struct CRUDevent {
     pub data_plane_id: String,
     pub event_id: String,
-    pub message_type: String,
-    pub body: EventBody,
+    pub event_type: Event,
+    pub dbname: String,
+    pub spec: crd::CoreDBSpec,
 }
 
-pub enum UpdateEvent {
-    ToggleExtension,
-    UpdateInfra,
-    InstallExtension,
+#[derive(Debug, Clone, Copy, Serialize, Deserialize)]
+pub enum Event {
+    Create,
+    Created,
+    Error,
+    Update,
+    Updated,
+    Restart,
+    Restarted,
+    Stop,
+    StopComplete,
+    Delete,
+    Deleted,
+    Start,
+    Started,
 }
 
 #[derive(Debug, Deserialize, Serialize)]
