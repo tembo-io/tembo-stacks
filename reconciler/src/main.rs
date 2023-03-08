@@ -55,7 +55,7 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
 
         // Based on message_type in message, create, update, delete PostgresCluster
         match read_msg.message.event_type {
-            (Event::Create | Event::Update) => {
+            Event::Create | Event::Update => {
                 info!("Doing nothing for now");
                 create_namespace(client.clone(), &read_msg.message.dbname)
                     .await
