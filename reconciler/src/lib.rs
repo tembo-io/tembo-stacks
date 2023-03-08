@@ -135,7 +135,7 @@ pub async fn create_or_update(
     let params = PatchParams::apply("reconciler").force();
     let name: String = serde_json::from_value(deployment["metadata"]["name"].clone()).unwrap();
     info!("\nCreating or updating CoreDB: {}", name);
-    let _o = pg_cluster_api
+    let _ = pg_cluster_api
         .patch(&name, &params, &Patch::Apply(&deployment))
         .await
         .map_err(Error::KubeError)?;
