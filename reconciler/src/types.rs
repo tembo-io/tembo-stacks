@@ -29,16 +29,6 @@ pub enum Event {
     Started,
 }
 
-#[derive(Debug, Deserialize, Serialize)]
-pub struct EventBody {
-    pub resource_type: String,
-    pub resource_name: String,
-    pub storage: Option<String>,
-    pub memory: Option<String>,
-    pub cpu: Option<String>,
-    pub extensions: Option<Vec<coredb_crd::CoreDBExtensions>>,
-}
-
 /// message returned to control plane
 /// reports state of data plane
 #[derive(Debug, Serialize, Deserialize)]

@@ -1,4 +1,4 @@
-mod coredb_crd;
+pub mod coredb_crd;
 mod ingress_route_tcp_crd;
 pub mod types;
 
