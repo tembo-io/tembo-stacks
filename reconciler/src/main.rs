@@ -47,7 +47,9 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
         };
 
         // TODO: recycld messages should get archived, logged, alerted
-        // if read_msg.read_ct >=2 {
+        // this auto-archive of bad messages should only get implemented after
+        // control-plane has a scheduled reconciler process implemented
+        // if read_msg.read_ct >= 2 {
         //     warn!("recycled message: {:?}", read_msg);
         //     queue.archive(queue_name, &read_msg.msg_id).await?;
         //     continue;
