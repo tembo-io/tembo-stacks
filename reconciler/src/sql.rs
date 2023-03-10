@@ -2,9 +2,10 @@ use crate::coredb_crd::{self as crd, CoreDBExtensionsLocations};
 use crate::errors::ReconcilerError;
 use log::LevelFilter;
 use sqlx;
-use sqlx::postgres::PgConnectOptions;
+use sqlx::postgres::{PgConnectOptions, PgPoolOptions};
 use sqlx::{ConnectOptions, FromRow};
 use sqlx::{Pool, Postgres, Row};
+use std::collections::HashMap;
 use url::{ParseError, Url};
 
 #[derive(Debug, FromRow)]
@@ -85,21 +86,6 @@ order by
     Ok(rows)
 }
 
-// Configure connection options
-pub fn conn_options(url: &str) -> Result<PgConnectOptions, ParseError> {
-    // Parse url
-    let parsed = Url::parse(url)?;
-    let mut options = PgConnectOptions::new()
-        .host(parsed.host_str().ok_or(ParseError::EmptyHost)?)
-        .port(parsed.port().ok_or(ParseError::InvalidPort)?)
-        .username(parsed.username())
-        .password(parsed.password().ok_or(ParseError::IdnaError)?);
-    options.log_statements(LevelFilter::Debug);
-    Ok(options)
-}
-
-use std::collections::HashMap;
-
 // wrangle the extensions in installed
 // return as the crd / spec
 pub async fn get_all_extensions(
@@ -132,4 +118,27 @@ pub async fn get_all_extensions(
         });
     }
     Ok(ext_spec)
+}
+
+// Configure connection options
+pub fn conn_options(url: &str) -> Result<PgConnectOptions, ParseError> {
+    // Parse url
+    let parsed = Url::parse(url)?;
+    let mut options = PgConnectOptions::new()
+        .host(parsed.host_str().ok_or(ParseError::EmptyHost)?)
+        .port(parsed.port().ok_or(ParseError::InvalidPort)?)
+        .username(parsed.username())
+        .password(parsed.password().ok_or(ParseError::IdnaError)?);
+    options.log_statements(LevelFilter::Debug);
+    Ok(options)
+}
+
+pub async fn connect(url: &str) -> Result<Pool<Postgres>, ReconcilerError> {
+    let options = conn_options(url)?;
+    let pgp = PgPoolOptions::new()
+        .acquire_timeout(std::time::Duration::from_secs(10))
+        .max_connections(5)
+        .connect_with(options)
+        .await?;
+    Ok(pgp)
 }

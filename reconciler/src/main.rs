@@ -12,7 +12,7 @@ use types::{CRUDevent, Event};
 
 #[tokio::main]
 async fn run() -> Result<(), Box<dyn std::error::Error>> {
-    // // Read connection info from environment variable
+    // Read connection info from environment variable
     let pg_conn_url = env::var("PG_CONN_URL").expect("PG_CONN_URL must be set");
     let control_plane_events_queue =
         env::var("CONTROL_PLANE_EVENTS_QUEUE").expect("CONTROL_PLANE_EVENTS_QUEUE must be set");
@@ -46,7 +46,7 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
             }
         };
 
-        // TODO: recycld messages should get archived, logged, alerted
+        // TODO: recycled messages should get archived, logged, alerted
         // this auto-archive of bad messages should only get implemented after
         // control-plane has a scheduled reconciler process implemented
         // if read_msg.read_ct >= 2 {
@@ -91,8 +91,11 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
                     .await
                     .expect("error getting spec");
                 info!("current_spec: {:?}", current_spec);
-                // TODO: establish a new connection to SQL using conn string from the secret
-                let extensions = sql::get_all_extensions(&queue.connection).await?;
+
+                // TODO: we should replace this with a connection string for CoreDBAdmin role
+                // which means we need to create that CoreDBAdmin role first...
+                let conn = sql::connect(&connection_string).await?;
+                let extensions = sql::get_all_extensions(&conn).await?;
                 println!("extensions: {extensions:?}");
                 // update the spec values from database.
                 current_spec.spec.extensions = Some(extensions);
