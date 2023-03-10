@@ -64,9 +64,8 @@ mod test {
                         enabled: true,
                         version: Some("1.1.1".to_owned()),
                         schema: Some("public".to_owned()),
-                        database: Some("postgres".to_owned())
-                    }
-                    ]
+                        database: Some("postgres".to_owned()),
+                    }],
                 }]),
                 storage: Some("1Gi".to_owned()),
                 port: None,

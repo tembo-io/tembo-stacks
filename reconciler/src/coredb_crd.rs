@@ -3,11 +3,16 @@
 // kopium version: 0.15.0
 
 use kube::CustomResource;
-use serde::{Serialize, Deserialize};
+use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 
 #[derive(CustomResource, Serialize, Deserialize, Clone, Debug)]
-#[kube(group = "coredb.io", version = "v1alpha1", kind = "CoreDB", plural = "coredbs")]
+#[kube(
+    group = "coredb.io",
+    version = "v1alpha1",
+    kind = "CoreDB",
+    plural = "coredbs"
+)]
 #[kube(namespaced)]
 #[kube(status = "CoreDBStatus")]
 #[kube(schema = "disabled")]
@@ -18,9 +23,17 @@ pub struct CoreDBSpec {
     pub image: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub port: Option<i32>,
-    #[serde(default, skip_serializing_if = "Option::is_none", rename = "postgresExporterEnabled")]
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        rename = "postgresExporterEnabled"
+    )]
     pub postgres_exporter_enabled: Option<bool>,
-    #[serde(default, skip_serializing_if = "Option::is_none", rename = "postgresExporterImage")]
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        rename = "postgresExporterImage"
+    )]
     pub postgres_exporter_image: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub replicas: Option<i32>,
@@ -61,4 +74,3 @@ pub struct CoreDBResources {
 pub struct CoreDBStatus {
     pub running: bool,
 }
-

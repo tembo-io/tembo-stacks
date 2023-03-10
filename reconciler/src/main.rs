@@ -1,10 +1,10 @@
 use kube::{Client, ResourceExt};
 use log::{info, warn};
 use pgmq::{Message, PGMQueue};
-use reconciler::types;
+use reconciler::sql;
 use reconciler::{
     create_ing_route_tcp, create_metrics_ingress, create_namespace, create_or_update, delete,
-    delete_namespace, generate_spec, get_all, get_pg_conn,
+    delete_namespace, generate_spec, get_all, get_one, get_pg_conn, types,
 };
 use std::env;
 use std::{thread, time};
@@ -57,6 +57,7 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
 
         // Based on message_type in message, create, update, delete PostgresCluster
         match read_msg.message.event_type {
+            // every event is for a single namespace
             Event::Create | Event::Update => {
                 info!("Doing nothing for now");
                 create_namespace(client.clone(), &read_msg.message.dbname)
@@ -85,6 +86,17 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
                     .await
                     .expect("error getting secret");
 
+                // read current spec from PostgresCluster
+                let mut current_spec = get_one(client.clone(), &read_msg.message.dbname)
+                    .await
+                    .expect("error getting spec");
+                info!("current_spec: {:?}", current_spec);
+                // TODO: establish a new connection to SQL using conn string from the secret
+                let extensions = sql::get_all_extensions(&queue.connection).await?;
+                println!("extensions: {extensions:?}");
+                // update the spec values from database.
+                current_spec.spec.extensions = Some(extensions);
+
                 let report_event = match read_msg.message.event_type {
                     Event::Create => Event::Created,
                     Event::Update => Event::Updated,
@@ -94,7 +106,7 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
                     data_plane_id: read_msg.message.data_plane_id,
                     event_id: read_msg.message.event_id,
                     event_type: report_event,
-                    spec: Some(read_msg.message.spec.clone()),
+                    spec: Some(current_spec.spec),
                     connection: Some(connection_string),
                 };
                 let msg_id = queue.send(&data_plane_events_queue, &msg).await?;
@@ -136,7 +148,7 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
         // TODO (ianstanton) This is here as an example for now. We want to use
         //  this to ensure a PostgresCluster exists before we attempt to delete it.
         // Get all existing PostgresClusters
-        let vec = get_all(client.clone(), "default".to_owned());
+        let vec = get_all(client.clone(), "default");
         for pg in vec.await.iter() {
             info!("found PostgresCluster {}", pg.name_any());
         }
