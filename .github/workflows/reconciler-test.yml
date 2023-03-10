@@ -19,7 +19,8 @@ on:
       - release**
 
 env:
-  COREDB_OPERATOR_VERSION: 2023.3.6
+  COREDB_OPERATOR_VERSION: 2023.3.9
+  COREDB_CLI_VERSION: 2023.3.9+1
 
 jobs:
   codegen:
@@ -121,7 +122,7 @@ jobs:
           helm install --namespace=traefik-v2 --values ./tests/traefik-values.yaml traefik traefik/traefik
 
           # Install the CoreDB operator
-          cargo install --version ${COREDB_OPERATOR_VERSION} coredb-cli
+          cargo install --version ${COREDB_CLI_VERSION} coredb-cli
           coredb-cli install
           kubectl get crds
 
