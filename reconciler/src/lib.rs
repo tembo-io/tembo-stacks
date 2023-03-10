@@ -1,6 +1,8 @@
 pub mod coredb_crd;
 mod ingress_route_tcp_crd;
 pub mod types;
+pub mod sql;
+pub mod errors;
 
 use base64::{engine::general_purpose, Engine as _};
 use coredb_crd::CoreDB;
@@ -117,13 +119,19 @@ pub async fn create_metrics_ingress(client: Client, name: &str) -> Result<(), Er
     Ok(())
 }
 
-pub async fn get_all(client: Client, namespace: String) -> Vec<CoreDB> {
+pub async fn get_all(client: Client, namespace: &str) -> Vec<CoreDB> {
     let pg_cluster_api: Api<CoreDB> = Api::namespaced(client, &namespace);
     let pg_list = pg_cluster_api
         .list(&ListParams::default())
         .await
         .expect("could not get CoreDBs");
     pg_list.items
+}
+
+pub async fn get_one(client: Client, namespace: &str) -> Result<CoreDB, Error> {
+    let pg_cluster_api: Api<CoreDB> = Api::namespaced(client, &namespace);
+    let pg_instance = pg_cluster_api.get(namespace).await.expect("msg");
+    Ok(pg_instance)
 }
 
 pub async fn create_or_update(
