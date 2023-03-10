@@ -33,27 +33,53 @@ pub async fn get_databases(pool: &Pool<Postgres>) -> Result<Vec<String>, sqlx::E
 /// lists extensions in a single database
 pub async fn list_extensions(connection: &Pool<Postgres>) -> Result<Vec<ExtRow>, ReconcilerError> {
     let q = "
-    select distinct
-	t0.name as name,
-	t0.installed as enabled,
-	t1.version as version,
-	t0.schema as schema
-from (
+select
+	distinct on
+	(name) *
+from
+	(
+	select
+		*
+	from
+		(
+		select
+			t0.extname as name,
+			t0.extversion as version,
+			true as enabled,
+			t1.nspname as schema
+		from
+			(
+			select
+				extnamespace,
+				extname,
+				extversion
+			from
+				pg_extension
+		) t0,
+			(
+			select
+				oid,
+				nspname
+			from
+				pg_namespace
+		) t1
+		where
+			t1.oid = t0.extnamespace
+	) installed
+union
 	select 
 		name,
-		version,
-		installed,
-		coalesce(schema, 'public') as schema
-	from pg_catalog.pg_available_extension_versions
-) t0,
-(
-	select 
-		name,
-		COALESCE(installed_version, default_version) AS version, 
-		comment 
-	from pg_catalog.pg_available_extensions
-) t1
-where t0.name = t1.name
+		default_version as version,
+		false as enabled,
+		'public' as schema
+	from
+		pg_catalog.pg_available_extensions
+	order by
+		enabled asc 
+) combined
+order by
+	name asc,
+	enabled desc
     ";
     let rows: Vec<ExtRow> = sqlx::query_as::<_, ExtRow>(q).fetch_all(connection).await?;
     Ok(rows)
