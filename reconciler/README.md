@@ -71,8 +71,20 @@ Install `kopium` if you don't have it already.
 
 Download the specified CoreDB spec.
 
-`wget https://raw.githubusercontent.com/CoreDB-io/coredb/release/2023.3.6/coredb-operator/yaml/crd.yaml`
+`wget https://raw.githubusercontent.com/CoreDB-io/coredb/release/2023.3.9/coredb-operator/yaml/crd.yaml`
 
 Generate the Rust code:
 
 `kopium -f crd.yaml > src/coredb_crd.rs`
+
+
+
+
+
+# Local Kind Instal
+# run from root of repo
+
+docker build -t quay.io/coredb/reconciler:local ./reconciler
+kind load docker-image quay.io/coredb/reconciler:local
+
+helm update --install --create-namespace --set image.tag=local --namespace reconciler reconciler ./charts/reconciler

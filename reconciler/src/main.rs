@@ -92,9 +92,15 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
                     .expect("error getting spec");
                 info!("current_spec: {:?}", current_spec);
 
+                // replace the host with dbame.svc.cluster.local
+                let db_string = connection_string.replace(
+                    "coredb-development.com",
+                    format!("{}.svc.cluster.local", &read_msg.message.dbname).as_str(),
+                );
+                warn!("db_string: {:?}", db_string);
                 // TODO: we should replace this with a connection string for CoreDBAdmin role
                 // which means we need to create that CoreDBAdmin role first...
-                let conn = sql::connect(&connection_string).await?;
+                let conn = sql::connect(&db_string).await?;
                 let extensions = sql::get_all_extensions(&conn).await?;
                 println!("extensions: {extensions:?}");
                 // update the spec values from database.
