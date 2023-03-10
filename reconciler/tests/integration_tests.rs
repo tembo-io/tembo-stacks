@@ -60,9 +60,13 @@ mod test {
                 postgres_exporter_image: None,
                 extensions: Some(vec![crd::CoreDBExtensions {
                     name: "postgis".to_owned(),
-                    enabled: true,
-                    version: "1.1.1".to_owned(),
-                    schema: "public".to_owned(),
+                    locations: vec![crd::CoreDBExtensionsLocations {
+                        enabled: true,
+                        version: Some("1.1.1".to_owned()),
+                        schema: Some("public".to_owned()),
+                        database: Some("postgres".to_owned())
+                    }
+                    ]
                 }]),
                 storage: Some("1Gi".to_owned()),
                 port: None,
