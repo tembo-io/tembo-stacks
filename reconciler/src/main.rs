@@ -1,4 +1,4 @@
-use kube::{Client, ResourceExt};
+use kube::{Client, Config, ResourceExt};
 use log::{info, warn};
 use pgmq::{Message, PGMQueue};
 use reconciler::sql;
@@ -59,7 +59,6 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
         match read_msg.message.event_type {
             // every event is for a single namespace
             Event::Create | Event::Update => {
-                info!("Doing nothing for now");
                 create_namespace(client.clone(), &read_msg.message.dbname)
                     .await
                     .expect("error creating namespace");
@@ -92,19 +91,31 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
                     .expect("error getting spec");
                 info!("current_spec: {:?}", current_spec);
 
-                // replace the host with dbame.svc.cluster.local
-                let db_string = connection_string.replace(
-                    "coredb-development.com",
-                    format!("{}.svc.cluster.local", &read_msg.message.dbname).as_str(),
-                );
-                warn!("db_string: {:?}", db_string);
+                // // replace the host with dbame.svc.cluster.local
+                // let db_string = connection_string.replace(
+                //     "coredb-development.com",
+                //     format!("{}.svc.cluster.local", &read_msg.message.dbname).as_str(),
+                // );
+                // warn!("db_string: {:?}", db_string);
                 // TODO: we should replace this with a connection string for CoreDBAdmin role
                 // which means we need to create that CoreDBAdmin role first...
-                let conn = sql::connect(&db_string).await?;
-                let extensions = sql::get_all_extensions(&conn).await?;
-                println!("extensions: {extensions:?}");
+                let kube_config = Config::infer()
+                    .await
+                    .expect("Please configure your Kubernetes context.");
+                // let selected_namespace = &kube_config.default_namespace;
+
+                // Initialize the Kubernetes client
+                let client = Client::try_from(kube_config.clone())
+                    .expect("Failed to initialize Kubernetes client");
+                let extensions =
+                    sql::exec_get_all_extensions(&current_spec, client, "postgres").await?;
+
+                // panic!();
+                // let conn = sql::connect(&db_string).await?;
+                // let extensions = sql::get_all_extensions(&conn).await?;
+                // println!("extensions: {extensions:?}");
                 // update the spec values from database.
-                current_spec.spec.extensions = Some(extensions);
+                current_spec.spec.extensions = extensions;
 
                 let report_event = match read_msg.message.event_type {
                     Event::Create => Event::Created,

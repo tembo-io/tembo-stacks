@@ -12,6 +12,7 @@
 #[cfg(test)]
 mod test {
 
+    use controller::controller::{CoreDB, CoreDBSpec, Extension, ExtensionInstallLocation};
     use k8s_openapi::{
         api::core::v1::Pod,
         apiextensions_apiserver::pkg::apis::apiextensions::v1::CustomResourceDefinition,
@@ -21,6 +22,7 @@ mod test {
         Api, Client, Config,
     };
     use pgmq::PGMQueue;
+
     use rand::Rng;
     use reconciler::{coredb_crd as crd, types};
     use std::collections::BTreeMap;
@@ -46,6 +48,25 @@ mod test {
         ]);
 
         // reconciler receives a CRUDevent from control plane
+        let spec_js = serde_json::json!({
+            "extensions": Some(vec![crd::CoreDBExtensions {
+                name: "postgis".to_owned(),
+                locations: vec![crd::CoreDBExtensionsLocations {
+                    enabled: true,
+                    version: Some("1.1.1".to_owned()),
+                    schema: Some("public".to_owned()),
+                    database: Some("postgres".to_owned()),
+                }],
+            }]),
+            "storage": Some("1Gi".to_owned()),
+            "replicas": Some(1),
+            "resources": Some(crd::CoreDBResources {
+                limits: Some(limits),
+                requests: None,
+            }),
+        });
+        let spec: CoreDBSpec = serde_json::from_value(spec_js).unwrap();
+
         let msg = types::CRUDevent {
             data_plane_id: "org_02s3owPQskuGXHE8vYsGSY".to_owned(),
             event_id: format!(
@@ -54,28 +75,7 @@ mod test {
             ),
             event_type: types::Event::Create,
             dbname: name.clone(),
-            spec: crd::CoreDBSpec {
-                image: None,
-                postgres_exporter_enabled: None,
-                postgres_exporter_image: None,
-                extensions: Some(vec![crd::CoreDBExtensions {
-                    name: "postgis".to_owned(),
-                    locations: vec![crd::CoreDBExtensionsLocations {
-                        enabled: true,
-                        version: Some("1.1.1".to_owned()),
-                        schema: Some("public".to_owned()),
-                        database: Some("postgres".to_owned()),
-                    }],
-                }]),
-                storage: Some("1Gi".to_owned()),
-                port: None,
-                replicas: Some(1),
-                resources: Some(crd::CoreDBResources {
-                    limits: Some(limits),
-                    requests: None,
-                }),
-                uid: None,
-            },
+            spec: spec,
         };
 
         let msg_id = queue.send(&myqueue, &msg).await;

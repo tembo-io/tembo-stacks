@@ -3,6 +3,7 @@ pub mod errors;
 mod ingress_route_tcp_crd;
 pub mod sql;
 pub mod types;
+use controller::controller::CoreDBSpec;
 
 use base64::{engine::general_purpose, Engine as _};
 use coredb_crd::CoreDB;
@@ -27,7 +28,7 @@ pub enum Error {
 
 pub type Result<T, E = Error> = std::result::Result<T, E>;
 
-pub async fn generate_spec(namespace: &str, spec: &coredb_crd::CoreDBSpec) -> Value {
+pub async fn generate_spec(namespace: &str, spec: &CoreDBSpec) -> Value {
     let spec = serde_json::json!({
         "apiVersion": "coredb.io/v1alpha1",
         "kind": "CoreDB",
@@ -128,8 +129,10 @@ pub async fn get_all(client: Client, namespace: &str) -> Vec<CoreDB> {
     pg_list.items
 }
 
-pub async fn get_one(client: Client, namespace: &str) -> Result<CoreDB, Error> {
-    let pg_cluster_api: Api<CoreDB> = Api::namespaced(client, namespace);
+use controller::CoreDB as crdCoreDb;
+
+pub async fn get_one(client: Client, namespace: &str) -> Result<crdCoreDb, Error> {
+    let pg_cluster_api: Api<crdCoreDb> = Api::namespaced(client, namespace);
     let pg_instance = pg_cluster_api.get(namespace).await.expect("msg");
     Ok(pg_instance)
 }

@@ -1,7 +1,5 @@
-use coredb_crd as crd;
+use controller::controller::CoreDBSpec;
 use serde::{Deserialize, Serialize};
-
-use crate::coredb_crd;
 /// incoming message from control plane
 #[derive(Debug, Deserialize, Serialize)]
 pub struct CRUDevent {
@@ -9,7 +7,7 @@ pub struct CRUDevent {
     pub event_id: String,
     pub event_type: Event,
     pub dbname: String,
-    pub spec: crd::CoreDBSpec,
+    pub spec: CoreDBSpec,
 }
 
 #[derive(Debug, Clone, Copy, Serialize, Deserialize)]
@@ -36,6 +34,6 @@ pub struct StateToControlPlane {
     pub data_plane_id: String, // unique identifier for the data plane
     pub event_id: String,      // pass through from event that triggered a data plane action
     pub event_type: Event,     // pass through from event that triggered a data plane action
-    pub spec: Option<coredb_crd::CoreDBSpec>,
+    pub spec: Option<CoreDBSpec>,
     pub connection: Option<String>,
 }
