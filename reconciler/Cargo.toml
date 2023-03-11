@@ -15,10 +15,8 @@ schemars = "0.8.11"
 thiserror = "1.0.38"
 env_logger = "0.10.0"
 log = "0.4.17"
-sqlx = { version = "0.6", features = [ "runtime-tokio-native-tls" , "postgres", "chrono" ] }
 pgmq = "0.8.1"
 base64 = "0.21.0"
-url = "2.3.1"
 coredb-controller = "0.0.1-alpha.1"
 
 [dependencies.kube]

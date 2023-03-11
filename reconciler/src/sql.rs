@@ -3,15 +3,10 @@ use controller::controller::{Extension, ExtensionInstallLocation};
 use crate::errors::ReconcilerError;
 use controller::CoreDB;
 use kube::Client;
-use log::{debug, info, LevelFilter};
-use sqlx;
-use sqlx::postgres::{PgConnectOptions, PgPoolOptions};
-use sqlx::{ConnectOptions, FromRow};
-use sqlx::{Pool, Postgres, Row};
+use log::{debug, info};
 use std::collections::HashMap;
-use url::{ParseError, Url};
 
-#[derive(Debug, FromRow)]
+#[derive(Debug)]
 pub struct ExtRow {
     pub name: String,
     pub version: String,
@@ -75,55 +70,6 @@ order by
 name asc,
 enabled desc
 "#;
-
-pub async fn get_databases(pool: &Pool<Postgres>) -> Result<Vec<String>, sqlx::Error> {
-    let rows = sqlx::query(LIST_DATABASES_QUERY)
-        .map(|row: sqlx::postgres::PgRow| row.try_get(0))
-        .fetch_all(pool)
-        .await?;
-    let databases: Vec<String> = rows.into_iter().map(|row| row.unwrap()).collect();
-    Ok(databases)
-}
-
-/// lists extensions in a single database
-pub async fn list_extensions(connection: &Pool<Postgres>) -> Result<Vec<ExtRow>, ReconcilerError> {
-    let rows: Vec<ExtRow> = sqlx::query_as::<_, ExtRow>(LIST_EXTENSIONS_QUERY)
-        .fetch_all(connection)
-        .await?;
-    Ok(rows)
-}
-
-// wrangle the extensions in installed
-// return as the crd / spec
-pub async fn get_all_extensions(conn: &Pool<Postgres>) -> Result<Vec<Extension>, ReconcilerError> {
-    let databases = get_databases(conn).await?;
-
-    let mut ext_hashmap: HashMap<String, Vec<ExtensionInstallLocation>> = HashMap::new();
-    for db in databases {
-        let extensions = list_extensions(conn).await?;
-        for ext in extensions {
-            let extlocation = ExtensionInstallLocation {
-                database: db.clone(),
-                version: Some(ext.version),
-                enabled: ext.enabled,
-                schema: ext.schema,
-            };
-            ext_hashmap
-                .entry(ext.name)
-                .or_insert_with(Vec::new)
-                .push(extlocation);
-        }
-    }
-
-    let mut ext_spec: Vec<Extension> = Vec::new();
-    for (ext_name, ext_locations) in &ext_hashmap {
-        ext_spec.push(Extension {
-            name: ext_name.clone(),
-            locations: ext_locations.clone(),
-        });
-    }
-    Ok(ext_spec)
-}
 
 pub async fn exec_list_databases(
     cdb: &CoreDB,
@@ -221,27 +167,4 @@ pub async fn exec_get_all_extensions(
         });
     }
     Ok(ext_spec)
-}
-
-// Configure connection options
-pub fn conn_options(url: &str) -> Result<PgConnectOptions, ParseError> {
-    // Parse url
-    let parsed = Url::parse(url)?;
-    let mut options = PgConnectOptions::new()
-        .host(parsed.host_str().ok_or(ParseError::EmptyHost)?)
-        .port(parsed.port().ok_or(ParseError::InvalidPort)?)
-        .username(parsed.username())
-        .password(parsed.password().ok_or(ParseError::IdnaError)?);
-    options.log_statements(LevelFilter::Debug);
-    Ok(options)
-}
-
-pub async fn connect(url: &str) -> Result<Pool<Postgres>, ReconcilerError> {
-    let options = conn_options(url)?;
-    let pgp = PgPoolOptions::new()
-        .acquire_timeout(std::time::Duration::from_secs(10))
-        .max_connections(5)
-        .connect_with(options)
-        .await?;
-    Ok(pgp)
 }
