@@ -80,7 +80,7 @@ pub async fn create_metrics_ingress(client: Client, name: &str) -> Result<(), Re
             "ingressClassName": "traefik",
             "rules": [
                 {
-                    "host": format!("{name}.coredb.io"),
+                    "host": format!("{name}.coredb-development.com"),
                     "http": {
                         "paths": [
                             {
