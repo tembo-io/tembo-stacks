@@ -18,10 +18,6 @@ on:
       - main
       - release**
 
-env:
-  COREDB_OPERATOR_VERSION: 2023.3.9
-  COREDB_CLI_VERSION: 2023.3.9+1
-
 jobs:
   codegen:
     name: codegen check
@@ -37,7 +33,7 @@ jobs:
       - name: Codegen check
         run: |
           cargo install kopium
-          wget https://raw.githubusercontent.com/CoreDB-io/coredb/release/${COREDB_OPERATOR_VERSION}/coredb-operator/yaml/crd.yaml
+          wget https://raw.githubusercontent.com/CoreDB-io/coredb/main/coredb-operator/yaml/crd.yaml
           kopium -f crd.yaml > src/coredb_crd.rs
           cargo fmt
           if git diff --quiet -- src/coredb_crd.rs; then
@@ -123,7 +119,7 @@ jobs:
 
           # Install the CoreDB operator
           cargo install coredb-cli
-          coredb-cli install --branch release/${COREDB_OPERATOR_VERSION}
+          coredb-cli install --branch main
           kubectl get crds
 
           # Start local postgres for the Nile queues

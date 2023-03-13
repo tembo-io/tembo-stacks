@@ -99,7 +99,9 @@ mod test {
         let msg = queue.read::<StateToControlPlane>("myqueue_data_plane", Some(&10_i32)).await.unwrap();
         assert!(msg.is_some());
         let spec = msg.unwrap().message.spec.unwrap();
-        assert!(spec.extensions.unwrap().len() > 0);
+        assert!(spec.extensions.is_some());
+        let extensions = spec.extensions.unwrap();
+        assert!(extensions.len() > 0);
     }
 
     async fn kube_client() -> kube::Client {
