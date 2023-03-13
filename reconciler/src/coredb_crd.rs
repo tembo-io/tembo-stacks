@@ -72,5 +72,7 @@ pub struct CoreDBResources {
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct CoreDBStatus {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub extensions: Option<Vec<CoreDBExtensions>>,
     pub running: bool,
 }

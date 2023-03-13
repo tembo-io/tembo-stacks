@@ -11,8 +11,6 @@
 
 #[cfg(test)]
 mod test {
-
-    use controller::controller::{CoreDB, CoreDBSpec, Extension, ExtensionInstallLocation};
     use k8s_openapi::{
         api::core::v1::Pod,
         apiextensions_apiserver::pkg::apis::apiextensions::v1::CustomResourceDefinition,
@@ -65,7 +63,7 @@ mod test {
                 requests: None,
             }),
         });
-        let spec: CoreDBSpec = serde_json::from_value(spec_js).unwrap();
+        let spec: crd::CoreDBSpec = serde_json::from_value(spec_js).unwrap();
 
         let msg = types::CRUDevent {
             data_plane_id: "org_02s3owPQskuGXHE8vYsGSY".to_owned(),

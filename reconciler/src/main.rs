@@ -1,13 +1,14 @@
-use kube::{Client, Config, ResourceExt};
+use kube::{Client, ResourceExt};
 use log::{info, warn};
 use pgmq::{Message, PGMQueue};
-use reconciler::sql;
 use reconciler::{
     create_ing_route_tcp, create_metrics_ingress, create_namespace, create_or_update, delete,
-    delete_namespace, generate_spec, get_all, get_one, get_pg_conn, types,
+    delete_namespace, generate_spec, get_all, get_coredb_status, get_pg_conn, types,
 };
 use std::env;
 use std::{thread, time};
+use tokio_retry::strategy::FixedInterval;
+use tokio_retry::Retry;
 use types::{CRUDevent, Event};
 
 #[tokio::main]
@@ -29,11 +30,16 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
     // Infer the runtime environment and try to create a Kubernetes Client
     let client = Client::try_default().await?;
 
+    // retrying actions with kubernetes
+    // limit it to 5 retries at 1 second intervals
+    let retry_strategy = FixedInterval::from_millis(2500).take(1);
+
     loop {
         // Read from queue (check for new message)
         // messages that dont fit a CRUDevent will error
+        // set visibility timeout to 90 seconds
         let read_msg = queue
-            .read::<CRUDevent>(&control_plane_events_queue, Some(&30_i32))
+            .read::<CRUDevent>(&control_plane_events_queue, Some(&90_i32))
             .await?;
         let read_msg: Message<CRUDevent> = match read_msg {
             Some(message) => {
@@ -86,36 +92,31 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
                     .expect("error getting secret");
 
                 // read current spec from PostgresCluster
-                let mut current_spec = get_one(client.clone(), &read_msg.message.dbname)
-                    .await
-                    .expect("error getting spec");
-                info!("current_spec: {:?}", current_spec);
+                // this should wait until it is able to receive an actual update from the cluster
 
-                // // replace the host with dbame.svc.cluster.local
-                // let db_string = connection_string.replace(
-                //     "coredb-development.com",
-                //     format!("{}.svc.cluster.local", &read_msg.message.dbname).as_str(),
-                // );
-                // warn!("db_string: {:?}", db_string);
-                // TODO: we should replace this with a connection string for CoreDBAdmin role
-                // which means we need to create that CoreDBAdmin role first...
-                let kube_config = Config::infer()
-                    .await
-                    .expect("Please configure your Kubernetes context.");
-                // let selected_namespace = &kube_config.default_namespace;
-
-                // Initialize the Kubernetes client
-                let client = Client::try_from(kube_config.clone())
-                    .expect("Failed to initialize Kubernetes client");
-                let extensions =
-                    sql::exec_get_all_extensions(&current_spec, client, "postgres").await?;
+                let result = Retry::spawn(retry_strategy.clone(), || {
+                    get_coredb_status(client.clone(), &read_msg.message.dbname)
+                })
+                .await;
+                if result.is_err() {
+                    warn!("error getting PostgresCluster status: {:?}", result);
+                    continue;
+                }
+                let mut current_spec = result?;
+                let spec_js = serde_json::to_string(&current_spec.spec).unwrap();
+                info!("{} spec: {:?}", &read_msg.message.dbname, spec_js);
 
                 // panic!();
-                // let conn = sql::connect(&db_string).await?;
-                // let extensions = sql::get_all_extensions(&conn).await?;
-                // println!("extensions: {extensions:?}");
-                // update the spec values from database.
-                current_spec.spec.extensions = extensions;
+                // get actual extensions from crd status
+                let actual_extension = match current_spec.status {
+                    Some(status) => status.extensions,
+                    None => {
+                        warn!("No extensions in: {:?}", &read_msg.message.dbname);
+                        None
+                    }
+                };
+                // UPDATE SPEC OBJECT WITH ACTUAL EXTENSIONS
+                current_spec.spec.extensions = actual_extension;
 
                 let report_event = match read_msg.message.event_type {
                     Event::Create => Event::Created,
