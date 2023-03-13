@@ -4,7 +4,6 @@ on:
   push:
     branches:
       - main
-      - deploy-to-dev
     paths:
     - 'reconciler/**'
     - '.github/workflows/reconciler-deploy.yml'
@@ -16,27 +15,23 @@ jobs:
     steps:
       - name: Check out the repo
         uses: actions/checkout@v3
-      # - name: Check out the coredb repo to reuse some actions
-      #   uses: actions/checkout@v3
-      #   with:
-      #     repository: coredb-io/coredb
-      #     path: ./coredb
-      #     ref: release/2023.2.15
+      - name: Check out the coredb repo to reuse some actions
+        uses: actions/checkout@v3
+        with:
+          repository: coredb-io/coredb
+          path: ./coredb
+          ref: release/2023.2.15
       - uses: azure/setup-kubectl@v3
       - uses: azure/setup-helm@v3
-      - name: Install Helm 'diff'
-        run: |
-          set -xe
-          helm plugin install https://github.com/databus23/helm-diff
-      # - name: Build and upload operator image
-      #   uses: ./coredb/.github/actions/build-and-push-to-quay
-      #   with:
-      #     image_name: reconciler
-      #     publish_latest: true
-      #     publish_calver: true
-      #     docker_directory: ./reconciler
-      #     quay_user: ${{ secrets.QUAY_USER }}
-      #     quay_password: ${{ secrets.QUAY_PASSWORD }}
+      - name: Build and upload operator image
+        uses: ./coredb/.github/actions/build-and-push-to-quay
+        with:
+          image_name: reconciler
+          publish_latest: true
+          publish_calver: true
+          docker_directory: ./reconciler
+          quay_user: ${{ secrets.QUAY_USER }}
+          quay_password: ${{ secrets.QUAY_PASSWORD }}
       - name: Configure AWS Credentials
         uses: aws-actions/configure-aws-credentials@v2
         with:
