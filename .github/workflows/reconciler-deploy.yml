@@ -23,6 +23,11 @@ jobs:
       #     path: ./coredb
       #     ref: release/2023.2.15
       - uses: azure/setup-kubectl@v3
+      - uses: azure/setup-helm@v3
+      - name: Install Helm 'diff'
+        run: |
+          set -xe
+          helm plugin install https://github.com/databus23/helm-diff
       # - name: Build and upload operator image
       #   uses: ./coredb/.github/actions/build-and-push-to-quay
       #   with:
@@ -41,6 +46,14 @@ jobs:
       - name: Configure Kubeconfig
         run: |
           aws eks --region us-east-1 update-kubeconfig --name coredb-pgaas
-      - name: Check kubernetes connection
+      - name: Update the reconciler
         run: |
-          kubectl get nodes
+          helm upgrade \
+            --install \
+            --set secret.postgresConnectionString='queue-conn'
+            --set dataPlaneEventsQueue=data_plane_events \
+            --set controlPlaneEventsQueue=saas_queue \
+            --namespace reconciler \
+            reconciler \
+            charts/reconciler
+					kubectl rollout restart --namespace reconciler deployments
