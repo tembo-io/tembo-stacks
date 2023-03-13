@@ -56,4 +56,4 @@ jobs:
             --namespace reconciler \
             reconciler \
             charts/reconciler
-					kubectl rollout restart --namespace reconciler deployments
+          kubectl rollout restart --namespace reconciler deployments || true
