@@ -50,7 +50,7 @@ jobs:
         run: |
           helm upgrade \
             --install \
-            --set secret.postgresConnectionString='queue-conn'
+            --set secret.useExistingSecret='queue-conn' \
             --set dataPlaneEventsQueue=data_plane_events \
             --set controlPlaneEventsQueue=saas_queue \
             --namespace reconciler \
