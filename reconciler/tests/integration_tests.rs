@@ -27,6 +27,7 @@ mod test {
         types::{self, StateToControlPlane},
     };
     use std::collections::BTreeMap;
+    use std::{thread, time};
 
     #[tokio::test]
     #[ignore]
@@ -96,6 +97,9 @@ mod test {
         )
         .await
         .unwrap_or_else(|_| panic!("Did not find the pod {pod_name} to be running after waiting {timeout_seconds_start_pod} seconds"));
+
+        // wait for reconciler to send message to data_plane_events queue
+        thread::sleep(time::Duration::from_secs(15));
 
         // read message from data_plane_events queue
         let msg = queue

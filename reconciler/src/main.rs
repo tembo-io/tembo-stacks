@@ -108,7 +108,6 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
                 let spec_js = serde_json::to_string(&current_spec.spec).unwrap();
                 info!("{} spec: {:?}", &read_msg.message.dbname, spec_js);
 
-                // panic!();
                 // get actual extensions from crd status
                 let actual_extension = match current_spec.status {
                     Some(status) => status.extensions,
