@@ -60,7 +60,6 @@ export DATA_PLANE_EVENTS_QUEUE=myqueue_data_plane
 
 2. Next, you'll need to post some messages to the queue for the reconciler to pick up. That can be performed in functional testing like this `cargo test -- --ignored`
 
-
 ## Codegen
 
 This project requires generated client side types for the coredb-operator. To update:
@@ -76,7 +75,6 @@ Download the specified CoreDB spec.
 Generate the Rust code:
 
 `kopium -f crd.yaml > src/coredb_crd.rs`
-
 
 ## Integration Testing
 
