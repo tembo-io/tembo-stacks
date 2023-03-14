@@ -105,7 +105,10 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
                 }
                 let mut current_spec = result?;
                 let spec_js = serde_json::to_string(&current_spec.spec).unwrap();
-                debug!("dbname: {}, current_spec: {:?}", &read_msg.message.dbname, spec_js);
+                debug!(
+                    "dbname: {}, current_spec: {:?}",
+                    &read_msg.message.dbname, spec_js
+                );
 
                 // get actual extensions from crd status
                 let actual_extension = match current_spec.status {
