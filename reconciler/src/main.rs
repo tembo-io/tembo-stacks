@@ -1,5 +1,5 @@
 use kube::{Client, ResourceExt};
-use log::{info, warn};
+use log::{debug, error, info, warn};
 use pgmq::{Message, PGMQueue};
 use reconciler::{
     create_ing_route_tcp, create_metrics_ingress, create_namespace, create_or_update, delete,
@@ -89,24 +89,23 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
                     .await
                     .expect("error getting secret");
 
-                // read current spec from PostgresCluster
+                // read spec.status from PostgresCluster
                 // this should wait until it is able to receive an actual update from the cluster
-                thread::sleep(time::Duration::from_secs(2));
                 // retrying actions with kube
-                // limit it to 10 retries at 2.5 second intervals
+                // limit to 60 seconds - 20 retries, 5 seconds between retries
                 // TODO: need a better way to handle this
-                let retry_strategy = FixedInterval::from_millis(2500).take(10);
+                let retry_strategy = FixedInterval::from_millis(5000).take(20);
                 let result = Retry::spawn(retry_strategy.clone(), || {
                     get_coredb_status(client.clone(), &read_msg.message.dbname)
                 })
                 .await;
                 if result.is_err() {
-                    warn!("error getting PostgresCluster status: {:?}", result);
+                    error!("error getting PostgresCluster status: {:?}", result);
                     continue;
                 }
                 let mut current_spec = result?;
                 let spec_js = serde_json::to_string(&current_spec.spec).unwrap();
-                info!("{} spec: {:?}", &read_msg.message.dbname, spec_js);
+                debug!("{} spec: {:?}", &read_msg.message.dbname, spec_js);
 
                 // get actual extensions from crd status
                 let actual_extension = match current_spec.status {
@@ -135,7 +134,6 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
                 info!("msg_id: {:?}", msg_id);
             }
             Event::Delete => {
-                info!("Doing nothing for now");
                 // delete PostgresCluster
                 delete(
                     client.clone(),

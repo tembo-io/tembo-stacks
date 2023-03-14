@@ -106,11 +106,19 @@ mod test {
             .read::<StateToControlPlane>("myqueue_data_plane", Some(&10_i32))
             .await
             .unwrap();
-        assert!(msg.is_some());
-        let spec = msg.unwrap().message.spec.unwrap();
-        assert!(spec.extensions.is_some());
-        let extensions = spec.extensions.unwrap();
-        assert!(extensions.len() > 0);
+        assert!(
+            msg.is_some(),
+            "Reconciler did not send a message to myqueue_data_plane...yet"
+        );
+        let spec = msg.unwrap().message.spec.expect("No spec found in message");
+        assert!(
+            spec.extensions.is_some(),
+            "Extension object missing from spec"
+        );
+        let extensions = spec
+            .extensions
+            .expect("No extensions found in message spec");
+        assert!(extensions.len() > 0, "Expected at least one extension");
     }
 
     async fn kube_client() -> kube::Client {
