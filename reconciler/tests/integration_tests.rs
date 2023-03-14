@@ -44,8 +44,8 @@ mod test {
         let namespace = name.clone();
 
         let limits: BTreeMap<String, String> = BTreeMap::from([
-            ("cpu".to_owned(), "100m".to_string()),
-            ("memory".to_owned(), "500Mi".to_string()),
+            ("cpu".to_owned(), "1".to_string()),
+            ("memory".to_owned(), "1Gi".to_string()),
         ]);
 
         // reconciler receives a CRUDevent from control plane
