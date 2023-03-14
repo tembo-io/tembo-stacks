@@ -100,7 +100,7 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
                 })
                 .await;
                 if result.is_err() {
-                    error!("error getting PostgresCluster status: {:?}", result);
+                    error!("error getting CoreDB status: {:?}", result);
                     continue;
                 }
                 let mut current_spec = result?;
