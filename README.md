@@ -16,3 +16,4 @@ It performs these actions based on messages written to a queue in the control pl
 ## CoreDB Operator
 
 The [CoreDB operator](https://github.com/CoreDB-io/coredb/tree/main/coredb-operator) is responsible for creating, updating and deleting CoreDB in the data plane cluster. When the reconciler applies or deletes a CoreDB custom resource, the operator takes action based on this request.
+
