@@ -22,7 +22,10 @@ mod test {
     use pgmq::PGMQueue;
 
     use rand::Rng;
-    use reconciler::{coredb_crd as crd, types::{self, StateToControlPlane}};
+    use reconciler::{
+        coredb_crd as crd,
+        types::{self, StateToControlPlane},
+    };
     use std::collections::BTreeMap;
 
     #[tokio::test]
@@ -94,9 +97,11 @@ mod test {
         .await
         .unwrap_or_else(|_| panic!("Did not find the pod {pod_name} to be running after waiting {timeout_seconds_start_pod} seconds"));
 
-        
         // read message from data_plane_events queue
-        let msg = queue.read::<StateToControlPlane>("myqueue_data_plane", Some(&10_i32)).await.unwrap();
+        let msg = queue
+            .read::<StateToControlPlane>("myqueue_data_plane", Some(&10_i32))
+            .await
+            .unwrap();
         assert!(msg.is_some());
         let spec = msg.unwrap().message.spec.unwrap();
         assert!(spec.extensions.is_some());

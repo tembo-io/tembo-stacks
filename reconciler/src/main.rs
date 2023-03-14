@@ -30,10 +30,6 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
     // Infer the runtime environment and try to create a Kubernetes Client
     let client = Client::try_default().await?;
 
-    // retrying actions with kubernetes
-    // limit it to 5 retries at 1 second intervals
-    let retry_strategy = FixedInterval::from_millis(2500).take(1);
-
     loop {
         // Read from queue (check for new message)
         // messages that dont fit a CRUDevent will error
@@ -82,6 +78,8 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
                 // generate PostgresCluster spec based on values in body
                 let spec = generate_spec(&read_msg.message.dbname, &read_msg.message.spec).await;
 
+                let spec_js = serde_json::to_string(&spec).unwrap();
+                warn!("spec: {}", spec_js);
                 // create or update PostgresCluster
                 create_or_update(client.clone(), &read_msg.message.dbname, spec)
                     .await
@@ -93,7 +91,11 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
 
                 // read current spec from PostgresCluster
                 // this should wait until it is able to receive an actual update from the cluster
-
+                thread::sleep(time::Duration::from_secs(2));
+                // retrying actions with kube
+                // limit it to 10 retries at 2.5 second intervals
+                // TODO: need a better way to handle this
+                let retry_strategy = FixedInterval::from_millis(2500).take(10);
                 let result = Retry::spawn(retry_strategy.clone(), || {
                     get_coredb_status(client.clone(), &read_msg.message.dbname)
                 })
