@@ -21,3 +21,10 @@ run.test:
 	CONTROL_PLANE_EVENTS_QUEUE=myqueue_control_plane \
 	DATA_PLANE_EVENTS_QUEUE=myqueue_data_plane \
 	cargo run
+
+
+setup.traefik:
+	helm repo add traefik https://traefik.github.io/charts
+	helm repo update
+	kubectl create namespace traefik-v2
+	helm install --namespace=traefik-v2 --values ./tests/traefik-values.yaml traefik traefik/traefik
