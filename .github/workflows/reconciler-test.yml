@@ -92,7 +92,7 @@ jobs:
 
           # Install the CoreDB operator
           cargo install coredb-cli
-          coredb-cli install --branch main
+          coredb-cli install --branch COR-482
           kubectl get crds
 
           # Start local postgres for the Nile queues
