@@ -1,3 +1,7 @@
+fmt:
+	cargo +nightly fmt
+	cargo clippy
+
 run.local:
 	PG_CONN_URL=postgresql://postgres:postgres@0.0.0.0:5432/postgres \
 	RUST_BACKTRACE=1 \
