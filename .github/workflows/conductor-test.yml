@@ -98,11 +98,7 @@ jobs:
           # Start local postgres for the Nile queues
           docker run -d --name pgmq -e POSTGRES_PASSWORD=postgres -p 5432:5432 postgres
 
-<<<<<<< HEAD:.github/workflows/conductor-test.yml
           # Start conductor with test configuration
-=======
-          # Start reconciler with test configuration
->>>>>>> main:.github/workflows/reconciler-test.yml
           make run.test &
 
           # Run the tests
