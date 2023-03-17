@@ -21,11 +21,11 @@ mod test {
     };
     use pgmq::PGMQueue;
 
-    use rand::Rng;
-    use reconciler::{
+    use conductor::{
         coredb_crd as crd,
         types::{self, StateToControlPlane},
     };
+    use rand::Rng;
     use std::collections::BTreeMap;
     use std::{thread, time};
 
@@ -49,10 +49,11 @@ mod test {
             ("memory".to_owned(), "1Gi".to_string()),
         ]);
 
-        // reconciler receives a CRUDevent from control plane
+        // conductor receives a CRUDevent from control plane
         let spec_js = serde_json::json!({
             "extensions": Some(vec![crd::CoreDBExtensions {
                 name: "postgis".to_owned(),
+                description: Some("PostGIS extension".to_owned()),
                 locations: vec![crd::CoreDBExtensionsLocations {
                     enabled: true,
                     version: Some("1.1.1".to_owned()),
@@ -98,7 +99,7 @@ mod test {
         .await
         .unwrap_or_else(|_| panic!("Did not find the pod {pod_name} to be running after waiting {timeout_seconds_start_pod} seconds"));
 
-        // wait for reconciler to send message to data_plane_events queue
+        // wait for conductor to send message to data_plane_events queue
         thread::sleep(time::Duration::from_secs(15));
 
         // read message from data_plane_events queue
@@ -108,7 +109,7 @@ mod test {
             .unwrap();
         assert!(
             msg.is_some(),
-            "Reconciler did not send a message to myqueue_data_plane...yet"
+            "conductor did not send a message to myqueue_data_plane...yet"
         );
         let spec = msg.unwrap().message.spec.expect("No spec found in message");
         assert!(

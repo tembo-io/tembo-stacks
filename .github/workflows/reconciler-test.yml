@@ -1,17 +1,17 @@
-name: Reconciler test workflow
+name: conductor test workflow
 
 defaults:
   run:
     shell: bash
-    working-directory: ./reconciler/
+    working-directory: ./conductor/
 
 on:
   pull_request:
     branches:
       - main
     paths:
-    - '.github/workflows/reconciler-test.yml'
-    - 'reconciler/**'
+    - '.github/workflows/conductor-test.yml'
+    - 'conductor/**'
   # Always run tests on main or release branches
   push:
     branches:
@@ -32,9 +32,9 @@ jobs:
           components: rustfmt, clippy
       - uses: Swatinem/rust-cache@v2
         with:
-          prefix-key: "reconciler-lint"
+          prefix-key: "conductor-lint"
           workspaces: |
-            reconciler
+            conductor
       - name: Cargo format
         run: cargo +nightly fmt --all --check
       - name: Clippy
@@ -49,9 +49,9 @@ jobs:
           toolchain: stable
       - uses: Swatinem/rust-cache@v2
         with:
-          prefix-key: "reconciler-test"
+          prefix-key: "conductor-test"
           workspaces: |
-            reconciler
+            conductor
       - name: Unit tests
         run: cargo test
 
@@ -77,9 +77,9 @@ jobs:
           toolchain: stable
       - uses: Swatinem/rust-cache@v2
         with:
-          prefix-key: "reconciler-functional-test"
+          prefix-key: "conductor-functional-test"
           workspaces: |
-            reconciler
+            conductor
       - name: Run functional / integration tests
         run: |
           set -xe
@@ -88,10 +88,7 @@ jobs:
           curl https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-3 | bash
 
           # Install Traefik
-          helm repo add traefik https://traefik.github.io/charts
-          helm repo update
-          kubectl create namespace traefik-v2
-          helm install --namespace=traefik-v2 --values ./tests/traefik-values.yaml traefik traefik/traefik
+          make setup.traefik
 
           # Install the CoreDB operator
           cargo install coredb-cli
@@ -101,14 +98,8 @@ jobs:
           # Start local postgres for the Nile queues
           docker run -d --name pgmq -e POSTGRES_PASSWORD=postgres -p 5432:5432 postgres
 
-          # Set ENVs for reconciler
-          export PG_CONN_URL=postgres://postgres:postgres@localhost:5432/postgres
-          export CONTROL_PLANE_EVENTS_QUEUE=myqueue_control_plane
-          export DATA_PLANE_EVENTS_QUEUE=myqueue_data_plane
-
-          # Start the reconciler in the background
-          cargo build
-          cargo run &
+          # Start conductor with test configuration
+          make run.test &
 
           # Run the tests
           cargo test -- --ignored --nocapture
