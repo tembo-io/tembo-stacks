@@ -7,7 +7,7 @@ use crate::types;
 #[derive(Debug, Deserialize, Serialize)]
 pub struct CRUDevent {
     pub organization_name: String,
-    pub data_plane_id: String, // synonymous with an organization
+    pub data_plane_id: String,
     pub event_id: String,
     pub event_type: Event,
     pub dbname: String,
