@@ -71,6 +71,7 @@ mod test {
         let spec: crd::CoreDBSpec = serde_json::from_value(spec_js).unwrap();
 
         let msg = types::CRUDevent {
+            organization_name: "coredb-test-org".to_owned(),
             data_plane_id: "org_02s3owPQskuGXHE8vYsGSY".to_owned(),
             event_id: format!(
                 "{name}.org_02s3owPQskuGXHE8vYsGSY.CoreDB.inst_02s4UKVbRy34SAYVSwZq2H",
