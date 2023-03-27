@@ -41,6 +41,7 @@ mod test {
 
         // Configurations
         let mut rng = rand::thread_rng();
+        let org_name = "coredb-test-org".to_owned();
         let name = &format!("test-coredb-{}", rng.gen_range(0..100000));
         let namespace = name.clone();
 
@@ -71,7 +72,7 @@ mod test {
         let spec: crd::CoreDBSpec = serde_json::from_value(spec_js).unwrap();
 
         let msg = types::CRUDevent {
-            organization_name: "coredb-test-org".to_owned(),
+            organization_name: org_name.clone(),
             data_plane_id: "org_02s3owPQskuGXHE8vYsGSY".to_owned(),
             event_id: format!(
                 "{name}.org_02s3owPQskuGXHE8vYsGSY.CoreDB.inst_02s4UKVbRy34SAYVSwZq2H",
@@ -91,7 +92,7 @@ mod test {
 
         let timeout_seconds_start_pod = 90;
 
-        let pod_name = format!("{name}-0");
+        let pod_name = format!("{org_name}-{name}-0");
 
         let _check_for_pod = tokio::time::timeout(
             std::time::Duration::from_secs(timeout_seconds_start_pod),
