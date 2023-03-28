@@ -43,7 +43,7 @@ mod test {
         let mut rng = rand::thread_rng();
         let org_name = "coredb-test-org".to_owned();
         let dbname = format!("test-coredb-{}", rng.gen_range(0..100000));
-        let namespace = format!("{}-{}", org_name, dbname);
+        let namespace = format!("org-{}-inst-{}", org_name, dbname);
 
         let limits: BTreeMap<String, String> = BTreeMap::from([
             ("cpu".to_owned(), "1".to_string()),

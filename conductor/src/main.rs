@@ -58,9 +58,10 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
         // }
 
         let namespace = format!(
-            "{}-{}",
+            "org-{}-inst-{}",
             read_msg.message.organization_name, read_msg.message.dbname
         );
+        warn!("namespace: {}", namespace);
         // Based on message_type in message, create, update, delete CoreDB
         match read_msg.message.event_type {
             // every event is for a single namespace
