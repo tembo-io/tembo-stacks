@@ -159,6 +159,9 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
                 let msg_id = queue.send(&data_plane_events_queue, &msg).await?;
                 info!("sent msg_id: {:?}", msg_id);
             }
+            Event::Restart => {
+                info!("handling instance restart")
+            }
             _ => {
                 warn!("action was not in expected format");
                 continue;
