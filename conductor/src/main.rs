@@ -163,7 +163,7 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
                 info!("handling instance restart")
             }
             _ => {
-                warn!("action was not in expected format");
+                warn!("Unhandled event_type: {:?}", read_msg.message.event_type);
                 continue;
             }
         }
