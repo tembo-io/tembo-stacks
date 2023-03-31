@@ -2,12 +2,6 @@ controlPlaneEventsQueue: ~
 dataPlaneEventsQueue: ~
 logLevel: debug
 
-secret:
-  # You must set the connection string for the postgres queue
-  postgresConnectionString: ~
-  # Or you can use an existing secret instead
-  useExistingSecret: ~
-
 externalSecrets:
   refreshInterval: "5m"
   parameterStore:
