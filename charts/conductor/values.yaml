@@ -8,6 +8,14 @@ secret:
   # Or you can use an existing secret instead
   useExistingSecret: ~
 
+externalSecrets:
+  refreshInterval: "5m"
+  parameterStore:
+    name: "secret-store-parameter-store"
+    kind: ClusterSecretStore
+  secretName: ~
+  secretRegex: ~
+
 serviceMonitors:
   coredb:
     enabled: true
