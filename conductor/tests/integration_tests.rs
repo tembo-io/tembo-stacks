@@ -101,10 +101,10 @@ mod test {
         .await
         .unwrap_or_else(|_| panic!("Did not find the pod {pod_name} to be running after waiting {timeout_seconds_start_pod} seconds"));
 
-        // wait for conductor to send message to data_plane_events queue
+        // // wait for conductor to send message to data_plane_events queue
         thread::sleep(time::Duration::from_secs(15));
 
-        // read message from data_plane_events queue
+        // // read message from data_plane_events queue
         let msg = queue
             .read::<StateToControlPlane>("myqueue_data_plane", Some(&10_i32))
             .await
@@ -126,15 +126,22 @@ mod test {
         restart_statefulset(client.clone(), &namespace, &namespace)
             .await
             .expect("failed restarting statefulset");
+        thread::sleep(time::Duration::from_secs(10));
         // Verify that the statefulSet was updated with the restartedAt annotation
         let sts: Api<StatefulSet> = Api::namespaced(client.clone(), &namespace);
         let updated_statefulset = sts
             .get(&namespace)
             .await
             .expect("Failed to get StatefulSet");
-        let annot = updated_statefulset.metadata.annotations.unwrap();
-        let restarted_at_annotation = annot.get("kubectl.kubernetes.io/restartedAt");
-
+        let annot = updated_statefulset
+            .spec
+            .expect("no spec found")
+            .template
+            .metadata
+            .unwrap()
+            .annotations
+            .expect("no annotations found");
+        let restarted_at_annotation = annot.get("kube.kubernetes.io/restartedAt");
         assert!(
             restarted_at_annotation.is_some(),
             "StatefulSet was not restarted."
