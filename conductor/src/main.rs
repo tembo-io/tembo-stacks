@@ -1,6 +1,7 @@
 use conductor::{
     create_ing_route_tcp, create_metrics_ingress, create_namespace, create_or_update, delete,
-    delete_namespace, generate_spec, get_all, get_coredb_status, get_pg_conn, types,
+    delete_namespace, generate_spec, get_all, get_coredb_status, get_pg_conn, restart_statefulset,
+    types,
 };
 use kube::{Client, ResourceExt};
 use log::{debug, error, info, warn};
@@ -160,7 +161,10 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
                 info!("sent msg_id: {:?}", msg_id);
             }
             Event::Restart => {
-                info!("handling instance restart")
+                info!("handling instance restart");
+                restart_statefulset(client.clone(), &namespace, &namespace)
+                    .await
+                    .expect("error restarting statefulset");
             }
             _ => {
                 warn!("Unhandled event_type: {:?}", read_msg.message.event_type);
