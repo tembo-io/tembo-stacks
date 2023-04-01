@@ -101,10 +101,10 @@ mod test {
         .await
         .unwrap_or_else(|_| panic!("Did not find the pod {pod_name} to be running after waiting {timeout_seconds_start_pod} seconds"));
 
-        // // wait for conductor to send message to data_plane_events queue
+        // wait for conductor to send message to data_plane_events queue
         thread::sleep(time::Duration::from_secs(15));
 
-        // // read message from data_plane_events queue
+        // read message from data_plane_events queue
         let msg = queue
             .read::<StateToControlPlane>("myqueue_data_plane", Some(&10_i32))
             .await
@@ -138,7 +138,7 @@ mod test {
             .expect("no spec found")
             .template
             .metadata
-            .unwrap()
+            .expect("no metadata")
             .annotations
             .expect("no annotations found");
         let restarted_at_annotation = annot.get("kube.kubernetes.io/restartedAt");

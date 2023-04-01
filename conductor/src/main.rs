@@ -161,6 +161,9 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
                 info!("sent msg_id: {:?}", msg_id);
             }
             Event::Restart => {
+                // TODO: refactor to be more DRY
+                // Restart and Update events share a lot of the same code.
+                // move some operations after the Event match with a `let match` flow
                 info!("handling instance restart");
                 restart_statefulset(client.clone(), &namespace, &namespace)
                     .await
