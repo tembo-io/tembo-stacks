@@ -63,7 +63,7 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
             read_msg.message.organization_name, read_msg.message.dbname
         );
         // Based on message_type in message, create, update, delete CoreDB
-        match read_msg.message.event_type {
+        let event_msg: types::StateToControlPlane = match read_msg.message.event_type {
             // every event is for a single namespace
             Event::Create | Event::Update => {
                 create_namespace(client.clone(), &namespace)
@@ -128,15 +128,13 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
                     Event::Update => Event::Updated,
                     _ => unreachable!(),
                 };
-                let msg = types::StateToControlPlane {
+                types::StateToControlPlane {
                     data_plane_id: read_msg.message.data_plane_id,
                     event_id: read_msg.message.event_id,
                     event_type: report_event,
                     spec: Some(current_spec.spec),
                     connection: Some(conn_info),
-                };
-                let msg_id = queue.send(&data_plane_events_queue, &msg).await?;
-                info!("sent msg_id: {:?}", msg_id);
+                }
             }
             Event::Delete => {
                 // delete CoreDB
@@ -150,20 +148,18 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
                     .expect("error deleting namespace");
 
                 // report state
-                let msg = types::StateToControlPlane {
+                types::StateToControlPlane {
                     data_plane_id: read_msg.message.data_plane_id,
                     event_id: read_msg.message.event_id,
                     event_type: Event::Deleted,
                     spec: None,
                     connection: None,
-                };
-                let msg_id = queue.send(&data_plane_events_queue, &msg).await?;
-                info!("sent msg_id: {:?}", msg_id);
+                }
             }
             Event::Restart => {
                 // TODO: refactor to be more DRY
                 // Restart and Update events share a lot of the same code.
-                // move some operations after the Event match with a `let match` flow
+                // move some operations after the Event match
                 info!("handling instance restart");
                 restart_statefulset(client.clone(), &namespace, &namespace)
                     .await
@@ -192,21 +188,23 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
                 // UPDATE SPEC OBJECT WITH ACTUAL EXTENSIONS
                 current_spec.spec.extensions = actual_extension;
 
-                let msg = types::StateToControlPlane {
+                let conn_info = get_pg_conn(client.clone(), &namespace).await;
+
+                types::StateToControlPlane {
                     data_plane_id: read_msg.message.data_plane_id,
                     event_id: read_msg.message.event_id,
                     event_type: Event::Restarted,
                     spec: Some(current_spec.spec),
-                    connection: None,
-                };
-                let msg_id = queue.send(&data_plane_events_queue, &msg).await?;
-                info!("sent msg_id: {:?}", msg_id);
+                    connection: conn_info.ok(),
+                }
             }
             _ => {
                 warn!("Unhandled event_type: {:?}", read_msg.message.event_type);
                 continue;
             }
-        }
+        };
+        let msg_id = queue.send(&data_plane_events_queue, &event_msg).await?;
+        debug!("sent msg_id: {:?}", msg_id);
 
         // TODO (ianstanton) This is here as an example for now. We want to use
         //  this to ensure a CoreDB exists before we attempt to delete it.
