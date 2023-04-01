@@ -165,6 +165,39 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
                 restart_statefulset(client.clone(), &namespace, &namespace)
                     .await
                     .expect("error restarting statefulset");
+                let retry_strategy = FixedInterval::from_millis(5000).take(20);
+                let result = Retry::spawn(retry_strategy.clone(), || {
+                    get_coredb_status(client.clone(), &namespace)
+                })
+                .await;
+                if result.is_err() {
+                    error!("error getting CoreDB status: {:?}", result);
+                    continue;
+                }
+                let mut current_spec = result?;
+                let spec_js = serde_json::to_string(&current_spec.spec).unwrap();
+                debug!("dbname: {}, current_spec: {:?}", &namespace, spec_js);
+
+                // get actual extensions from crd status
+                let actual_extension = match current_spec.status {
+                    Some(status) => status.extensions,
+                    None => {
+                        warn!("No extensions in: {:?}", &namespace);
+                        None
+                    }
+                };
+                // UPDATE SPEC OBJECT WITH ACTUAL EXTENSIONS
+                current_spec.spec.extensions = actual_extension;
+
+                let msg = types::StateToControlPlane {
+                    data_plane_id: read_msg.message.data_plane_id,
+                    event_id: read_msg.message.event_id,
+                    event_type: Event::Restarted,
+                    spec: Some(current_spec.spec),
+                    connection: None,
+                };
+                let msg_id = queue.send(&data_plane_events_queue, &msg).await?;
+                info!("sent msg_id: {:?}", msg_id);
             }
             _ => {
                 warn!("Unhandled event_type: {:?}", read_msg.message.event_type);
