@@ -94,7 +94,7 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
                     .await
                     .expect("error creating or updating CoreDB");
                 // get connection string values from secret
-                let conn_info = get_pg_conn(client.clone(), &namespace, &basedomain)
+                let conn_info = get_pg_conn(client.clone(), &namespace, &data_plane_basedomain)
                     .await
                     .expect("error getting secret");
 

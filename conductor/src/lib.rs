@@ -210,7 +210,7 @@ pub async fn delete_namespace(client: Client, name: &str) -> Result<(), Conducto
 pub async fn get_pg_conn(
     client: Client,
     name: &str,
-    basedomain: &str
+    basedomain: &str,
 ) -> Result<types::ConnectionInfo, ConductorError> {
     // read secret <name>-connection
     let secret_name = format!("{name}-connection");
