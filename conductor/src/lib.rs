@@ -8,6 +8,7 @@ use coredb_crd as crd;
 use coredb_crd::CoreDB;
 use errors::ConductorError;
 use ingress_route_tcp_crd::IngressRouteTCP;
+use k8s_openapi::api::apps::v1::StatefulSet;
 use k8s_openapi::api::core::v1::{Namespace, Secret};
 use k8s_openapi::api::networking::v1::Ingress;
 use kube::api::{DeleteParams, ListParams, Patch, PatchParams};
@@ -30,7 +31,11 @@ pub async fn generate_spec(namespace: &str, spec: &crd::CoreDBSpec) -> Value {
     spec
 }
 
-pub async fn create_ing_route_tcp(client: Client, name: &str) -> Result<(), ConductorError> {
+pub async fn create_ing_route_tcp(
+    client: Client,
+    name: &str,
+    basedomain: &str,
+) -> Result<(), ConductorError> {
     let ing_api: Api<IngressRouteTCP> = Api::namespaced(client, name);
     let params = PatchParams::apply("conductor").force();
     let ing = serde_json::json!({
@@ -44,7 +49,7 @@ pub async fn create_ing_route_tcp(client: Client, name: &str) -> Result<(), Cond
             "entryPoints": ["postgresql"],
             "routes": [
                 {
-                    "match": format!("HostSNI(`{name}.coredb.io`) || HostSNI(`{name}.coredb-development.com`)"),
+                    "match": format!("HostSNI(`{name}.{basedomain}`)"),
                     "services": [
                         {
                             "name": format!("{name}"),
@@ -66,7 +71,11 @@ pub async fn create_ing_route_tcp(client: Client, name: &str) -> Result<(), Cond
     Ok(())
 }
 
-pub async fn create_metrics_ingress(client: Client, name: &str) -> Result<(), ConductorError> {
+pub async fn create_metrics_ingress(
+    client: Client,
+    name: &str,
+    basedomain: &str,
+) -> Result<(), ConductorError> {
     let ing_api: Api<Ingress> = Api::namespaced(client, name);
     let params = PatchParams::apply("conductor").force();
     let ingress = serde_json::json!({
@@ -80,7 +89,7 @@ pub async fn create_metrics_ingress(client: Client, name: &str) -> Result<(), Co
             "ingressClassName": "traefik",
             "rules": [
                 {
-                    "host": format!("{name}.coredb-development.com"),
+                    "host": format!("{name}.{basedomain}"),
                     "http": {
                         "paths": [
                             {
@@ -254,6 +263,16 @@ pub fn wait_for_secret() -> impl Condition<Secret> {
         }
         false
     }
+}
+
+pub async fn restart_statefulset(
+    client: Client,
+    namespace: &str,
+    statefulset_name: &str,
+) -> Result<(), ConductorError> {
+    let sts: Api<StatefulSet> = Api::namespaced(client, namespace);
+    sts.restart(statefulset_name).await?;
+    Ok(())
 }
 
 #[test]

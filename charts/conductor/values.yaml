@@ -1,6 +1,7 @@
 controlPlaneEventsQueue: ~
 dataPlaneEventsQueue: ~
-logLevel: debug
+dataPlaneBasedomain: ~
+logLevel: info
 
 externalSecrets:
   refreshInterval: "5m"
