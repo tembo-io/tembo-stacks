@@ -51,11 +51,11 @@ jobs:
       - name: Update helm chart version
         uses: mikefarah/yq@v4
         with:
-          cmd: yq e -i '.spec.source.targetRevision= "${{ needs.push_to_registry.outputs.short_sha }}"' dev/data-plane.yaml
+          cmd: yq -i '.spec.source.targetRevision= "${{ needs.push_to_registry.outputs.short_sha }}"' dev/data-plane.yaml
       - name: Update image version
         uses: mikefarah/yq@v4
         with:
-          cmd: yq e -i '(.spec.source.helm.parameters.[] | select(.name == "image.tag")).value = "${{ needs.push_to_registry.outputs.short_sha }}"' dev/data-plane.yaml
+          cmd: yq -i '(.spec.source.helm.parameters.[] | select(.name == "image.tag")).value = "${{ needs.push_to_registry.outputs.short_sha }}"' dev/data-plane.yaml
       - name: Git commit and push to remote
         run: |
           set -xe
