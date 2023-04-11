@@ -49,11 +49,11 @@ jobs:
           repository: coredb-io/app-deploy-dev
           ssh-key: ${{ secrets.SERVICE_USER_GITHUB_SSH_KEY }}
       - name: Update helm chart version
-        uses: mikefarah/yq@v4
+        uses: mikefarah/yq@v4.33.3
         with:
           cmd: yq -i '.spec.source.targetRevision= "${{ needs.push_to_registry.outputs.short_sha }}"' dev/data-plane.yaml
       - name: Update image version
-        uses: mikefarah/yq@v4
+        uses: mikefarah/yq@v4.33.3
         with:
           cmd: yq -i '(.spec.source.helm.parameters.[] | select(.name == "image.tag")).value = "${{ needs.push_to_registry.outputs.short_sha }}"' dev/data-plane.yaml
       - name: Git commit and push to remote
