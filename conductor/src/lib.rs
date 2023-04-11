@@ -1,5 +1,4 @@
 pub mod aws;
-pub mod cf;
 pub mod coredb_crd;
 pub mod errors;
 mod ingress_route_tcp_crd;
