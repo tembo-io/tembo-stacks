@@ -24,7 +24,7 @@ jobs:
         with:
           repository: coredb-io/coredb
           path: ./coredb
-          ref: release/2023.2.15
+          ref: a003470
       - name: Install Podman
         run: |
           set -xe
