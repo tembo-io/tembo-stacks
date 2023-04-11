@@ -48,16 +48,14 @@ jobs:
         with:
           repository: coredb-io/app-deploy-dev
           ssh-key: ${{ secrets.SERVICE_USER_GITHUB_SSH_KEY }}
-      - name: Install yq
-        run: |
-          set -xe
-          sudo snap install yq --channel=v3/stable
-      - name: Update helm parameters and chart version
-        run: |
-          set -xe
-          MANIFEST_FILE="dev/data-plane.yaml"
-          yq e -i '.spec.source.targetRevision= "${{ needs.push_to_registry.outputs.short_sha }}"' $MANIFEST_FILE
-          yq e -i '(.spec.source.helm.parameters.[] | select(.name == "image.tag")).value = "${{ needs.push_to_registry.outputs.short_sha }}"' $MANIFEST_FILE
+      - name: Update helm chart version
+        uses: mikefarah/yq@v4
+        with:
+          cmd: yq e -i '.spec.source.targetRevision= "${{ needs.push_to_registry.outputs.short_sha }}"' dev/data-plane.yaml
+      - name: Update image version
+        uses: mikefarah/yq@v4
+        with:
+          cmd: yq e -i '(.spec.source.helm.parameters.[] | select(.name == "image.tag")).value = "${{ needs.push_to_registry.outputs.short_sha }}"' dev/data-plane.yaml
       - name: Git commit and push to remote
         run: |
           set -xe
