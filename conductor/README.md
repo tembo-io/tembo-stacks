@@ -38,7 +38,7 @@ Prerequisites:
    `> coredb-cli install --branch main`
 
 2. Install Traefik in the cluster
-
+   
    `> make setup.traefik`
 
 3. Set up local postgres queue
