@@ -8,7 +8,10 @@ on:
 jobs:
   push_to_registry:
     name: Build and push image
-    runs-on: ubuntu-20.04
+    runs-on:
+      - self-hosted
+      - dind
+      - large-8x8
     outputs:
       short_sha: ${{ steps.versions.outputs.SHORT_SHA }}
     steps:
@@ -37,7 +40,9 @@ jobs:
           quay_password: ${{ secrets.QUAY_PASSWORD }}
   update_argocd_dev:
     name: Update ArgoCD in dev environment
-    runs-on: ubuntu-20.04
+    runs-on:
+      - self-hosted
+      - small
     needs:
       - push_to_registry
     steps:
