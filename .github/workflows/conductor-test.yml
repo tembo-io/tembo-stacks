@@ -21,9 +21,7 @@ on:
 jobs:
   lint:
     name: Run linters
-    runs-on:
-      - self-hosted
-      - small
+    runs-on: ubuntu-20.04
     steps:
       - uses: actions/checkout@v3
       - name: Install OpenSSL
@@ -48,9 +46,7 @@ jobs:
         run: cargo clippy
   test:
     name: Run unit tests
-    runs-on:
-      - self-hosted
-      - small
+    runs-on: ubuntu-20.04
     steps:
       - uses: actions/checkout@v2
       - name: Install OpenSSL
@@ -71,10 +67,7 @@ jobs:
 
   functional_test:
     name: Run functional testing
-    runs-on:
-      - self-hosted
-      - dind
-      - large-8x8
+    runs-on: ubuntu-20.04
     strategy:
       # fail-fast means to cancel all jobs if one fails
       fail-fast: false

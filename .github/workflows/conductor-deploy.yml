@@ -25,6 +25,11 @@ jobs:
           repository: coredb-io/coredb
           path: ./coredb
           ref: release/2023.2.15
+      - name: Install Podman
+        run: |
+          set -xe
+          sudo apt-get update
+          sudo apt-get -y install podman
       - uses: azure/setup-kubectl@v3
       - uses: azure/setup-helm@v3
       - name: Set version strings
@@ -42,9 +47,7 @@ jobs:
           quay_password: ${{ secrets.QUAY_PASSWORD }}
   update_argocd_dev:
     name: Update ArgoCD in dev environment
-    runs-on:
-      - self-hosted
-      - small
+    runs-on: ubuntu-20.04
     needs:
       - push_to_registry
     steps:
