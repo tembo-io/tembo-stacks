@@ -51,7 +51,7 @@ jobs:
       - name: Install yq
         run: |
           set -xe
-          snap install yq --channel=v3/stable
+          sudo snap install yq --channel=v3/stable
       - name: Update helm parameters and chart version
         run: |
           set -xe
