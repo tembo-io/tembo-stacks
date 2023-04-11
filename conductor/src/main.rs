@@ -1,4 +1,6 @@
+use aws_sdk_cloudformation::config::Region;
 use conductor::{
+    aws::cloudformation::AWSConfigState, aws::cloudformation::CloudFormationParams,
     create_ing_route_tcp, create_namespace, create_or_update, delete, delete_namespace,
     generate_spec, get_all, get_coredb_status, get_pg_conn, restart_statefulset, types,
 };
@@ -67,6 +69,31 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
         let event_msg: types::StateToControlPlane = match read_msg.message.event_type {
             // every event is for a single namespace
             Event::Create | Event::Update => {
+                // Create Cloudformation Stack only for Create event
+                if let Event::Create = read_msg.message.event_type {
+                    let region = Region::new("us-east-1");
+                    let aws_config_state = AWSConfigState::new(region).await;
+                    let stack_name = format!(
+                        "org-{}-inst-{}-cf",
+                        read_msg.message.organization_name, read_msg.message.dbname
+                    );
+                    let s3_bucket_name = format!("org-{}-s3", read_msg.message.organization_name);
+                    let s3_bucket_path = format!("inst-{}", read_msg.message.dbname);
+                    let iam_role_name = format!(
+                        "org-{}-inst-{}-iam",
+                        read_msg.message.organization_name, read_msg.message.dbname
+                    );
+                    let params = CloudFormationParams::new(
+                        String::from(&s3_bucket_name),
+                        String::from(&s3_bucket_path),
+                        String::from(&iam_role_name),
+                        Some(90),
+                    );
+                    aws_config_state
+                        .create_cloudformation_stack(&stack_name, &params)
+                        .await
+                        .expect("error creating CloudFormation stack");
+                }
                 create_namespace(client.clone(), &namespace)
                     .await
                     .expect("error creating namespace");
@@ -150,6 +177,18 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
                 delete_namespace(client.clone(), &namespace)
                     .await
                     .expect("error deleting namespace");
+
+                // delete Cloudformation Stack
+                let region = Region::new("us-east-1");
+                let aws_config_state = AWSConfigState::new(region).await;
+                let stack_name = format!(
+                    "org-{}-inst-{}-cf",
+                    read_msg.message.organization_name, read_msg.message.dbname
+                );
+                aws_config_state
+                    .delete_cloudformation_stack(&stack_name)
+                    .await
+                    .expect("error deleting CloudFormation stack");
 
                 // report state
                 types::StateToControlPlane {
