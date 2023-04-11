@@ -4,7 +4,6 @@ on:
   push:
     branches:
       - main
-      - update-dev-cluster
 
 jobs:
   push_to_registry:
