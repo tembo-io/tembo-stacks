@@ -25,17 +25,6 @@ jobs:
           repository: coredb-io/coredb
           path: ./coredb
           ref: a003470
-      - name: Install Podman
-        run: |
-          set -xe
-          sudo apt-get update -y
-          sudo apt-get install curl wget gnupg2 -y
-          source /etc/os-release
-          sudo sh -c "echo 'deb http://download.opensuse.org/repositories/devel:/kubic:/libcontainers:/stable/xUbuntu_${VERSION_ID}/ /' > /etc/apt/sources.list.d/devel:kubic:libcontainers:stable.list"
-          wget -nv https://download.opensuse.org/repositories/devel:kubic:libcontainers:stable/xUbuntu_${VERSION_ID}/Release.key -O- | sudo apt-key add -
-          sudo apt-get update -qq -y
-          sudo apt-get -qq --yes install podman
-          podman --version
       - uses: azure/setup-kubectl@v3
       - uses: azure/setup-helm@v3
       - name: Set version strings
