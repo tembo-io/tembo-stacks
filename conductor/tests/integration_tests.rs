@@ -102,11 +102,11 @@ mod test {
         .unwrap_or_else(|_| panic!("Did not find the pod {pod_name} to be running after waiting {timeout_seconds_start_pod} seconds"));
 
         // wait for conductor to send message to data_plane_events queue
-        thread::sleep(time::Duration::from_secs(15));
+        thread::sleep(time::Duration::from_secs(60));
 
         // read message from data_plane_events queue
         let msg = queue
-            .read::<StateToControlPlane>("myqueue_data_plane", Some(&10_i32))
+            .pop::<StateToControlPlane>("myqueue_data_plane")
             .await
             .unwrap();
         assert!(
@@ -122,6 +122,9 @@ mod test {
             .extensions
             .expect("No extensions found in message spec");
         assert!(extensions.len() > 0, "Expected at least one extension");
+
+        // take note of number of extensions at this point in time
+        let num_extensions = extensions.len();
 
         restart_statefulset(client.clone(), &namespace, &namespace)
             .await
@@ -146,6 +149,51 @@ mod test {
             restarted_at_annotation.is_some(),
             "StatefulSet was not restarted."
         );
+
+        // ADD AN EXTENSION - ASSERT IT MAKES IT TO STATUS.EXTENSIONS
+        // conductor receives a CRUDevent from control plane
+        let spec_js = serde_json::json!({
+            "extensions": Some(vec![crd::CoreDBExtensions {
+                name: "pgmq".to_owned(),
+                description: Some("pgmq description".to_owned()),
+                locations: vec![crd::CoreDBExtensionsLocations {
+                    enabled: false,
+                    version: Some("0.2.1".to_owned()),
+                    schema: Some("public".to_owned()),
+                    database: Some("postgres".to_owned()),
+                }],
+            }]),
+        });
+        let spec: crd::CoreDBSpec = serde_json::from_value(spec_js).unwrap();
+        let msg = types::CRUDevent {
+            organization_name: org_name.clone(),
+            data_plane_id: "org_02s3owPQskuGXHE8vYsGSY".to_owned(),
+            event_id: "test-install-extension".to_owned(),
+            event_type: types::Event::Create,
+            dbname: dbname.clone(),
+            spec: spec,
+        };
+        let msg_id = queue.send(&myqueue, &msg).await;
+        println!("msg_id: {msg_id:?}");
+
+        // ADD SOME DELAY
+        thread::sleep(time::Duration::from_secs(20));
+
+        // read message from data_plane_events queue
+        let msg = queue
+            .pop::<StateToControlPlane>("myqueue_data_plane")
+            .await
+            .unwrap()
+            .expect("no message received from queue");
+
+        let extensions = msg
+            .message
+            .spec
+            .expect("No spec found in message")
+            .extensions
+            .expect("no extensiosn found");
+        // we added an extension, so it should be +1 now
+        assert_eq!(num_extensions + 1, extensions.len());
     }
 
     async fn kube_client() -> kube::Client {
