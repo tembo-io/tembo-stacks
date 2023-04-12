@@ -106,14 +106,16 @@ mod test {
 
         // read message from data_plane_events queue
         let msg = queue
-            .pop::<StateToControlPlane>("myqueue_data_plane")
+            .read::<StateToControlPlane>("myqueue_data_plane", Some(&30_i32))
             .await
-            .unwrap();
-        assert!(
-            msg.is_some(),
-            "conductor did not send a message to myqueue_data_plane...yet"
-        );
-        let spec = msg.unwrap().message.spec.expect("No spec found in message");
+            .unwrap()
+            .expect("no message");
+        queue
+            .archive("myqueue_data_plane", &msg.msg_id)
+            .await
+            .expect("error deleting message");
+
+        let spec = msg.message.spec.expect("No spec found in message");
         assert!(
             spec.extensions.is_some(),
             "Extension object missing from spec"
@@ -121,10 +123,11 @@ mod test {
         let extensions = spec
             .extensions
             .expect("No extensions found in message spec");
-        assert!(extensions.len() > 0, "Expected at least one extension");
-
-        // take note of number of extensions at this point in time
-        let num_extensions = extensions.len();
+        assert!(
+            extensions.len() > 0,
+            "Expected at least one extension: {:?}",
+            extensions
+        );
 
         restart_statefulset(client.clone(), &namespace, &namespace)
             .await
@@ -152,24 +155,28 @@ mod test {
 
         // ADD AN EXTENSION - ASSERT IT MAKES IT TO STATUS.EXTENSIONS
         // conductor receives a CRUDevent from control plane
+        // take note of number of extensions at this point in time
+        let mut extensions_add = extensions.clone();
+        extensions_add.push(crd::CoreDBExtensions {
+            name: "pgmq".to_owned(),
+            description: Some("pgmq description".to_owned()),
+            locations: vec![crd::CoreDBExtensionsLocations {
+                enabled: false,
+                version: Some("0.2.1".to_owned()),
+                schema: Some("public".to_owned()),
+                database: Some("postgres".to_owned()),
+            }],
+        });
+        let num_expected_extensions = extensions_add.len();
         let spec_js = serde_json::json!({
-            "extensions": Some(vec![crd::CoreDBExtensions {
-                name: "pgmq".to_owned(),
-                description: Some("pgmq description".to_owned()),
-                locations: vec![crd::CoreDBExtensionsLocations {
-                    enabled: false,
-                    version: Some("0.2.1".to_owned()),
-                    schema: Some("public".to_owned()),
-                    database: Some("postgres".to_owned()),
-                }],
-            }]),
+            "extensions": extensions_add,
         });
         let spec: crd::CoreDBSpec = serde_json::from_value(spec_js).unwrap();
         let msg = types::CRUDevent {
             organization_name: org_name.clone(),
             data_plane_id: "org_02s3owPQskuGXHE8vYsGSY".to_owned(),
             event_id: "test-install-extension".to_owned(),
-            event_type: types::Event::Create,
+            event_type: types::Event::Update,
             dbname: dbname.clone(),
             spec: spec,
         };
@@ -177,23 +184,27 @@ mod test {
         println!("msg_id: {msg_id:?}");
 
         // ADD SOME DELAY
-        thread::sleep(time::Duration::from_secs(20));
+        thread::sleep(time::Duration::from_secs(30));
 
         // read message from data_plane_events queue
         let msg = queue
-            .pop::<StateToControlPlane>("myqueue_data_plane")
+            .read::<StateToControlPlane>("myqueue_data_plane", Some(&30_i32))
             .await
             .unwrap()
             .expect("no message received from queue");
+        queue
+            .archive("myqueue_data_plane", &msg.msg_id)
+            .await
+            .expect("error deleting message");
 
         let extensions = msg
             .message
             .spec
             .expect("No spec found in message")
             .extensions
-            .expect("no extensiosn found");
+            .expect("no extensions found");
         // we added an extension, so it should be +1 now
-        assert_eq!(num_extensions + 1, extensions.len());
+        assert_eq!(num_expected_extensions + 1, extensions.len());
     }
 
     async fn kube_client() -> kube::Client {
@@ -222,7 +233,6 @@ mod test {
         )
         .await
         .expect("Custom Resource Definition for CoreDB was not found, do you need to install that before running the tests?");
-
         client
     }
 }
