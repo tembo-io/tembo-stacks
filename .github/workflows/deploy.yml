@@ -57,8 +57,7 @@ jobs:
             subdirectory: prod
             branch: prod-updates
     needs:
-      - find_directories
-      - build_and_push_images
+      - push_to_registry
     steps:
       - name: Check out the repo
         uses: actions/checkout@v3
