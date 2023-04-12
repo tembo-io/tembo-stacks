@@ -1,7 +1,6 @@
 use conductor::{
-    create_ing_route_tcp, create_metrics_ingress, create_namespace, create_or_update, delete,
-    delete_namespace, generate_spec, get_all, get_coredb_status, get_pg_conn, restart_statefulset,
-    types,
+    create_ing_route_tcp, create_namespace, create_or_update, delete, delete_namespace,
+    generate_spec, get_all, get_coredb_status, get_pg_conn, restart_statefulset, types,
 };
 use kube::{Client, ResourceExt};
 use log::{debug, error, info, warn};
@@ -20,6 +19,8 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
         env::var("CONTROL_PLANE_EVENTS_QUEUE").expect("CONTROL_PLANE_EVENTS_QUEUE must be set");
     let data_plane_events_queue =
         env::var("DATA_PLANE_EVENTS_QUEUE").expect("DATA_PLANE_EVENTS_QUEUE must be set");
+    let data_plane_basedomain =
+        env::var("DATA_PLANE_BASEDOMAIN").expect("DATA_PLANE_BASEDOMAIN must be set");
 
     // Connect to pgmq
     let queue: PGMQueue = PGMQueue::new(pg_conn_url).await?;
@@ -79,14 +80,17 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
                     .expect("error creating namespace");
 
                 // create IngressRouteTCP
-                create_ing_route_tcp(client.clone(), &namespace)
+                create_ing_route_tcp(client.clone(), &namespace, &data_plane_basedomain)
                     .await
                     .expect("error creating IngressRouteTCP");
 
                 // create /metrics ingress
-                create_metrics_ingress(client.clone(), &namespace)
-                    .await
-                    .expect("error creating ingress for /metrics");
+                //
+                // Disable this feature until IP allow list
+                //
+                // create_metrics_ingress(client.clone(), &namespace, &data_plane_basedomain)
+                //     .await
+                //     .expect("error creating ingress for /metrics");
 
                 // generate CoreDB spec based on values in body
                 let spec = generate_spec(&namespace, &read_msg.message.spec).await;
@@ -98,7 +102,7 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
                     .await
                     .expect("error creating or updating CoreDB");
                 // get connection string values from secret
-                let conn_info = get_pg_conn(client.clone(), &namespace)
+                let conn_info = get_pg_conn(client.clone(), &namespace, &data_plane_basedomain)
                     .await
                     .expect("error getting secret");
 
@@ -216,7 +220,8 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
                 // UPDATE SPEC OBJECT WITH ACTUAL EXTENSIONS
                 current_spec.spec.extensions = actual_extension;
 
-                let conn_info = get_pg_conn(client.clone(), &namespace).await;
+                let conn_info =
+                    get_pg_conn(client.clone(), &namespace, &data_plane_basedomain).await;
 
                 types::StateToControlPlane {
                     data_plane_id: read_msg.message.data_plane_id,
