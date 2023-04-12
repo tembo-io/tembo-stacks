@@ -32,12 +32,6 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
     // Infer the runtime environment and try to create a Kubernetes Client
     let client = Client::try_default().await?;
 
-    const RETRY_INTERVAL_MS: u64 = 5000;
-    const RETRY_COUNT: usize = 20;
-
-    // max amount of time we expect to process the message
-    const VT: i32 = (RETRY_COUNT * (RETRY_INTERVAL_MS as usize) / 1000) as i32;
-
     // amount of time to wait after requeueing a message
     const REQUEUE_VT_SEC: i64 = 5;
     loop {
@@ -45,7 +39,7 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
         // messages that dont fit a CRUDevent will error
         // set visibility timeout to 90 seconds
         let read_msg = queue
-            .read::<CRUDevent>(&control_plane_events_queue, Some(&VT))
+            .read::<CRUDevent>(&control_plane_events_queue, Some(&90_i32))
             .await?;
         let read_msg: Message<CRUDevent> = match read_msg {
             Some(message) => {
@@ -58,6 +52,14 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
             }
         };
 
+        // TODO(chuckhend): recycled messages should get archived, logged, alerted
+        // note: messages are recycled on purpose, so alerting probably needs to be
+        // at some recycle count >= 20
+        // if read_msg.read_ct >= 2 {
+        //     warn!("recycled message: {:?}", read_msg);
+        //     queue.archive(queue_name, &read_msg.msg_id).await?;
+        //     continue;
+        // }
         let namespace = format!(
             "org-{}-inst-{}",
             read_msg.message.organization_name, read_msg.message.dbname
