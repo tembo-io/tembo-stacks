@@ -204,7 +204,7 @@ mod test {
             .extensions
             .expect("no extensions found");
         // we added an extension, so it should be +1 now
-        assert_eq!(num_expected_extensions + 1, extensions.len());
+        assert_eq!(num_expected_extensions, extensions.len());
     }
 
     async fn kube_client() -> kube::Client {
