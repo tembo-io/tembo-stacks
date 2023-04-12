@@ -31,7 +31,11 @@ pub async fn generate_spec(namespace: &str, spec: &crd::CoreDBSpec) -> Value {
     spec
 }
 
-pub async fn create_ing_route_tcp(client: Client, name: &str) -> Result<(), ConductorError> {
+pub async fn create_ing_route_tcp(
+    client: Client,
+    name: &str,
+    basedomain: &str,
+) -> Result<(), ConductorError> {
     let ing_api: Api<IngressRouteTCP> = Api::namespaced(client, name);
     let params = PatchParams::apply("conductor").force();
     let ing = serde_json::json!({
@@ -45,7 +49,7 @@ pub async fn create_ing_route_tcp(client: Client, name: &str) -> Result<(), Cond
             "entryPoints": ["postgresql"],
             "routes": [
                 {
-                    "match": format!("HostSNI(`{name}.coredb.io`) || HostSNI(`{name}.coredb-development.com`)"),
+                    "match": format!("HostSNI(`{name}.{basedomain}`)"),
                     "services": [
                         {
                             "name": format!("{name}"),
@@ -67,7 +71,11 @@ pub async fn create_ing_route_tcp(client: Client, name: &str) -> Result<(), Cond
     Ok(())
 }
 
-pub async fn create_metrics_ingress(client: Client, name: &str) -> Result<(), ConductorError> {
+pub async fn create_metrics_ingress(
+    client: Client,
+    name: &str,
+    basedomain: &str,
+) -> Result<(), ConductorError> {
     let ing_api: Api<Ingress> = Api::namespaced(client, name);
     let params = PatchParams::apply("conductor").force();
     let ingress = serde_json::json!({
@@ -81,7 +89,7 @@ pub async fn create_metrics_ingress(client: Client, name: &str) -> Result<(), Co
             "ingressClassName": "traefik",
             "rules": [
                 {
-                    "host": format!("{name}.coredb-development.com"),
+                    "host": format!("{name}.{basedomain}"),
                     "http": {
                         "paths": [
                             {
@@ -202,6 +210,7 @@ pub async fn delete_namespace(client: Client, name: &str) -> Result<(), Conducto
 pub async fn get_pg_conn(
     client: Client,
     name: &str,
+    basedomain: &str,
 ) -> Result<types::ConnectionInfo, ConductorError> {
     // read secret <name>-connection
     let secret_name = format!("{name}-connection");
@@ -228,7 +237,7 @@ pub async fn get_pg_conn(
     let byte_pw = to_string(pw_data).unwrap();
     let string_pw: String = from_str(&byte_pw).unwrap();
 
-    let host = format!("{name}.coredb-development.com");
+    let host = format!("{name}.{basedomain}");
 
     Ok(types::ConnectionInfo {
         host,
