@@ -31,12 +31,20 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
     // Infer the runtime environment and try to create a Kubernetes Client
     let client = Client::try_default().await?;
 
+    const RETRY_INTERVAL_MS: u64 = 5000;
+    const RETRY_COUNT: usize = 20;
+
+    // max amount of time we expect to process the message
+    const VT: i32 = (RETRY_COUNT * (RETRY_INTERVAL_MS as usize) / 1000) as i32;
+
+    // amount of time to wait after requeueing a message
+    const REQUEUE_VT_SEC: i64 = 2;
     loop {
         // Read from queue (check for new message)
         // messages that dont fit a CRUDevent will error
         // set visibility timeout to 90 seconds
         let read_msg = queue
-            .read::<CRUDevent>(&control_plane_events_queue, Some(&90_i32))
+            .read::<CRUDevent>(&control_plane_events_queue, Some(&VT))
             .await?;
         let read_msg: Message<CRUDevent> = match read_msg {
             Some(message) => {
@@ -99,7 +107,9 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
                 // retrying actions with kube
                 // limit to 60 seconds - 20 retries, 5 seconds between retries
                 // TODO: need a better way to handle this
-                let retry_strategy = FixedInterval::from_millis(5000).take(20);
+                // we could explore requeuing the message and trying again in a few seconds, instead of tying up the process in a retry
+                let retry_strategy =
+                    FixedInterval::from_millis(RETRY_INTERVAL_MS).take(RETRY_COUNT);
                 let result = Retry::spawn(retry_strategy.clone(), || {
                     get_coredb_status(client.clone(), &namespace)
                 })
@@ -108,7 +118,25 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
                     error!("error getting CoreDB status: {:?}", result);
                     continue;
                 }
+
                 let mut current_spec = result?;
+
+                // if the coredb is still updating the extensions, requeue this task and try again in a few seconds
+                let updating_extension = current_spec.clone().status.unwrap().extensions_updating;
+                if updating_extension {
+                    // requeue the message with new visibility time
+                    let vt: chrono::DateTime<chrono::Utc> =
+                        chrono::Utc::now() + chrono::Duration::seconds(REQUEUE_VT_SEC);
+                    info!(
+                        "extending updating, requeuing with delay: {}",
+                        REQUEUE_VT_SEC
+                    );
+                    let _ = queue
+                        .set_vt::<CRUDevent>(&control_plane_events_queue, &read_msg.msg_id, &vt)
+                        .await;
+                    continue;
+                }
+
                 let spec_js = serde_json::to_string(&current_spec.spec).unwrap();
                 debug!("dbname: {}, current_spec: {:?}", &namespace, spec_js);
 
