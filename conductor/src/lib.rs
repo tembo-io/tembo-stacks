@@ -131,7 +131,6 @@ pub async fn get_all(client: Client, namespace: &str) -> Vec<CoreDB> {
 pub async fn get_one(client: Client, namespace: &str) -> Result<CoreDB, ConductorError> {
     let coredb_api: Api<CoreDB> = Api::namespaced(client, namespace);
     let pg_instance = coredb_api.get(namespace).await?;
-    debug!("Namespace: {}, CoreDB: {:?}", namespace, pg_instance);
     Ok(pg_instance)
 }
 

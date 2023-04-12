@@ -39,7 +39,7 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
     const VT: i32 = (RETRY_COUNT * (RETRY_INTERVAL_MS as usize) / 1000) as i32;
 
     // amount of time to wait after requeueing a message
-    const REQUEUE_VT_SEC: i64 = 2;
+    const REQUEUE_VT_SEC: i64 = 5;
     loop {
         // Read from queue (check for new message)
         // messages that dont fit a CRUDevent will error
@@ -57,15 +57,6 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
                 continue;
             }
         };
-
-        // TODO: recycled messages should get archived, logged, alerted
-        // this auto-archive of bad messages should only get implemented after
-        // control-plane has a scheduled conductor process implemented
-        // if read_msg.read_ct >= 2 {
-        //     warn!("recycled message: {:?}", read_msg);
-        //     queue.archive(queue_name, &read_msg.msg_id).await?;
-        //     continue;
-        // }
 
         let namespace = format!(
             "org-{}-inst-{}",
@@ -106,40 +97,53 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
                     .await
                     .expect("error getting secret");
 
-                // read spec.status from CoreDB
-                // this should wait until it is able to receive an actual update from the cluster
-                // retrying actions with kube
-                // limit to 60 seconds - 20 retries, 5 seconds between retries
-                // TODO: need a better way to handle this
-                // we could explore requeuing the message and trying again in a few seconds, instead of tying up the process in a retry
-                let retry_strategy =
-                    FixedInterval::from_millis(RETRY_INTERVAL_MS).take(RETRY_COUNT);
-                let result = Retry::spawn(retry_strategy.clone(), || {
-                    get_coredb_status(client.clone(), &namespace)
-                })
-                .await;
-                if result.is_err() {
-                    error!("error getting CoreDB status: {:?}", result);
+                let result = get_coredb_status(client.clone(), &namespace).await;
+
+                // requeue if no status, no extensions, or if extensions are currently being updated
+                let num_desired_extensions = match read_msg.message.spec.extensions {
+                    Some(extensions) => extensions.len(),
+                    None => 0,
+                };
+                let requeue: bool = match &result {
+                    Ok(current_spec) => {
+                        // if the coredb is still updating the extensions, requeue this task and try again in a few seconds
+                        let status = current_spec.clone().status.expect("no status present");
+                        let updating_extension = status.extensions_updating;
+                        let no_extensions = match status.extensions {
+                            Some(extensions) => {
+                                // requeue if there are less extensions than desired
+                                // likely means that the extensions are still being updated
+                                extensions.len() < num_desired_extensions
+                            }
+                            None => true,
+                        };
+                        if updating_extension || no_extensions {
+                            warn!(
+                                "extensions updating: {}, no extensions: {}",
+                                updating_extension, no_extensions
+                            );
+                            true
+                        } else {
+                            false
+                        }
+                    }
+                    Err(err) => {
+                        error!("error getting CoreDB status: {:?}", err);
+                        true
+                    }
+                };
+
+                if requeue {
+                    // requeue then continue loop from beginning
+                    let vt: chrono::DateTime<chrono::Utc> =
+                        chrono::Utc::now() + chrono::Duration::seconds(REQUEUE_VT_SEC);
+                    let _ = queue
+                        .set_vt::<CRUDevent>(&control_plane_events_queue, &read_msg.msg_id, &vt)
+                        .await?;
                     continue;
                 }
 
                 let mut current_spec = result?;
-
-                // if the coredb is still updating the extensions, requeue this task and try again in a few seconds
-                let updating_extension = current_spec.clone().status.unwrap().extensions_updating;
-                if updating_extension {
-                    // requeue the message with new visibility time
-                    let vt: chrono::DateTime<chrono::Utc> =
-                        chrono::Utc::now() + chrono::Duration::seconds(REQUEUE_VT_SEC);
-                    info!(
-                        "extending updating, requeuing with delay: {}",
-                        REQUEUE_VT_SEC
-                    );
-                    let _ = queue
-                        .set_vt::<CRUDevent>(&control_plane_events_queue, &read_msg.msg_id, &vt)
-                        .await;
-                    continue;
-                }
 
                 let spec_js = serde_json::to_string(&current_spec.spec).unwrap();
                 debug!("dbname: {}, current_spec: {:?}", &namespace, spec_js);
