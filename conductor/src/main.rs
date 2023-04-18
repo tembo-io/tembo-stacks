@@ -23,6 +23,8 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
         env::var("DATA_PLANE_EVENTS_QUEUE").expect("DATA_PLANE_EVENTS_QUEUE must be set");
     let data_plane_basedomain =
         env::var("DATA_PLANE_BASEDOMAIN").expect("DATA_PLANE_BASEDOMAIN must be set");
+    let backup_archive_bucket =
+        env::var("BACKUP_ARCHIVE_BUCKET").expect("BACKUP_ARCHIVE_BUCKET must be set");
 
     // Connect to pgmq
     let queue: PGMQueue = PGMQueue::new(pg_conn_url).await?;
@@ -77,16 +79,22 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
                         "org-{}-inst-{}-cf",
                         read_msg.message.organization_name, read_msg.message.dbname
                     );
-                    let s3_bucket_name = format!("org-{}-s3", read_msg.message.organization_name);
-                    let s3_bucket_path = format!("inst-{}", read_msg.message.dbname);
+                    let s3_bucket_path = format!(
+                        "org-{}/inst-{}",
+                        read_msg.message.organization_name, read_msg.message.dbname
+                    );
                     let iam_role_name = format!(
                         "org-{}-inst-{}-iam",
                         read_msg.message.organization_name, read_msg.message.dbname
                     );
                     let params = CloudFormationParams::new(
-                        String::from(&s3_bucket_name),
+                        // BucketName
+                        String::from(&backup_archive_bucket),
+                        // S3BucketPath
                         String::from(&s3_bucket_path),
+                        // IAMRoleName
                         String::from(&iam_role_name),
+                        // ExpirationInDays
                         Some(90),
                     );
                     aws_config_state
