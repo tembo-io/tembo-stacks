@@ -1,7 +1,6 @@
-controlPlaneEventsQueue: ~
-dataPlaneEventsQueue: ~
-dataPlaneBasedomain: ~
 logLevel: info
+
+replicas: 2
 
 externalSecrets:
   refreshInterval: "5m"
@@ -46,3 +45,4 @@ securityContext: {}
 nodeSelector: {}
 tolerations: []
 affinity: {}
+env: {}

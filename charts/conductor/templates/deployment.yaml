@@ -5,7 +5,7 @@ metadata:
   labels:
     {{- include "conductor.labels" . | nindent 4 }}
 spec:
-  replicas: 1
+  replicas: {{ .Values.replicas }}
   selector:
     matchLabels:
       {{- include "conductor.selectorLabels" . | nindent 6 }}
@@ -40,14 +40,9 @@ spec:
               secretKeyRef:
                 name: data-plane
                 key: _data-plane_postgres_connection_string
-          - name: CONTROL_PLANE_EVENTS_QUEUE
-            value: {{ .Values.controlPlaneEventsQueue }}
-          - name: DATA_PLANE_EVENTS_QUEUE
-            value: {{ .Values.dataPlaneEventsQueue }}
-          - name: DATA_PLANE_BASEDOMAIN
-            value: {{ .Values.dataPlaneBasedomain }}
           - name: RUST_LOG
             value: {{ .Values.logLevel }}
+          {{- if .Values.env }}{{ .Values.env | default list | toYaml | nindent 10 }}{{- end }}
           securityContext:
             {{- toYaml .Values.securityContext | nindent 12 }}
           image: "{{ .Values.image.repository }}:{{ .Values.image.tag | default .Chart.AppVersion }}"
