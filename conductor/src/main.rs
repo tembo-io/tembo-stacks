@@ -97,6 +97,8 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
                         String::from(&iam_role_name),
                         // ExpirationInDays
                         Some(90),
+                        // Cloudformation Template Bucket
+                        String::from(&backup_archive_bucket),
                     );
                     aws_config_state
                         .create_cloudformation_stack(&stack_name, &params)

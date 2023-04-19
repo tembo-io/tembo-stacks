@@ -2,13 +2,12 @@ use aws_config::SdkConfig;
 use aws_sdk_cloudformation::{config::Region, Client, Error};
 use std::sync::Arc;
 
-use crate::aws::cloudformation_template::create_template;
-
 pub struct CloudFormationParams {
     pub s3_bucket_name: String,
     pub s3_bucket_path: String,
     pub iam_role_name: String,
     pub lifecycle_duration: Option<u32>,
+    pub backup_archive_bucket: String,
 }
 
 pub struct AWSConfigState {
@@ -22,12 +21,14 @@ impl CloudFormationParams {
         s3_bucket_path: String,
         iam_role_name: String,
         lifecycle_duration: Option<u32>,
+        backup_archive_bucket: String,
     ) -> Self {
         Self {
             s3_bucket_name,
             s3_bucket_path,
             iam_role_name,
             lifecycle_duration,
+            backup_archive_bucket,
         }
     }
 
@@ -45,6 +46,9 @@ impl CloudFormationParams {
             if duration == 0 {
                 return Err("Lifecycle duration cannot be 0".to_string());
             }
+        }
+        if self.backup_archive_bucket.is_empty() {
+            return Err("Cloudformation Bucket Name cannot be empty".to_string());
         }
         Ok(())
     }
@@ -76,8 +80,11 @@ impl AWSConfigState {
         stack_name: &str,
         params: &CloudFormationParams,
     ) -> Result<(), Error> {
+        let template_url = format!(
+            "s3:///{}/{}",
+            params.backup_archive_bucket, "conductor-cf-template.yaml"
+        );
         if !self.does_stack_exist(stack_name).await? {
-            let template = create_template(params).await;
             // todo(nhudson): We need to add tags to the stack
             // get with @sjmiller609 to figure out how we want
             // to tag these CF stacks.
@@ -85,13 +92,15 @@ impl AWSConfigState {
                 .cf_client
                 .create_stack()
                 .stack_name(stack_name)
-                .template_body(template.to_string())
+                .template_url(template_url)
                 .send()
                 .await?;
 
             println!("Created stack: {:?}", create_stack_result.stack_id);
         } else {
-            println!("Stack {:?} already exists, skipping creation", stack_name);
+            println!("Stack {:?} already exists, updating stack", stack_name);
+            self.update_cloudformation_stack(stack_name, &template_url)
+                .await?;
         }
 
         Ok(())
@@ -113,6 +122,27 @@ impl AWSConfigState {
         } else {
             println!("Stack {:?} does not exist, skipping deletion", stack_name);
         }
+
+        Ok(())
+    }
+
+    pub async fn update_cloudformation_stack(
+        &self,
+        stack_name: &str,
+        template_url: &str,
+    ) -> Result<(), Error> {
+        let update_stack_result = self
+            .cf_client
+            .update_stack()
+            .stack_name(stack_name)
+            .template_url(template_url)
+            .send()
+            .await?;
+
+        println!(
+            "Updated stack: {}, update_stack_result: {:?}",
+            stack_name, update_stack_result
+        );
 
         Ok(())
     }
