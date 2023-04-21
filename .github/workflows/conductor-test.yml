@@ -80,6 +80,10 @@ jobs:
           prefix-key: "conductor-functional-test"
           workspaces: |
             conductor
+      - uses: aws-actions/configure-aws-credentials@v2
+        with:
+          aws-region: "us-east-1"
+          role-to-assume: "arn:aws:iam::484221059514:role/cdb-plat-use1-dev-data-plane-dev-conductor@conductor"
       - name: Run functional / integration tests
         run: |
           set -xe
