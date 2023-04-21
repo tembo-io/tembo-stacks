@@ -19,6 +19,11 @@ on:
       - release**
 
 jobs:
+  connect-aws-sandbox:
+    runs-on:
+      - self-hosted
+      - common
+      - small
   lint:
     name: Run linters
     runs-on: ubuntu-latest
