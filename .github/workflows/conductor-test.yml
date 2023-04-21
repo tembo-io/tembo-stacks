@@ -19,11 +19,6 @@ on:
       - release**
 
 jobs:
-  connect-aws-sandbox:
-    runs-on:
-      - self-hosted
-      - common
-      - small
   lint:
     name: Run linters
     runs-on: ubuntu-latest
@@ -62,7 +57,10 @@ jobs:
 
   functional_test:
     name: Run functional testing
-    runs-on: ubuntu-20.04
+    runs-on:
+      - self-hosted
+      - common
+      - small
     strategy:
       # fail-fast means to cancel all jobs if one fails
       fail-fast: false
