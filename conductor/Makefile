@@ -29,7 +29,7 @@ run.test:
 	CONTROL_PLANE_EVENTS_QUEUE=myqueue_control_plane \
 	DATA_PLANE_EVENTS_QUEUE=myqueue_data_plane \
 	DATA_PLANE_BASEDOMAIN=coredb-development.com \
-	BACKUP_ARCHIVE_BUCKET=cdb-plat-use1-sandbox-eks-data-1-conductor-cf-templates
+	BACKUP_ARCHIVE_BUCKET=cdb-plat-use1-sandbox-eks-data-1-conductor-cf-templates \
 	cargo run
 
 setup.traefik:
