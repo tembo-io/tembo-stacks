@@ -105,7 +105,8 @@ jobs:
           make setup.traefik
 
           # Install the CoreDB operator
-          apt update && apt install pkg-config
+          sudo apt-get update
+          sudo apt-get install -y pkg-config libssl-dev
           cargo install coredb-cli
           coredb-cli install --branch main
           kubectl get crds
