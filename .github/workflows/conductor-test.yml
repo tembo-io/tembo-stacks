@@ -5,6 +5,12 @@ defaults:
     shell: bash
     working-directory: ./conductor/
 
+permissions:
+  pull-requests: write
+  deployments: write
+  id-token: write
+  contents: read
+
 on:
   pull_request:
     branches:
