@@ -197,12 +197,12 @@ pub async fn create_networkpolicy(client: Client, name: &str) -> Result<(), Cond
     let np_api: Api<NetworkPolicy> = Api::namespaced(client, name);
     let params: PatchParams = PatchParams::apply("conductor").force();
     let np = serde_json::json!({
-        "apiVersion": "networking.k8s.io/v1",
-        "kind": "NetworkPolicy",
-        "metadata": {
-            "name": format!("{name}"),
-            "namespace": format!("{name}"),
-        },
+				"apiVersion": "networking.k8s.io/v1",
+				"kind": "NetworkPolicy",
+				"metadata": {
+						"name": format!("{name}"),
+						"namespace": format!("{name}"),
+				},
 				"spec": {
 						"podSelector": {},
 						"policyTypes": [
@@ -221,7 +221,7 @@ pub async fn create_networkpolicy(client: Client, name: &str) -> Result<(), Cond
 												{
 														"podSelector": {
 																"matchLabels": {
-																				"k8s-app": "kube-dns"
+																		"k8s-app": "kube-dns"
 																}
 														}
 												}
@@ -237,19 +237,19 @@ pub async fn create_networkpolicy(client: Client, name: &str) -> Result<(), Cond
 										"to": [
 												{
 														"ipBlock": {
-																		"cidr": "0.0.0.0/0",
-																		"except": [
-																				"10.0.0.0/8",
-																				"172.16.0.0/12",
-																				"192.168.0.0/16"
-																		]
+																"cidr": "0.0.0.0/0",
+																"except": [
+																		"10.0.0.0/8",
+																		"172.16.0.0/12",
+																		"192.168.0.0/16"
+																]
 														}
 												}
 										]
 								}
 						]
 				}
-    });
+		});
 
     info!("\nCreating Network Policy {} if it does not exist", name);
     let _o: NetworkPolicy = np_api
