@@ -59,7 +59,8 @@ jobs:
     name: Run functional testing
     runs-on:
       - self-hosted
-      - common
+      - dind
+      - core-auto
       - small
     strategy:
       # fail-fast means to cancel all jobs if one fails
@@ -86,7 +87,7 @@ jobs:
       - uses: aws-actions/configure-aws-credentials@v2
         with:
           aws-region: "us-east-1"
-          role-to-assume: "arn:aws:iam::484221059514:role/cdb-plat-use1-dev-data-plane-dev-conductor@conductor"
+          role-to-assume: "arn:aws:iam::484221059514:role/cdb-plat-gbl-dev-admin"
       - name: Run functional / integration tests
         run: |
           set -xe
