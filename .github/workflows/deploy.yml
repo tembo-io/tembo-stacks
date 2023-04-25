@@ -26,7 +26,7 @@ jobs:
         with:
           repository: coredb-io/coredb
           path: ./coredb
-          ref: a0034703ad57d5179c0217beb39b88ca23417f43
+          ref: f39690e38f48be5b17cf0a9080e15ce589ecf240
       - name: Set version strings
         id: versions
         run: |
