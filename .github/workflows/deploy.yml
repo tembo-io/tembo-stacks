@@ -4,6 +4,10 @@ on:
   push:
     branches:
       - main
+  # Upload images on PR to main so they can be tested if we need to in dev cluster pre-merge
+  pull_request:
+    branches:
+      - main
 
 jobs:
   push_to_registry:
