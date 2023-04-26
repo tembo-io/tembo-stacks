@@ -117,6 +117,9 @@ jobs:
           # Start conductor with test configuration
           make run.test &
 
+          # sleep to fix race condition
+          sleep 5
+
           # Run the tests
           cargo test -- --ignored --nocapture
       - name: Debugging information
