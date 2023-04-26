@@ -132,6 +132,8 @@ jobs:
           echo "=========="
           kubectl get -o yaml sts --all-namespaces
           echo "=========="
+          kubectl describe pvc --all-namespaces
+          echo "=========="
           kubectl get -o yaml svc --all-namespaces
           echo "=========="
           kubectl get -o yaml pods --all-namespaces
