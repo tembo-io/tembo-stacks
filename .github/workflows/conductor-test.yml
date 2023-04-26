@@ -122,6 +122,14 @@ jobs:
 
           # Run the tests
           cargo test -- --ignored --nocapture
+      - name: Delete test cloudformation stacks
+        run: |
+          stacks=$(aws cloudformation list-stacks --stack-status-filter CREATE_COMPLETE --query "StackSummaries[].StackName" --output json)
+          stack_names=$(echo "$stacks" | jq -r '.[]' | grep -E '.*-test-org-inst-test-coredb-.*-cf')
+          for stack_name in $stack_names; do
+            echo "Deleting stack: $stack_name"
+            aws cloudformation delete-stack --stack-name "$stack_name" --region us-east-1
+          done
       - name: Debugging information
         if: always()
         run: |
@@ -131,8 +139,6 @@ jobs:
           kubectl get pods --all-namespaces
           echo "=========="
           kubectl get -o yaml sts --all-namespaces
-          echo "=========="
-          kubectl describe pvc --all-namespaces
           echo "=========="
           kubectl get -o yaml svc --all-namespaces
           echo "=========="
