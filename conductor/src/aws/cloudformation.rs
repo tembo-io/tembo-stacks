@@ -1,13 +1,21 @@
+//use crate::errors::ConductorError;
 use aws_config::SdkConfig;
-use aws_sdk_cloudformation::{config::Region, Client, Error};
+use aws_sdk_cloudformation::{
+    config::Region,
+    types::{Capability, Parameter},
+    Client,
+};
+use log::info;
 use std::sync::Arc;
 
+use crate::errors::ConductorError;
+
 pub struct CloudFormationParams {
-    pub s3_bucket_name: String,
-    pub s3_bucket_path: String,
-    pub iam_role_name: String,
-    pub lifecycle_duration: Option<u32>,
     pub backup_archive_bucket: String,
+    pub org_name: String,
+    pub db_name: String,
+    pub iam_role_name: String,
+    pub cf_template_bucket: String,
 }
 
 pub struct AWSConfigState {
@@ -17,37 +25,35 @@ pub struct AWSConfigState {
 
 impl CloudFormationParams {
     pub fn new(
-        s3_bucket_name: String,
-        s3_bucket_path: String,
-        iam_role_name: String,
-        lifecycle_duration: Option<u32>,
         backup_archive_bucket: String,
+        org_name: String,
+        db_name: String,
+        iam_role_name: String,
+        cf_template_bucket: String,
     ) -> Self {
         Self {
-            s3_bucket_name,
-            s3_bucket_path,
-            iam_role_name,
-            lifecycle_duration,
             backup_archive_bucket,
+            org_name,
+            db_name,
+            iam_role_name,
+            cf_template_bucket,
         }
     }
 
     pub fn validate(&self) -> Result<(), String> {
-        if self.s3_bucket_name.is_empty() {
-            return Err("S3 bucket name cannot be empty".to_string());
-        }
-        if self.s3_bucket_path.is_empty() {
-            return Err("S3 bucket path cannot be empty".to_string());
-        }
         if self.iam_role_name.is_empty() {
             return Err("IAM role name cannot be empty".to_string());
         }
-        if let Some(duration) = self.lifecycle_duration {
-            if duration == 0 {
-                return Err("Lifecycle duration cannot be 0".to_string());
-            }
-        }
         if self.backup_archive_bucket.is_empty() {
+            return Err("Cloudformation Bucket Name cannot be empty".to_string());
+        }
+        if self.org_name.is_empty() {
+            return Err("Cloudformation Bucket Name cannot be empty".to_string());
+        }
+        if self.db_name.is_empty() {
+            return Err("Cloudformation Bucket Name cannot be empty".to_string());
+        }
+        if self.cf_template_bucket.is_empty() {
             return Err("Cloudformation Bucket Name cannot be empty".to_string());
         }
         Ok(())
@@ -64,27 +70,51 @@ impl AWSConfigState {
         }
     }
 
-    pub async fn does_stack_exist(&self, stack_name: &str) -> Result<bool, Error> {
+    pub async fn does_stack_exist(&self, stack_name: &str) -> bool {
         let describe_stacks_result = self
             .cf_client
             .describe_stacks()
             .stack_name(stack_name)
             .send()
-            .await?;
+            .await;
 
-        Ok(describe_stacks_result.stacks.is_some())
+        match describe_stacks_result {
+            Ok(result) => {
+                println!("Stack {:?} exists", stack_name);
+                result.stacks.is_some()
+            }
+            Err(_) => false,
+        }
     }
 
     pub async fn create_cloudformation_stack(
         &self,
         stack_name: &str,
         params: &CloudFormationParams,
-    ) -> Result<(), Error> {
+    ) -> Result<(), ConductorError> {
         let template_url = format!(
-            "s3:///{}/{}",
-            params.backup_archive_bucket, "conductor-cf-template.yaml"
+            "https://{}.s3.amazonaws.com/{}",
+            params.cf_template_bucket, "conductor-cf-template.yaml"
         );
-        if !self.does_stack_exist(stack_name).await? {
+        let parameters = vec![
+            Parameter::builder()
+                .parameter_key("BucketName")
+                .parameter_value(params.backup_archive_bucket.clone())
+                .build(),
+            Parameter::builder()
+                .parameter_key("BucketOrg")
+                .parameter_value(params.org_name.clone())
+                .build(),
+            Parameter::builder()
+                .parameter_key("BucketPath")
+                .parameter_value(params.db_name.clone())
+                .build(),
+            Parameter::builder()
+                .parameter_key("RoleName")
+                .parameter_value(params.iam_role_name.clone())
+                .build(),
+        ];
+        if !self.does_stack_exist(stack_name).await {
             // todo(nhudson): We need to add tags to the stack
             // get with @sjmiller609 to figure out how we want
             // to tag these CF stacks.
@@ -93,57 +123,52 @@ impl AWSConfigState {
                 .create_stack()
                 .stack_name(stack_name)
                 .template_url(template_url)
+                .set_parameters(Some(parameters))
+                .capabilities(Capability::CapabilityNamedIam)
                 .send()
-                .await?;
+                .await;
 
-            println!("Created stack: {:?}", create_stack_result.stack_id);
+            match create_stack_result {
+                Ok(result) => {
+                    info!("Created stack: {:?}", result.stack_id);
+                    Ok(())
+                }
+                Err(err) => {
+                    info!("Error creating stack: {:?}", err);
+                    Err(ConductorError::AwsError(err.into()))
+                }
+            }
         } else {
-            println!("Stack {:?} already exists, updating stack", stack_name);
-            self.update_cloudformation_stack(stack_name, &template_url)
-                .await?;
+            info!("Stack {:?} already exists, no-op", stack_name);
+            Ok(())
         }
-
-        Ok(())
     }
 
-    pub async fn delete_cloudformation_stack(&self, stack_name: &str) -> Result<(), Error> {
-        if self.does_stack_exist(stack_name).await? {
+    pub async fn delete_cloudformation_stack(
+        &self,
+        stack_name: &str,
+    ) -> Result<(), ConductorError> {
+        if !self.does_stack_exist(stack_name).await {
             let delete_stack_result = self
                 .cf_client
                 .delete_stack()
                 .stack_name(stack_name)
                 .send()
-                .await?;
+                .await;
 
-            println!(
-                "Deleted stack: {}, delete_stack_result: {:?}",
-                stack_name, delete_stack_result
-            );
+            match delete_stack_result {
+                Ok(_) => {
+                    info!("Deleted stack: {:?}", stack_name);
+                    Ok(())
+                }
+                Err(err) => {
+                    info!("Error creating stack: {:?}", err);
+                    Err(ConductorError::AwsError(err.into()))
+                }
+            }
         } else {
-            println!("Stack {:?} does not exist, skipping deletion", stack_name);
+            info!("Stack {:?} doesn't exist, no-op", stack_name);
+            Ok(())
         }
-
-        Ok(())
-    }
-
-    pub async fn update_cloudformation_stack(
-        &self,
-        stack_name: &str,
-        template_url: &str,
-    ) -> Result<(), Error> {
-        let update_stack_result = self
-            .cf_client
-            .update_stack()
-            .stack_name(stack_name)
-            .template_url(template_url)
-            .send()
-            .await?;
-
-        println!(
-            "Updated stack: {}, update_stack_result: {:?}",
-            stack_name, update_stack_result
-        );
-
-        Ok(())
     }
 }
