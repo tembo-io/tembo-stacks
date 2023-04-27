@@ -5,7 +5,7 @@ use aws_sdk_cloudformation::{
     types::{Capability, Parameter},
     Client,
 };
-use log::info;
+use log::{error, info};
 use std::sync::Arc;
 
 use crate::errors::ConductorError;
@@ -80,7 +80,7 @@ impl AWSConfigState {
 
         match describe_stacks_result {
             Ok(result) => {
-                println!("Stack {:?} exists", stack_name);
+                info!("Stack {:?} exists", stack_name);
                 result.stacks.is_some()
             }
             Err(_) => false,
@@ -134,7 +134,7 @@ impl AWSConfigState {
                     Ok(())
                 }
                 Err(err) => {
-                    info!("Error creating stack: {:?}", err);
+                    error!("Error creating stack: {:?}", err);
                     Err(ConductorError::AwsError(err.into()))
                 }
             }
@@ -162,7 +162,7 @@ impl AWSConfigState {
                     Ok(())
                 }
                 Err(err) => {
-                    info!("Error creating stack: {:?}", err);
+                    error!("Error creating stack: {:?}", err);
                     Err(ConductorError::AwsError(err.into()))
                 }
             }
