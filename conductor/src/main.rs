@@ -1,7 +1,7 @@
 use conductor::{
-    create_cloudformation, create_ing_route_tcp, create_namespace, create_networkpolicy, create_or_update, delete,
-    delete_cloudformation, delete_namespace, generate_spec, get_all, get_coredb_status,
-    get_pg_conn, restart_statefulset, types,
+    create_cloudformation, create_ing_route_tcp, create_namespace, create_networkpolicy,
+    create_or_update, delete, delete_cloudformation, delete_namespace, generate_spec, get_all,
+    get_coredb_status, get_pg_conn, restart_statefulset, types,
 };
 use kube::{Client, ResourceExt};
 use log::{debug, error, info, warn};
