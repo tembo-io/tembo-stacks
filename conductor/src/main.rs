@@ -1,6 +1,6 @@
 use conductor::{
     create_cloudformation, create_ing_route_tcp, create_namespace, create_networkpolicy,
-    create_or_update, delete, delete_cloudformation, delete_namespace, extensions::diff_extensions,
+    create_or_update, delete, delete_cloudformation, delete_namespace, extensions::extension_plan,
     generate_spec, get_all, get_coredb_status, get_pg_conn, restart_statefulset, types,
 };
 use kube::{Client, ResourceExt};
@@ -150,7 +150,18 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
                                     info!("No extensions in request");
                                     false
                                 } else {
-                                    diff_extensions(&desired_extensions, &actual_extensions)
+                                    let (changed, to_install) =
+                                        extension_plan(&desired_extensions, &actual_extensions);
+                                    // requeue if extensions need to be installed or updated
+                                    if !changed.is_empty() || !to_install.is_empty() {
+                                        warn!(
+                                            "changed: {:?}, to_install: {:?}",
+                                            changed, to_install
+                                        );
+                                        true
+                                    } else {
+                                        false
+                                    }
                                 }
                             }
                             None => true,
