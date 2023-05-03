@@ -157,7 +157,7 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
                         };
                         if updating_extension || extensions_out_of_sync {
                             warn!(
-                                "extensions updating: {}, no extensions: {}",
+                                "extensions updating: {}, extensions_out_of_sync: {}",
                                 updating_extension, extensions_out_of_sync
                             );
                             true
