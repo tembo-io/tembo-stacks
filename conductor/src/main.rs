@@ -64,7 +64,10 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
         // note: messages are recycled on purpose
         // but absurdly high read_ct means its probably never going to get processed
         if read_msg.read_ct >= max_read_ct {
-            error!("archived message with read_count >= `{}`: {:?}", max_read_ct, read_msg);
+            error!(
+                "archived message with read_count >= `{}`: {:?}",
+                max_read_ct, read_msg
+            );
             queue
                 .archive(&control_plane_events_queue, &read_msg.msg_id)
                 .await?;
