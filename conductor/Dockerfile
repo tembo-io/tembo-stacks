@@ -8,5 +8,5 @@ RUN cargo install --path .
 FROM quay.io/coredb/debian:11.6-slim
 RUN apt-get update && \
     apt-get install -y ca-certificates && apt-get clean && \
-    rm -rf /var/lib/apt/lists/*
+    rm -rf /var/lib/apt/lists/* /var/cache/apt/archives/*
 COPY --from=builder /usr/local/cargo/bin/* /usr/local/bin/

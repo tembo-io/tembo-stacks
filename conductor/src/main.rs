@@ -1,7 +1,7 @@
 use conductor::{
-    create_cloudformation, create_ing_route_tcp, create_namespace, create_or_update, delete,
-    delete_cloudformation, delete_namespace, generate_spec, get_all, get_coredb_status,
-    get_pg_conn, restart_statefulset, types,
+    create_cloudformation, create_ing_route_tcp, create_namespace, create_networkpolicy,
+    create_or_update, delete, delete_cloudformation, delete_namespace, extensions::extension_plan,
+    generate_spec, get_all, get_coredb_status, get_pg_conn, restart_statefulset, types,
 };
 use kube::{Client, ResourceExt};
 use log::{debug, error, info, warn};
@@ -26,6 +26,10 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
         env::var("BACKUP_ARCHIVE_BUCKET").expect("BACKUP_ARCHIVE_BUCKET must be set");
     let cf_template_bucket =
         env::var("CF_TEMPLATE_BUCKET").expect("CF_TEMPLATE_BUCKET must be set");
+    let max_read_ct: i32 = env::var("MAX_READ_CT")
+        .unwrap_or_else(|_| "100".to_owned())
+        .parse()
+        .expect("error parsing MAX_READ_CT");
 
     // Connect to pgmq
     let queue: PGMQueue = PGMQueue::new(pg_conn_url).await?;
@@ -57,14 +61,28 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
             }
         };
 
-        // TODO(chuckhend): recycled messages should get archived, logged, alerted
-        // note: messages are recycled on purpose, so alerting probably needs to be
-        // at some recycle count >= 20
-        // if read_msg.read_ct >= 2 {
-        //     warn!("recycled message: {:?}", read_msg);
-        //     queue.archive(queue_name, &read_msg.msg_id).await?;
-        //     continue;
-        // }
+        // note: messages are recycled on purpose
+        // but absurdly high read_ct means its probably never going to get processed
+        if read_msg.read_ct >= max_read_ct {
+            error!(
+                "archived message with read_count >= `{}`: {:?}",
+                max_read_ct, read_msg
+            );
+            queue
+                .archive(&control_plane_events_queue, &read_msg.msg_id)
+                .await?;
+            // this is what we'll send back to control-plane
+            let error_event = types::StateToControlPlane {
+                data_plane_id: read_msg.message.data_plane_id,
+                event_id: read_msg.message.event_id,
+                event_type: Event::Error,
+                spec: None,
+                connection: None,
+            };
+            let msg_id = queue.send(&data_plane_events_queue, &error_event).await?;
+            error!("sent error event to control-plane, msg_id: {:?}", msg_id);
+            continue;
+        }
         let namespace = format!(
             "org-{}-inst-{}",
             read_msg.message.organization_name, read_msg.message.dbname
@@ -90,6 +108,11 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
                     .await
                     .expect("error creating namespace");
 
+                // create NetworkPolicy to allow internet access only
+                create_networkpolicy(client.clone(), &namespace)
+                    .await
+                    .expect("error creating networkpolicy");
+
                 // create IngressRouteTCP
                 create_ing_route_tcp(client.clone(), &namespace, &data_plane_basedomain)
                     .await
@@ -106,8 +129,6 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
                 // generate CoreDB spec based on values in body
                 let spec = generate_spec(&namespace, &read_msg.message.spec).await;
 
-                let spec_js = serde_json::to_string(&spec).unwrap();
-                debug!("spec: {}", spec_js);
                 // create or update CoreDB
                 create_or_update(client.clone(), &namespace, spec)
                     .await
@@ -119,28 +140,54 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
 
                 let result = get_coredb_status(client.clone(), &namespace).await;
 
-                // requeue if no status, no extensions, or if extensions are currently being updated
-                let num_desired_extensions = match read_msg.message.spec.extensions {
-                    Some(extensions) => extensions.len(),
-                    None => 0,
-                };
+                // determine if we should requeue the message
                 let requeue: bool = match &result {
                     Ok(current_spec) => {
                         // if the coredb is still updating the extensions, requeue this task and try again in a few seconds
                         let status = current_spec.clone().status.expect("no status present");
                         let updating_extension = status.extensions_updating;
-                        let no_extensions = match status.extensions {
-                            Some(extensions) => {
+
+                        // requeue when extensions are "out of sync"
+                        // this happens when:
+                        // 1. no extensions reported on the crd status
+                        // 2. number of desired extensions != actual extensions
+                        // 3. there is a difference in hashes between desired and actual extensions
+                        let extensions_out_of_sync: bool = match status.extensions {
+                            Some(actual_extensions) => {
                                 // requeue if there are less extensions than desired
                                 // likely means that the extensions are still being updated
-                                extensions.len() < num_desired_extensions
+                                // or there is an issue changing an extension
+                                let desired_extensions = match read_msg.message.spec.extensions {
+                                    Some(extensions) => extensions,
+                                    None => {
+                                        vec![]
+                                    } // no extensions in the request
+                                };
+                                // if no extensions in request, then exit
+                                if desired_extensions.is_empty() {
+                                    info!("No extensions in request");
+                                    false
+                                } else {
+                                    let (changed, to_install) =
+                                        extension_plan(&desired_extensions, &actual_extensions);
+                                    // requeue if extensions need to be installed or updated
+                                    if !changed.is_empty() || !to_install.is_empty() {
+                                        warn!(
+                                            "changed: {:?}, to_install: {:?}",
+                                            changed, to_install
+                                        );
+                                        true
+                                    } else {
+                                        false
+                                    }
+                                }
                             }
                             None => true,
                         };
-                        if updating_extension || no_extensions {
+                        if updating_extension || extensions_out_of_sync {
                             warn!(
-                                "extensions updating: {}, no extensions: {}",
-                                updating_extension, no_extensions
+                                "extensions updating: {}, extensions_out_of_sync: {}",
+                                updating_extension, extensions_out_of_sync
                             );
                             true
                         } else {
