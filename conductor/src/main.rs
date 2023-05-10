@@ -1,12 +1,14 @@
 use conductor::{
+    coredb_crd::Backup, coredb_crd::CoreDBSpec, coredb_crd::ServiceAccountTemplate,
     create_cloudformation, create_ing_route_tcp, create_namespace, create_networkpolicy,
     create_or_update, delete, delete_cloudformation, delete_namespace, extensions::extension_plan,
-    generate_spec, get_all, get_coredb_status, get_pg_conn, restart_statefulset, types,
+    generate_rand_schedule, generate_spec, get_all, get_coredb_status, get_pg_conn,
+    lookup_role_arn, restart_statefulset, types,
 };
-use conductor::{get_stack_outputs, StackOutputs};
 use kube::{Client, ResourceExt};
 use log::{debug, error, info, warn};
 use pgmq::{Message, PGMQueue};
+use serde_json::json;
 use std::env;
 use std::{thread, time};
 use tokio_retry::strategy::FixedInterval;
@@ -92,8 +94,8 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
         let event_msg: types::StateToControlPlane = match read_msg.message.event_type {
             // every event is for a single namespace
             Event::Create | Event::Update => {
-                // (todo: nhudson) in teh future move this to be more specific
-                // to the event taht we are taking action on.  For now just create
+                // (todo: nhudson) in thr future move this to be more specific
+                // to the event that we are taking action on.  For now just create
                 // the stack without checking.
                 create_cloudformation(
                     String::from("us-east-1"),
@@ -104,15 +106,15 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
                 )
                 .await?;
 
-                // Lookup the stacks role name and role arn from the stack
-                let StackOutputs { role_arn, .. } = match get_stack_outputs(
+                // Lookup the stack's role ARN
+                let role_arn = match lookup_role_arn(
                     String::from("us-east-1"),
                     &read_msg.message.organization_name,
                     &read_msg.message.dbname,
                 )
                 .await
                 {
-                    Ok(ouputs) => ouputs,
+                    Ok(arn) => arn,
                     Err(err) => {
                         error!("Error getting stack outputs: {}", err);
                         // Requeue the message
@@ -121,12 +123,38 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
                         let _ = queue
                             .set_vt::<CRUDevent>(&control_plane_events_queue, &read_msg.msg_id, &vt)
                             .await?;
-                        continue; // Skip to the next iteration of the loop
+                        continue;
                     }
                 };
 
-                let role_arn = role_arn.as_ref().unwrap().to_owned();
+                // Format ServiceAccountTemplate spec in CoreDBSpec
+                let service_account_template = ServiceAccountTemplate {
+                    metadata: Some(json!({
+                        "annotations": {
+                            "eks.amazonaws.com/role-arn": role_arn,
+                        }
+                    })),
+                };
 
+                // Format Backup spec in CoreDBSpec
+                let backup = Backup {
+                    destinationPath: Some(format!(
+                        "s3://{}/coredb/{}/{}",
+                        backup_archive_bucket,
+                        &read_msg.message.organization_name,
+                        &read_msg.message.dbname
+                    )),
+                    encryption: Some(String::from("AES256")),
+                    retentionPolicy: Some(String::from("30d")),
+                    schedule: Some(generate_rand_schedule().await),
+                };
+
+                // Merge backup and service_account_template into spec
+                let coredb_spec = CoreDBSpec {
+                    service_account_template: Some(service_account_template),
+                    backup: Some(backup),
+                    ..read_msg.message.spec.clone()
+                };
                 // create Namespace
                 create_namespace(client.clone(), &namespace)
                     .await
@@ -150,29 +178,8 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
                 //     .await
                 //     .expect("error creating ingress for /metrics");
 
-                // format correct bucket string to pass into generate_spec
-                let backup_bucket = format!(
-                    "s3://{}/coredb/{}/{}",
-                    backup_archive_bucket,
-                    &read_msg.message.organization_name,
-                    &read_msg.message.dbname,
-                );
-
                 // generate CoreDB spec based on values in body
-                let spec = match generate_spec(
-                    &namespace,
-                    &read_msg.message.spec,
-                    &backup_bucket,
-                    &role_arn,
-                )
-                .await
-                {
-                    Ok(spec) => spec,
-                    Err(e) => {
-                        error!("Error generating spec: {:?}", e);
-                        return Err(e.into());
-                    }
-                };
+                let spec = generate_spec(&namespace, &coredb_spec).await;
 
                 // create or update CoreDB
                 create_or_update(client.clone(), &namespace, spec)

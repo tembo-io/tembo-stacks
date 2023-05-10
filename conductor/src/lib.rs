@@ -24,57 +24,16 @@ use serde_json::{from_str, to_string, Value};
 
 pub type Result<T, E = ConductorError> = std::result::Result<T, E>;
 
-pub async fn generate_spec(
-    namespace: &str,
-    spec: &crd::CoreDBSpec,
-    backup_bucket: &str,
-    role_arn: &str,
-) -> Result<Value, ConductorError> {
-    // Convert the existing spec to a JSON object
-    let mut spec_map: serde_json::Map<String, Value> =
-        serde_json::from_value(serde_json::json!(spec)).unwrap();
-
-    // Create the new fields
-    // backup_bucket needs to be s3://<bucket_name>/coredb/<org_name>/<db_name>
-    let new_fields = serde_json::json!({
-        "serviceAccountTemplate": {
-            "metadata": {
-                "annotations": {
-                    // todo: (nhudson) we need to figure out the ARN for the IAM role that
-                    // was created with the CloudFormation stack
-                    "eks.amazonaws.com/role-arn": role_arn,
-                }
-            }
-        },
-        "backup": {
-            "destinationPath": backup_bucket,
-            "encryption": "AES256",
-            "retentionPolicy": "30d",
-            "schedule": generate_rand_schedule().await,
-        }
-    });
-
-    // Merge the new fields into the existing spec
-    let new_fields_map: serde_json::Map<String, Value> =
-        serde_json::from_value(new_fields).unwrap();
-    for (k, v) in new_fields_map {
-        spec_map.insert(k, v);
-    }
-
-    // Convert the updated spec_map back into a Value
-    let updated_spec = Value::Object(spec_map);
-
-    // Create the final JSON object
+pub async fn generate_spec(namespace: &str, spec: &crd::CoreDBSpec) -> Value {
     let spec = serde_json::json!({
         "apiVersion": "coredb.io/v1alpha1",
         "kind": "CoreDB",
         "metadata": {
             "name": namespace,
         },
-        "spec": updated_spec,
+        "spec": spec,
     });
-
-    Ok(spec)
+    spec
 }
 
 pub async fn create_ing_route_tcp(
@@ -458,8 +417,20 @@ pub struct StackOutputs {
     pub role_arn: Option<String>,
 }
 
+pub async fn lookup_role_arn(
+    aws_region: String,
+    organization_name: &str,
+    dbname: &str,
+) -> Result<String, ConductorError> {
+    let stack_outputs = get_stack_outputs(aws_region, organization_name, dbname).await?;
+    let role_arn = stack_outputs
+        .role_arn
+        .ok_or_else(|| ConductorError::NoOutputsFound)?;
+    Ok(role_arn)
+}
+
 // Get Cloudformation Stack Outputs RoleName and RoleArn
-pub async fn get_stack_outputs(
+async fn get_stack_outputs(
     aws_region: String,
     org_name: &str,
     db_name: &str,
@@ -478,7 +449,7 @@ pub async fn get_stack_outputs(
     Ok(stack_outputs)
 }
 
-async fn generate_rand_schedule() -> String {
+pub async fn generate_rand_schedule() -> String {
     // Generate a random minute and hour between 4am and 10am UTC
     let mut rng = rand::thread_rng();
     let minute: u8 = rng.gen_range(0..60);

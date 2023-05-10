@@ -224,11 +224,11 @@ impl AWSConfigState {
                         }
                     }
                 }
-                return Err(ConductorError::NoOutputsFound);
+                Err(ConductorError::NoOutputsFound)
             }
             Err(err) => {
                 error!("Error describing stack: {:?}", err);
-                return Err(ConductorError::AwsError(err.into()));
+                Err(ConductorError::AwsError(err.into()))
             }
         }
     }
