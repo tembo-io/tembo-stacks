@@ -3,6 +3,7 @@ use conductor::{
     create_or_update, delete, delete_cloudformation, delete_namespace, extensions::extension_plan,
     generate_spec, get_all, get_coredb_status, get_pg_conn, restart_statefulset, types,
 };
+use conductor::{get_stack_outputs, StackOutputs};
 use kube::{Client, ResourceExt};
 use log::{debug, error, info, warn};
 use pgmq::{Message, PGMQueue};
@@ -103,6 +104,29 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
                 )
                 .await?;
 
+                // Lookup the stacks role name and role arn from the stack
+                let StackOutputs { role_arn, .. } = match get_stack_outputs(
+                    String::from("us-east-1"),
+                    &read_msg.message.organization_name,
+                    &read_msg.message.dbname,
+                )
+                .await
+                {
+                    Ok(ouputs) => ouputs,
+                    Err(err) => {
+                        error!("Error getting stack outputs: {}", err);
+                        // Requeue the message
+                        let vt: chrono::DateTime<chrono::Utc> =
+                            chrono::Utc::now() + chrono::Duration::seconds(REQUEUE_VT_SEC);
+                        let _ = queue
+                            .set_vt::<CRUDevent>(&control_plane_events_queue, &read_msg.msg_id, &vt)
+                            .await?;
+                        continue; // Skip to the next iteration of the loop
+                    }
+                };
+
+                let role_arn = role_arn.as_ref().unwrap().to_owned();
+
                 // create Namespace
                 create_namespace(client.clone(), &namespace)
                     .await
@@ -126,8 +150,29 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
                 //     .await
                 //     .expect("error creating ingress for /metrics");
 
+                // format correct bucket string to pass into generate_spec
+                let backup_bucket = format!(
+                    "s3://{}/coredb/{}/{}",
+                    backup_archive_bucket,
+                    &read_msg.message.organization_name,
+                    &read_msg.message.dbname,
+                );
+
                 // generate CoreDB spec based on values in body
-                let spec = generate_spec(&namespace, &read_msg.message.spec).await;
+                let spec = match generate_spec(
+                    &namespace,
+                    &read_msg.message.spec,
+                    &backup_bucket,
+                    &role_arn,
+                )
+                .await
+                {
+                    Ok(spec) => spec,
+                    Err(e) => {
+                        error!("Error generating spec: {:?}", e);
+                        return Err(e.into());
+                    }
+                };
 
                 // create or update CoreDB
                 create_or_update(client.clone(), &namespace, spec)
