@@ -90,7 +90,7 @@ mod test {
             "metrics": [
               {
                 "start_time_seconds": {
-                  "usage": "Gauge",
+                  "usage": "GAUGE",
                   "description": "Time at which postmaster started"
                 }
               }
@@ -102,7 +102,7 @@ mod test {
             "metrics": [
               {
                 "num_ext": {
-                  "usage": "Gauge",
+                  "usage": "GAUGE",
                   "description": "Num extensions"
                 }
               }
