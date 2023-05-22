@@ -181,7 +181,13 @@ mod test {
         let spec = msg.message.spec.expect("No spec found in message");
 
         // assert that the message returned by Conductor includes the new metrics values in the spec
-        assert!(spec.metrics.expect("no metrics in data-plane-event message").queries.expect("queries missing").queries.contains_key("pg_postmaster"));
+        assert!(spec
+            .metrics
+            .expect("no metrics in data-plane-event message")
+            .queries
+            .expect("queries missing")
+            .queries
+            .contains_key("pg_postmaster"));
 
         assert!(
             spec.extensions.is_some(),
