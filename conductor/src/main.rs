@@ -383,5 +383,12 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
 fn main() {
     env_logger::init();
     info!("starting");
-    run().unwrap();
+    loop {
+        match run() {
+            Ok(_) => {}
+            Err(err) => {
+                error!("error: {:?}", err);
+            }
+        }
+    }
 }
