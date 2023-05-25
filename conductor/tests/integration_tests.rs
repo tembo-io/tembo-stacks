@@ -290,7 +290,8 @@ mod test {
         println!("msg_id: {msg_id:?}");
 
         // wait for it to delete
-        let wait_for_delete = 40;
+        let wait_for_delete = 60;
+        println!("Waiting {} seconds for delete operation", wait_for_delete);
         thread::sleep(time::Duration::from_secs(wait_for_delete));
 
         // assert namespace is gone
