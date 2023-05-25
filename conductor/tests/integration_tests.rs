@@ -12,10 +12,15 @@
 #[cfg(test)]
 mod test {
     use k8s_openapi::{
-        api::{apps::v1::StatefulSet, core::v1::Pod},
+        api::{
+            apps::v1::StatefulSet, core::v1::Namespace, core::v1::PersistentVolumeClaim,
+            core::v1::Pod,
+        },
         apiextensions_apiserver::pkg::apis::apiextensions::v1::CustomResourceDefinition,
     };
+
     use kube::{
+        api::ListParams,
         runtime::wait::{await_condition, conditions},
         Api, Client, Config,
     };
@@ -285,19 +290,25 @@ mod test {
         println!("msg_id: {msg_id:?}");
 
         // wait for it to delete
-        let wait_for_delete = 10;
+        let wait_for_delete = 40;
         thread::sleep(time::Duration::from_secs(wait_for_delete));
-        let pod_does_not_exist = tokio::time::timeout(
-            std::time::Duration::from_secs(1),
-            await_condition(pods.clone(), &pod_name, conditions::is_pod_running()),
-        )
-        .await;
+
+        // assert namespace is gone
+        let ns_api: Api<Namespace> = Api::all(client.clone());
+        let ns_dne = ns_api.get(&namespace).await;
+        assert!(ns_dne.is_err(), "Namespace was not deleted");
+        // assert pvcs is gone
+        let pvcs: Api<PersistentVolumeClaim> = Api::all(client.clone());
+        let lp = ListParams::default().fields(&format!("metadata.name=data-{}-0", namespace));
+        let pvc_list = pvcs.list(&lp).await.expect("failed to list pvcs");
         assert!(
-            pod_does_not_exist.is_err(),
-            "CoreDB pod: {} was not deleted after :{} seconds",
-            &pod_name,
-            wait_for_delete
+            pvc_list.items.is_empty(),
+            "PVCs were not deleted: {:?}",
+            pvc_list
         );
+
+        // TODO:
+        // assert coredb resource was deleted
     }
 
     async fn kube_client() -> kube::Client {
