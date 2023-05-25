@@ -2,10 +2,10 @@ use conductor::{
     coredb_crd::Backup, coredb_crd::CoreDBSpec, coredb_crd::ServiceAccountTemplate,
     create_cloudformation, create_ing_route_tcp, create_namespace, create_networkpolicy,
     create_or_update, delete, delete_cloudformation, delete_namespace, extensions::extension_plan,
-    generate_rand_schedule, generate_spec, get_all, get_coredb_status, get_pg_conn,
-    lookup_role_arn, restart_statefulset, types,
+    generate_rand_schedule, generate_spec, get_coredb_status, get_pg_conn, lookup_role_arn,
+    restart_statefulset, types,
 };
-use kube::{Client, ResourceExt};
+use kube::Client;
 use log::{debug, error, info, warn};
 use pgmq::{Message, PGMQueue};
 use serde_json::json;
