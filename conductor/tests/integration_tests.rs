@@ -308,8 +308,20 @@ mod test {
             pvc_list
         );
 
-        // TODO:
-        // assert coredb resource was deleted
+        use conductor::coredb_crd::CoreDB;
+        let cdb_api: Api<CoreDB> = Api::all(client.clone());
+        let cdb_dne = cdb_api.get(&namespace).await;
+        assert!(cdb_dne.is_err(), "CoreDB was not deleted");
+
+        // call aws api and verify CF stack was deleted
+        use aws_sdk_cloudformation::config::Region;
+        use conductor::aws::cloudformation::AWSConfigState;
+        let aws_region = "us-east-1".to_owned();
+        let region = Region::new(aws_region);
+        let aws_config_state = AWSConfigState::new(region).await;
+        let stack_name = format!("org-{}-inst-{}-cf", org_name, dbname);
+        let exists = aws_config_state.does_stack_exist(&stack_name).await;
+        assert!(!exists, "CF stack was not deleted");
     }
 
     async fn kube_client() -> kube::Client {
