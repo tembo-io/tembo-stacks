@@ -368,7 +368,6 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
         for pg in vec.await.iter() {
             info!("found CoreDB {}", pg.name_any());
         }
-        thread::sleep(time::Duration::from_secs(1));
 
         // archive message from queue
         let archived = queue
