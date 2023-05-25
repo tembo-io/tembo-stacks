@@ -285,15 +285,18 @@ mod test {
         println!("msg_id: {msg_id:?}");
 
         // wait for it to delete
-        let wait_seconds = 20; //thread::sleep(time::Duration::from_secs(10));
+        let wait_for_delete = 10;
+        thread::sleep(time::Duration::from_secs(wait_for_delete));
         let pod_does_not_exist = tokio::time::timeout(
-            std::time::Duration::from_secs(wait_seconds),
+            std::time::Duration::from_secs(1),
             await_condition(pods.clone(), &pod_name, conditions::is_pod_running()),
         )
         .await;
         assert!(
             pod_does_not_exist.is_err(),
-            "Pod still exists after {wait_seconds} seconds"
+            "CoreDB pod: {} was not deleted after :{} seconds",
+            &pod_name,
+            wait_for_delete
         );
     }
 
