@@ -97,6 +97,14 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
                 // (todo: nhudson) in thr future move this to be more specific
                 // to the event that we are taking action on.  For now just create
                 // the stack without checking.
+
+                if read_msg.message.spec.is_none() {
+                    error!("spec is required on create and update events");
+                    continue;
+                }
+                // spec.expect() should be safe here - since above we continue in loop when it is None
+                let msg_spec = read_msg.message.spec.clone().expect("message spec");
+
                 create_cloudformation(
                     String::from("us-east-1"),
                     backup_archive_bucket.clone(),
@@ -154,7 +162,7 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
                 let coredb_spec = CoreDBSpec {
                     service_account_template: Some(service_account_template),
                     backup: Some(backup),
-                    ..read_msg.message.spec.clone()
+                    ..msg_spec.clone()
                 };
                 // create Namespace
                 create_namespace(client.clone(), &namespace).await?;
@@ -201,7 +209,7 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
                                 // requeue if there are less extensions than desired
                                 // likely means that the extensions are still being updated
                                 // or there is an issue changing an extension
-                                let desired_extensions = match read_msg.message.spec.extensions {
+                                let desired_extensions = match msg_spec.extensions {
                                     Some(extensions) => extensions,
                                     None => {
                                         vec![]
