@@ -147,7 +147,7 @@ mod test {
             ),
             event_type: types::Event::Create,
             dbname: dbname.clone(),
-            spec: spec,
+            spec: Some(spec),
         };
 
         let msg_id = queue.send(&myqueue, &msg).await;
@@ -251,7 +251,7 @@ mod test {
             event_id: "test-install-extension".to_owned(),
             event_type: types::Event::Update,
             dbname: dbname.clone(),
-            spec: spec,
+            spec: Some(spec),
         };
         let msg_id = queue.send(&myqueue, &msg).await;
         println!("msg_id: {msg_id:?}");
@@ -271,6 +271,30 @@ mod test {
             .expect("no extensions found");
         // we added an extension, so it should be +1 now
         assert_eq!(num_expected_extensions, extensions.len());
+
+        // delete the instance
+        let msg = types::CRUDevent {
+            organization_name: org_name.clone(),
+            data_plane_id: "org_02s3owPQskuGXHE8vYsGSY".to_owned(),
+            event_id: "test-install-extension".to_owned(),
+            event_type: types::Event::Delete,
+            dbname: dbname.clone(),
+            spec: None,
+        };
+        let msg_id = queue.send(&myqueue, &msg).await;
+        println!("msg_id: {msg_id:?}");
+
+        // wait for it to delete
+        let wait_seconds = 20; //thread::sleep(time::Duration::from_secs(10));
+        let pod_does_not_exist = tokio::time::timeout(
+            std::time::Duration::from_secs(wait_seconds),
+            await_condition(pods.clone(), &pod_name, conditions::is_pod_running()),
+        )
+        .await;
+        assert!(
+            pod_does_not_exist.is_err(),
+            "Pod still exists after {wait_seconds} seconds"
+        );
     }
 
     async fn kube_client() -> kube::Client {
