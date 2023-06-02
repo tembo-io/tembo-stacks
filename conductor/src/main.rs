@@ -7,7 +7,7 @@ use conductor::{
 };
 use kube::Client;
 use log::{debug, error, info, warn};
-use pgmq::{Message, PGMQueue};
+use pgmq::{Message, PGMQueueExt};
 use serde_json::json;
 use std::env;
 use std::{thread, time};
@@ -35,7 +35,8 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
         .expect("error parsing MAX_READ_CT");
 
     // Connect to pgmq
-    let queue: PGMQueue = PGMQueue::new(pg_conn_url).await?;
+    let queue = PGMQueueExt::new(pg_conn_url, 5).await?;
+    queue.init().await?;
 
     // Create queues if they do not exist
     queue.create(&control_plane_events_queue).await?;
@@ -45,13 +46,13 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
     let client = Client::try_default().await?;
 
     // amount of time to wait after requeueing a message
-    const REQUEUE_VT_SEC: i64 = 5;
+    const REQUEUE_VT_SEC: i32 = 5;
     loop {
         // Read from queue (check for new message)
         // messages that dont fit a CRUDevent will error
         // set visibility timeout to 90 seconds
         let read_msg = queue
-            .read::<CRUDevent>(&control_plane_events_queue, Some(&90_i32))
+            .read::<CRUDevent>(&control_plane_events_queue, 90_i32)
             .await?;
         let read_msg: Message<CRUDevent> = match read_msg {
             Some(message) => {
@@ -72,7 +73,7 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
                 max_read_ct, read_msg
             );
             queue
-                .archive(&control_plane_events_queue, &read_msg.msg_id)
+                .archive(&control_plane_events_queue, read_msg.msg_id)
                 .await?;
             // this is what we'll send back to control-plane
             let error_event = types::StateToControlPlane {
@@ -126,10 +127,8 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
                     Err(err) => {
                         error!("Error getting stack outputs: {}", err);
                         // Requeue the message
-                        let vt: chrono::DateTime<chrono::Utc> =
-                            chrono::Utc::now() + chrono::Duration::seconds(REQUEUE_VT_SEC);
                         let _ = queue
-                            .set_vt::<CRUDevent>(&control_plane_events_queue, &read_msg.msg_id, &vt)
+                            .set_vt::<CRUDevent>(&control_plane_events_queue, read_msg.msg_id, REQUEUE_VT_SEC.clone())
                             .await?;
                         continue;
                     }
@@ -254,10 +253,8 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
 
                 if requeue {
                     // requeue then continue loop from beginning
-                    let vt: chrono::DateTime<chrono::Utc> =
-                        chrono::Utc::now() + chrono::Duration::seconds(REQUEUE_VT_SEC);
                     let _ = queue
-                        .set_vt::<CRUDevent>(&control_plane_events_queue, &read_msg.msg_id, &vt)
+                        .set_vt::<CRUDevent>(&control_plane_events_queue, read_msg.msg_id, REQUEUE_VT_SEC)
                         .await?;
                     continue;
                 }
@@ -371,7 +368,7 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
 
         // archive message from queue
         let archived = queue
-            .archive(&control_plane_events_queue, &read_msg.msg_id)
+            .archive(&control_plane_events_queue, read_msg.msg_id)
             .await
             .expect("error archiving message from queue");
         // TODO(ianstanton) Improve logging everywhere
