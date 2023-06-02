@@ -4,6 +4,9 @@ fmt:
 	cargo +nightly fmt
 	cargo clippy
 
+run.pgmq-postgres:
+	docker run -d --name pgmq-pg -e POSTGRES_PASSWORD=postgres -p 5432:5432 quay.io/coredb/pgmq-pg:latest
+
 run.local:
 	PG_CONN_URL=postgresql://postgres:postgres@0.0.0.0:5432/postgres \
 	RUST_BACKTRACE=1 \
