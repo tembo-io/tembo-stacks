@@ -128,7 +128,11 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
                         error!("Error getting stack outputs: {}", err);
                         // Requeue the message
                         let _ = queue
-                            .set_vt::<CRUDevent>(&control_plane_events_queue, read_msg.msg_id, REQUEUE_VT_SEC.clone())
+                            .set_vt::<CRUDevent>(
+                                &control_plane_events_queue,
+                                read_msg.msg_id,
+                                REQUEUE_VT_SEC,
+                            )
                             .await?;
                         continue;
                     }
@@ -254,7 +258,11 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
                 if requeue {
                     // requeue then continue loop from beginning
                     let _ = queue
-                        .set_vt::<CRUDevent>(&control_plane_events_queue, read_msg.msg_id, REQUEUE_VT_SEC)
+                        .set_vt::<CRUDevent>(
+                            &control_plane_events_queue,
+                            read_msg.msg_id,
+                            REQUEUE_VT_SEC,
+                        )
                         .await?;
                     continue;
                 }
