@@ -18,7 +18,7 @@ use types::{CRUDevent, Event};
 #[tokio::main]
 async fn run() -> Result<(), Box<dyn std::error::Error>> {
     // Read connection info from environment variable
-    let pg_conn_url = env::var("PG_CONN_URL").expect("PG_CONN_URL must be set");
+    let pg_conn_url = env::var("POSTGRES_QUEUE_CONNECTION").expect("POSTGRES_QUEUE_CONNECTION must be set");
     let control_plane_events_queue =
         env::var("CONTROL_PLANE_EVENTS_QUEUE").expect("CONTROL_PLANE_EVENTS_QUEUE must be set");
     let data_plane_events_queue =
