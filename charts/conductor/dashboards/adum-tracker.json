@@ -967,7 +967,7 @@
     ]
   },
   "time": {
-    "from": "now-6h",
+    "from": "now-7d",
     "to": "now"
   },
   "timepicker": {
@@ -996,8 +996,8 @@
     ]
   },
   "timezone": "",
-  "title": "Cloud Tracker Copy2",
-  "uid": "g9EQJF_Vk",
+  "title": "Cloud Tracker",
+  "uid": "bE7Y7zEVz",
   "version": 2,
   "weekStart": ""
 }
