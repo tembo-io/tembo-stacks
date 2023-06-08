@@ -111,7 +111,7 @@
             "uid": "prometheus"
           },
           "editorMode": "code",
-          "expr": "pgmq_queue_length{job=\"org-coredb-inst-cp-queue-prd-metrics\"}",
+          "expr": "pgmq_queue_length{job=~\"org-coredb-inst-cp-queue-.*-metrics\"}",
           "legendFormat": "{{queue_name}}",
           "range": true,
           "refId": "A"
@@ -174,7 +174,7 @@
             "uid": "prometheus"
           },
           "editorMode": "code",
-          "expr": "pgmq_oldest_msg_age_sec{job=\"org-coredb-inst-cp-queue-prd-metrics\"} / 60",
+          "expr": "pgmq_oldest_msg_age_sec{job=~\"org-coredb-inst-cp-queue-.*-metrics\"} / 60",
           "legendFormat": "{{queue_name}}",
           "range": true,
           "refId": "A"
@@ -237,7 +237,7 @@
             "uid": "prometheus"
           },
           "editorMode": "code",
-          "expr": "pgmq_newest_msg_age_sec{job=\"org-coredb-inst-cp-queue-prd-metrics\"} / 60",
+          "expr": "pgmq_newest_msg_age_sec{job=~\"org-coredb-inst-cp-queue-.*-metrics\"} / 60",
           "legendFormat": "{{queue_name}}",
           "range": true,
           "refId": "A"
@@ -261,6 +261,6 @@
   "timezone": "",
   "title": "Control Plane Queues",
   "uid": "3XmQBAl4z",
-  "version": 5,
+  "version": 7,
   "weekStart": ""
 }
