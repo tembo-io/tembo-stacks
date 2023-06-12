@@ -6,7 +6,6 @@ use dataplane_webserver::{
     routes::root,
 };
 
-
 use utoipa::OpenApi;
 use utoipa_swagger_ui::{SwaggerUi, Url};
 
@@ -15,12 +14,7 @@ async fn main() -> std::io::Result<()> {
     env_logger::init_from_env(env_logger::Env::new().default_filter_or("debug"));
 
     #[derive(OpenApi)]
-    #[openapi(
-        paths(
-        ),
-        components(schemas(
-        ))
-    )]
+    #[openapi(paths(), components(schemas()))]
     struct ApiDoc;
 
     HttpServer::new(move || {
