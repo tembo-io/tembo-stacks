@@ -19,6 +19,7 @@ jobs:
     outputs:
       short_sha: ${{ steps.versions.outputs.SHORT_SHA }}
     strategy:
+      fail-fast: false
       matrix:
         include:
           - path: ./conductor
