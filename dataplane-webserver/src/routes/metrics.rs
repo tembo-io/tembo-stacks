@@ -1,28 +1,52 @@
-use actix_web::{get, Error, HttpRequest, HttpResponse};
-use log::{error, info, warn};
 use crate::config;
+use actix_web::{get, web, Error, HttpRequest, HttpResponse};
+use log::{error, info, warn};
+use promql_parser::parser;
+use serde::{Deserialize, Serialize};
+
+// https://prometheus.io/docs/prometheus/latest/querying/api/
+
+#[derive(Deserialize)]
+struct RangeQuery {
+    start: String,
+    query: String,
+    end: Option<String>,
+    step: Option<String>,
+}
 
 #[utoipa::path(
-context_path = "/",
-responses(
-(status = 200, description = "Returns metrics", body = Value),
-(status = 403, description = "Not authorized for query", body = Value),
-(status = 422, description = "Incorrectly formatted request", body = Value),
-)
+    context_path = "/{namespace}/metrics",
+    params(
+        ("namespace", example="org-tembo-inst-sample", description = "Instance namespace"),
+        ("query", example="standard", description = "PromQL range query"),
+        ("start", example="1686780828", description = "Range start, unix timestamp"),
+        ("end", example="1686780828", description = "Range end, unix timestamp. Default is now."),
+        ("step", example="60s", description = "Step size, defaults to 60s"),
+    ),
+    responses(
+        (status = 200, description = "Metrics queries over a range", body = Value),
+        (status = 400, description = "Parameters are missing or incorrect", body = Value),
+        (status = 403, description = "Not authorized for query", body = Value),
+        (status = 422, description = "Incorrectly formatted query", body = Value),
+        (status = 504, description = "Request timed out on metrics backend", body = Value),
+    )
 )]
-#[get("/{namespace}/metrics")]
-pub async fn metrics(req: HttpRequest) -> Result<HttpResponse, Error> {
+#[get("/query_range")]
+pub async fn query_range(
+    cfg: web::Data<config::Config>,
+    req: HttpRequest,
+    range_query: web::Query<RangeQuery>,
+    path: web::Path<(String,)>,
+) -> Result<HttpResponse, Error> {
+
+    let (namespace,) = path.into_inner();
 
     // Get prometheus URL from config
-    let prometheus_url = match req
-        .app_data::<config::Config>()
-        .map(|cfg| cfg.prometheus_url.clone()) {
-        Some(url) => url,
-        None => {
-            error!("No prometheus URL configured, please set environment variable PROMETHEUS_URL");
-            return Ok(HttpResponse::InternalServerError().finish());
-        }
-    };
+    let prometheus_url = cfg.prometheus_url.clone();
+
+    // Get the query parameters
+    let query = range_query.query.clone();
+    info!("request namespace: {}, query: {}", namespace, query);
 
     return Ok(HttpResponse::Ok().body(""));
 }

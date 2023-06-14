@@ -1,3 +1,3 @@
 pub mod health;
-pub mod root;
 pub mod metrics;
+pub mod root;

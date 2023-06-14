@@ -1,8 +1,13 @@
 use actix_web::{middleware, web, App, HttpServer};
 
 use actix_cors::Cors;
-use dataplane_webserver::{config, routes::health::{lively, ready}, routes::root};
+use dataplane_webserver::{
+    config,
+    routes::health::{lively, ready},
+    routes::root,
+};
 
+use dataplane_webserver::routes::metrics;
 use utoipa::OpenApi;
 use utoipa_swagger_ui::{SwaggerUi, Url};
 
@@ -23,15 +28,16 @@ async fn main() -> std::io::Result<()> {
 
         let cors = Cors::permissive();
         App::new()
+            .app_data(web::Data::new(cfg.clone()))
             .wrap(cors)
             .wrap(middleware::Logger::default())
             .service(web::scope("/").service(root::ok))
+            .service(web::scope("/{namespace}/metrics").service(metrics::query_range))
             .service(web::scope("/health").service(ready).service(lively))
             .service(SwaggerUi::new("/swagger-ui/{_:.*}").urls(vec![(
                 Url::new("dataplane-api", "/api-docs/openapi.json"),
                 doc,
             )]))
-            .app_data(web::Data::new(cfg.clone()))
     })
     .workers(8)
     .bind(("0.0.0.0", 8080))?
