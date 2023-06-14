@@ -1,10 +1,7 @@
 use actix_web::{middleware, web, App, HttpServer};
 
 use actix_cors::Cors;
-use dataplane_webserver::{
-    routes::health::{lively, ready},
-    routes::root,
-};
+use dataplane_webserver::{config, routes::health::{lively, ready}, routes::root};
 
 use utoipa::OpenApi;
 use utoipa_swagger_ui::{SwaggerUi, Url};
@@ -12,6 +9,8 @@ use utoipa_swagger_ui::{SwaggerUi, Url};
 #[actix_web::main]
 async fn main() -> std::io::Result<()> {
     env_logger::init_from_env(env_logger::Env::new().default_filter_or("debug"));
+
+    let cfg = config::Config::default();
 
     #[derive(OpenApi)]
     #[openapi(paths(), components(schemas()))]
@@ -32,6 +31,7 @@ async fn main() -> std::io::Result<()> {
                 Url::new("dataplane-api", "/api-docs/openapi.json"),
                 doc,
             )]))
+            .app_data(web::Data::new(cfg.clone()))
     })
     .workers(8)
     .bind(("0.0.0.0", 8080))?
