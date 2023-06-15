@@ -218,7 +218,6 @@ pub async fn query_range(
             return Ok(HttpResponse::InternalServerError().json("Failed to parse Prometheus response in JSON"));
         }
     };
-    debug!("{:?}", &json_response);
 
     match status_code {
         StatusCode::OK => {
