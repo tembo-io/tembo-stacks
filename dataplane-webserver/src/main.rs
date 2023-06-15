@@ -1,6 +1,7 @@
 use actix_web::{middleware, web, App, HttpServer};
 
 use actix_cors::Cors;
+use log::info;
 use dataplane_webserver::{
     config,
     routes::health::{lively, ready},
@@ -16,6 +17,7 @@ async fn main() -> std::io::Result<()> {
     env_logger::init_from_env(env_logger::Env::new().default_filter_or("debug"));
 
     let cfg = config::Config::default();
+    info!("{:?}", cfg);
 
     #[derive(OpenApi)]
     #[openapi(paths(), components(schemas()))]
