@@ -169,6 +169,11 @@ pub async fn query_range(
         }
     };
     let timeout = format!("{prometheus_timeout_ms}ms");
+    // Check that end - start is not greater than 1 day, plus 100 seconds
+    if end - start > 86500.0 {
+        warn!("Query time range too large: namespace '{}', start '{}', end '{}'", namespace, start, end);
+        return Ok(HttpResponse::BadRequest().json("Query time range too large, must be less than or equal to 1 day"));
+    }
 
     let query_params = vec![
         ("query", query),
