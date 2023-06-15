@@ -1,12 +1,12 @@
 use actix_web::{middleware, web, App, HttpServer};
 
 use actix_cors::Cors;
-use log::info;
 use dataplane_webserver::{
     config,
     routes::health::{lively, ready},
     routes::root,
 };
+use log::info;
 
 use dataplane_webserver::routes::metrics;
 use utoipa::OpenApi;
@@ -23,7 +23,8 @@ async fn main() -> std::io::Result<()> {
     // allows for connection pooling and re-use of TCP
     // connections to the Prometheus server.
     let http_client = reqwest::Client::builder()
-        .build().expect("Failed to create HTTP client");
+        .build()
+        .expect("Failed to create HTTP client");
 
     #[derive(OpenApi)]
     #[openapi(paths(), components(schemas()))]

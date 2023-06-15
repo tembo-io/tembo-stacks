@@ -1,4 +1,3 @@
-use std::time::{Duration, SystemTime};
 use crate::config;
 use actix_web::{get, web, Error, HttpRequest, HttpResponse};
 use log::{debug, error, info, warn};
@@ -7,13 +6,14 @@ use promql_parser::parser;
 use promql_parser::parser::{Expr, VectorSelector};
 use promql_parser::util::{walk_expr, ExprVisitor};
 use reqwest::{Client, StatusCode, Url};
-use serde::{Deserialize, Serialize};
+use serde::Deserialize;
 use serde_json::Value;
+use std::time::{Duration, SystemTime};
 
 // https://prometheus.io/docs/prometheus/latest/querying/api/
 
 #[derive(Deserialize)]
-struct RangeQuery {
+pub struct RangeQuery {
     query: String,
     start: f64,
     end: Option<f64>,
@@ -39,7 +39,7 @@ fn validate_vector_selector(namespace: &String, vector_selector: &VectorSelector
             authorized_query = true;
         }
     }
-    return authorized_query;
+    authorized_query
 }
 
 // This checks that prometheus queries are only using authorized namespace
@@ -64,7 +64,7 @@ impl ExprVisitor for NamespaceVisitor {
             Expr::Call(call) => {
                 for boxed_arg in &call.args.args {
                     let expr_arg = boxed_arg;
-                    match self.pre_visit(&expr_arg) {
+                    match self.pre_visit(expr_arg) {
                         Ok(true) => (),
                         Ok(false) => return Ok(false),
                         Err(e) => return Err(e),
@@ -102,12 +102,11 @@ impl ExprVisitor for NamespaceVisitor {
 pub async fn query_range(
     cfg: web::Data<config::Config>,
     http_client: web::Data<Client>,
-    req: HttpRequest,
+    _req: HttpRequest,
     range_query: web::Query<RangeQuery>,
     path: web::Path<(String,)>,
 ) -> Result<HttpResponse, Error> {
     let (namespace,) = path.into_inner();
-
 
     // Get the query parameters
     let query = range_query.query.clone();
@@ -131,10 +130,16 @@ pub async fn query_range(
     // Check if we are performing an unauthorized query.
     match all_metrics_specify_namespace {
         Ok(true) => {
-            info!("Authorized request: namespace '{}', query '{}'", namespace, query);
+            info!(
+                "Authorized request: namespace '{}', query '{}'",
+                namespace, query
+            );
         }
         _ => {
-            warn!("Unauthorized request: namespace '{}', query '{}'", namespace, query);
+            warn!(
+                "Unauthorized request: namespace '{}', query '{}'",
+                namespace, query
+            );
             return Ok(
                 HttpResponse::Forbidden().json("Must include namespace in all vector selectors")
             );
@@ -159,8 +164,12 @@ pub async fn query_range(
     };
     // Check that end - start is not greater than 1 day, plus 100 seconds
     if end - start > 86500.0 {
-        warn!("Query time range too large: namespace '{}', start '{}', end '{}'", namespace, start, end);
-        return Ok(HttpResponse::BadRequest().json("Query time range too large, must be less than or equal to 1 day"));
+        warn!(
+            "Query time range too large: namespace '{}', start '{}', end '{}'",
+            namespace, start, end
+        );
+        return Ok(HttpResponse::BadRequest()
+            .json("Query time range too large, must be less than or equal to 1 day"));
     }
 
     // Get timeout from config
@@ -168,7 +177,7 @@ pub async fn query_range(
     // Set reqwest timeout to 50% greater than the prometheus timeout, plus 500ms, since we
     // prefer for Prometheus to perform the timeout rather than reqwest client.
     let reqwest_timeout_ms = prometheus_timeout_ms + (prometheus_timeout_ms / 2) + 500;
-    let reqwest_timeout_ms : u64 = match reqwest_timeout_ms.try_into() {
+    let reqwest_timeout_ms: u64 = match reqwest_timeout_ms.try_into() {
         Ok(n) => n,
         Err(_) => {
             error!("Failed to convert timeout to u64");
@@ -194,13 +203,19 @@ pub async fn query_range(
         Ok(url) => url,
         Err(e) => {
             error!("Failed to parse Prometheus URL: {}", e);
-            return Ok(HttpResponse::InternalServerError().json("Failed to create URL to query Prometheus"));
+            return Ok(HttpResponse::InternalServerError()
+                .json("Failed to create URL to query Prometheus"));
         }
     };
     debug!("{}", query_url);
 
     // Create an HTTP request to the Prometheus backend
-    let prometheus_response = match http_client.get(query_url).timeout(Duration::from_millis(reqwest_timeout_ms)).send().await {
+    let prometheus_response = match http_client
+        .get(query_url)
+        .timeout(Duration::from_millis(reqwest_timeout_ms))
+        .send()
+        .await
+    {
         Ok(response) => response,
         Err(e) => {
             error!("Failed to query Prometheus: {}", e);
@@ -215,38 +230,47 @@ pub async fn query_range(
         Ok(response) => response,
         Err(e) => {
             error!("Failed to parse Prometheus response: {}", e);
-            return Ok(HttpResponse::InternalServerError().json("Failed to parse Prometheus response in JSON"));
+            return Ok(HttpResponse::InternalServerError()
+                .json("Failed to parse Prometheus response in JSON"));
         }
     };
 
     match status_code {
         StatusCode::OK => {
-           debug!("Request to prometheus returned 200");
-            },
+            debug!("Request to prometheus returned 200");
+        }
         StatusCode::BAD_REQUEST => {
             warn!("{:?}", &json_response);
-            return Ok(HttpResponse::BadRequest().json("Prometheus reported the query is malformed"));
-        },
+            return Ok(
+                HttpResponse::BadRequest().json("Prometheus reported the query is malformed")
+            );
+        }
         StatusCode::GATEWAY_TIMEOUT => {
             warn!("{:?}", &json_response);
             return Ok(HttpResponse::GatewayTimeout().json("Prometheus timeout"));
-        },
+        }
         StatusCode::SERVICE_UNAVAILABLE => {
             warn!("{:?}", &json_response);
             return Ok(HttpResponse::GatewayTimeout().json("Prometheus timeout"));
-        },
+        }
         StatusCode::UNPROCESSABLE_ENTITY => {
             // If this is a timeout, then make the response 503 to match the other
             // types of timeouts.
             warn!("{:?}", &json_response);
-            if json_response["error"].to_string().contains("context deadline exceeded") {
+            if json_response["error"]
+                .to_string()
+                .contains("context deadline exceeded")
+            {
                 return Ok(HttpResponse::GatewayTimeout().json("Prometheus timeout"));
             }
-            return Ok(HttpResponse::BadRequest().json("Expression cannot be executed on Prometheus"));
-        },
+            return Ok(
+                HttpResponse::BadRequest().json("Expression cannot be executed on Prometheus")
+            );
+        }
         _ => {
             error!("{:?}: {:?}", status_code, &json_response);
-            return Ok(HttpResponse::InternalServerError().json("Prometheus returned an unexpected status code"));
+            return Ok(HttpResponse::InternalServerError()
+                .json("Prometheus returned an unexpected status code"));
         }
     }
 
