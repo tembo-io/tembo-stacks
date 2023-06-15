@@ -3,6 +3,7 @@ name = "dataplane_webserver"
 description = "Backend for the CoreDB Data Plane"
 version = "0.0.1"
 edition = "2021"
+publish = false
 
 [dependencies]
 actix-cors = "0.6.4"
