@@ -44,7 +44,12 @@ jobs:
 
   test:
     name: Run tests
-    runs-on: ubuntu-20.04
+    # Runs on self-hosted in order to reach
+    # prometheus server
+    runs-on:
+      - self-hosted
+      - dind
+      - small
     steps:
       - uses: actions/checkout@v2
       - uses: actions-rs/toolchain@v1
