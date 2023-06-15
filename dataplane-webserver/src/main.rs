@@ -23,7 +23,7 @@ async fn main() -> std::io::Result<()> {
     // allows for connection pooling and re-use of TCP
     // connections to the Prometheus server.
     let http_client = reqwest::Client::builder()
-        .build().expect("Failed to create ");
+        .build().expect("Failed to create HTTP client");
 
     #[derive(OpenApi)]
     #[openapi(paths(), components(schemas()))]
