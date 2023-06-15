@@ -18,10 +18,9 @@ impl Default for Config {
                 .parse::<i32>()
             {
                 Ok(n) => n,
-                Err(e) => panic!(
-                    "Environment variable PROMETHEUS_TIMEOUT_MS must convert into i32: {}",
-                    e
-                ),
+                Err(e) => {
+                error!("Environment variable PROMETHEUS_TIMEOUT_MS must convert into i32: {}",e);
+                100,
             },
         }
     }
