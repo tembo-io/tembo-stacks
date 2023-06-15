@@ -10,6 +10,7 @@ use log::info;
 
 use dataplane_webserver::routes::metrics;
 use utoipa::OpenApi;
+use utoipa::openapi::security::{HttpAuthScheme, HttpBuilder, SecurityScheme};
 use utoipa_swagger_ui::{SwaggerUi, Url};
 
 #[actix_web::main]
@@ -26,8 +27,12 @@ async fn main() -> std::io::Result<()> {
         .build()
         .expect("Failed to create HTTP client");
 
+    let security_scheme_documentation = SecurityScheme::Http(
+        HttpBuilder::new().scheme(HttpAuthScheme::Bearer).bearer_format("JWT").build()
+    );
+
     #[derive(OpenApi)]
-    #[openapi(paths(), components(schemas()))]
+    #[openapi(paths(metrics::query_range), components(schemas()), security(("http" = ["metrics::query_range"])))]
     struct ApiDoc;
 
     HttpServer::new(move || {
