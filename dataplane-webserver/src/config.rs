@@ -16,10 +16,10 @@ impl Default for Config {
             ),
             prometheus_timeout_ms: match from_env_default(
                 "PROMETHEUS_TIMEOUT_MS",
-                "1000",
+                "100",
             ).parse::<i32>() {
                 Ok(n) => n,
-                Err(e) => 1000,
+                Err(e) => 100,
             }
         }
     }

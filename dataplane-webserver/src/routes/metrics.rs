@@ -101,6 +101,7 @@ impl ExprVisitor for NamespaceVisitor {
 #[get("/query_range")]
 pub async fn query_range(
     cfg: web::Data<config::Config>,
+    http_client: web::Data<Client>,
     req: HttpRequest,
     range_query: web::Query<RangeQuery>,
     path: web::Path<(String,)>,
@@ -156,11 +157,17 @@ pub async fn query_range(
         Some(step) => step,
         None => "60s".to_string(),
     };
+    // Check that end - start is not greater than 1 day, plus 100 seconds
+    if end - start > 86500.0 {
+        warn!("Query time range too large: namespace '{}', start '{}', end '{}'", namespace, start, end);
+        return Ok(HttpResponse::BadRequest().json("Query time range too large, must be less than or equal to 1 day"));
+    }
 
     // Get timeout from config
     let prometheus_timeout_ms = cfg.prometheus_timeout_ms;
-    // Set reqwest timeout to 50% greater than the prometheus timeout
-    let reqwest_timeout_ms = prometheus_timeout_ms + (prometheus_timeout_ms / 2);
+    // Set reqwest timeout to 50% greater than the prometheus timeout, plus 500ms, since we
+    // prefer for Prometheus to perform the timeout rather than reqwest client.
+    let reqwest_timeout_ms = prometheus_timeout_ms + (prometheus_timeout_ms / 2) + 500;
     let reqwest_timeout_ms : u64 = match reqwest_timeout_ms.try_into() {
         Ok(n) => n,
         Err(_) => {
@@ -169,11 +176,6 @@ pub async fn query_range(
         }
     };
     let timeout = format!("{prometheus_timeout_ms}ms");
-    // Check that end - start is not greater than 1 day, plus 100 seconds
-    if end - start > 86500.0 {
-        warn!("Query time range too large: namespace '{}', start '{}', end '{}'", namespace, start, end);
-        return Ok(HttpResponse::BadRequest().json("Query time range too large, must be less than or equal to 1 day"));
-    }
 
     let query_params = vec![
         ("query", query),
@@ -197,19 +199,8 @@ pub async fn query_range(
     };
     debug!("{}", query_url);
 
-
-    let client = match reqwest::Client::builder()
-        .timeout(Duration::from_millis(reqwest_timeout_ms))
-        .build() {
-            Ok(client) => client,
-            Err(e) => {
-                error!("Failed to create reqwest client: {}", e);
-                return Ok(HttpResponse::InternalServerError().json("Failed to create reqwest client"));
-            }
-        };
-
     // Create an HTTP request to the Prometheus backend
-    let prometheus_response = match client.get(query_url).send().await {
+    let prometheus_response = match http_client.get(query_url).timeout(Duration::from_millis(reqwest_timeout_ms)).send().await {
         Ok(response) => response,
         Err(e) => {
             error!("Failed to query Prometheus: {}", e);
@@ -238,6 +229,10 @@ pub async fn query_range(
             return Ok(HttpResponse::BadRequest().json("Prometheus reported the query is malformed"));
         },
         StatusCode::GATEWAY_TIMEOUT => {
+            warn!("{:?}", &json_response);
+            return Ok(HttpResponse::GatewayTimeout().json("Prometheus timeout"));
+        },
+        StatusCode::SERVICE_UNAVAILABLE => {
             warn!("{:?}", &json_response);
             return Ok(HttpResponse::GatewayTimeout().json("Prometheus timeout"));
         },

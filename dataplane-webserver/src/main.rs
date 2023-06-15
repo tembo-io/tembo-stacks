@@ -19,6 +19,12 @@ async fn main() -> std::io::Result<()> {
     let cfg = config::Config::default();
     info!("{:?}", cfg);
 
+    // Initializing the HTTP client during server startup
+    // allows for connection pooling and re-use of TCP
+    // connections to the Prometheus server.
+    let http_client = reqwest::Client::builder()
+        .build().expect("Failed to create ");
+
     #[derive(OpenApi)]
     #[openapi(paths(), components(schemas()))]
     struct ApiDoc;
@@ -31,6 +37,7 @@ async fn main() -> std::io::Result<()> {
         let cors = Cors::permissive();
         App::new()
             .app_data(web::Data::new(cfg.clone()))
+            .app_data(web::Data::new(http_client.clone()))
             .wrap(cors)
             .wrap(middleware::Logger::default())
             .service(web::scope("/").service(root::ok))
