@@ -11,7 +11,7 @@ use log::info;
 use dataplane_webserver::routes::metrics;
 use utoipa::openapi::security::{HttpAuthScheme, HttpBuilder, SecurityScheme};
 use utoipa::{Modify, OpenApi};
-use utoipa::openapi::SecurityRequirement;
+
 use utoipa_swagger_ui::{SwaggerUi, Url};
 
 #[actix_web::main]
