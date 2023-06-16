@@ -10,7 +10,8 @@ use log::info;
 
 use dataplane_webserver::routes::metrics;
 use utoipa::openapi::security::{HttpAuthScheme, HttpBuilder, SecurityScheme};
-use utoipa::OpenApi;
+use utoipa::{Modify, OpenApi};
+use utoipa::openapi::SecurityRequirement;
 use utoipa_swagger_ui::{SwaggerUi, Url};
 
 #[actix_web::main]
@@ -27,16 +28,34 @@ async fn main() -> std::io::Result<()> {
         .build()
         .expect("Failed to create HTTP client");
 
-    let _security_scheme_documentation = SecurityScheme::Http(
-        HttpBuilder::new()
-            .scheme(HttpAuthScheme::Bearer)
-            .bearer_format("JWT")
-            .build(),
-    );
-
     #[derive(OpenApi)]
-    #[openapi(paths(metrics::query_range), components(schemas()), security(("http" = ["metrics::query_range"])))]
+    #[openapi(
+        paths(metrics::query_range),
+        components(schemas()),
+        modifiers(&SecurityAddon),
+        security(("jwt_token" = [])),
+    )]
     struct ApiDoc;
+
+    struct SecurityAddon;
+
+    impl Modify for SecurityAddon {
+        fn modify(&self, openapi: &mut utoipa::openapi::OpenApi) {
+            openapi.components = Some(
+                utoipa::openapi::ComponentsBuilder::new()
+                    .security_scheme(
+                        "jwt_token",
+                        SecurityScheme::Http(
+                            HttpBuilder::new()
+                                .scheme(HttpAuthScheme::Bearer)
+                                .bearer_format("JWT")
+                                .build(),
+                        ),
+                    )
+                    .build(),
+            )
+        }
+    }
 
     HttpServer::new(move || {
         let mut doc = ApiDoc::openapi();
