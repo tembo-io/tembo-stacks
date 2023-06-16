@@ -344,7 +344,7 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
                 if result.is_err() {
                     error!(
                         "error getting CoreDB status in {}: {:?}",
-                        &namespace.clone(),
+                        namespace.clone(),
                         result
                     );
                     continue;
