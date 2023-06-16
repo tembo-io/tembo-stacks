@@ -81,8 +81,6 @@ impl ExprVisitor for NamespaceVisitor {
     }
 }
 
-// ("Authorization" = String, Header, example = "Bearer eyJhbGc....rGD0SQ", description = "JWT bearer token in Authorization header")
-
 #[utoipa::path(
     context_path = "/{namespace}/metrics",
     params(
