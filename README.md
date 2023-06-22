@@ -22,3 +22,7 @@ The operator is responsible for managing Stacks. The operator depends on [Cloud 
 ### Tembo pod init
 
 This worklow is a Kubernetes mutating webhook and is a subcomponent of the operator.
+
+## Dataplane webserver
+
+The dataplane webserver is an API that runs for each dataplane. Some features of the platform are best served from the dataplane instead of from the control plane in order to avoid centralizing data. For example metrics. The dataplane API is authenticated against the control plane.
