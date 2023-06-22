@@ -1,4 +1,4 @@
-name: Lint Helm charts
+name: Cargo lint and test
 
 on:
   push:
