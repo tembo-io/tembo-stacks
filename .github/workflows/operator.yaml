@@ -1,4 +1,4 @@
-name: CoreDB operator workflow
+name: Operator workflow
 
 defaults:
   run:

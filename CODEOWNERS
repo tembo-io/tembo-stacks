@@ -3,6 +3,3 @@ dataplane-webserver/** @sjmiller609
 coredb-operator/** @sjmiller609 @nhudson @ianstanton @ChuckHend
 conductor/** @sjmiller609 @nhudson @ianstanton @ChuckHend
 tembo-pod-init/** @nhudson
-
-CODEOWNERS              charts                  coredb-operator         tembo-pod-init
-README.md               conductor               dataplane-webserver
