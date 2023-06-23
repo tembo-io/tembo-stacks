@@ -8,9 +8,9 @@ use k8s_openapi::apimachinery::pkg::{
 };
 use kube::{
     api::{Patch, PatchParams},
-    Api, Client, Resource,
+    Api, Resource,
 };
-use std::{collections::BTreeMap, sync::Arc};
+use std::sync::Arc;
 
 use crate::{apis::coredb_types::CoreDB, errors::OperatorError, Context};
 use tracing::log::{debug, error, info, warn};

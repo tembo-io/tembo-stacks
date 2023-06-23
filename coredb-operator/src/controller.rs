@@ -4,7 +4,7 @@ use futures::{
     future::{BoxFuture, FutureExt},
     stream::StreamExt,
 };
-use std::collections::BTreeMap;
+
 
 use crate::{
     config::Config,
@@ -161,7 +161,7 @@ impl CoreDB {
             "TODO: get this from an environment variable",
             ns.as_str(),
             self.name_any().as_str(),
-            IntOrString::Int(5432)
+            IntOrString::Int(5432),
         )
         .await
         .map_err(|e| {
