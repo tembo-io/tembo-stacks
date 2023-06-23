@@ -12,7 +12,7 @@ use coredb_crd::CoreDB;
 use errors::ConductorError;
 use k8s_openapi::api::apps::v1::StatefulSet;
 use k8s_openapi::api::core::v1::{Namespace, Secret};
-use k8s_openapi::api::networking::v1::{NetworkPolicy};
+use k8s_openapi::api::networking::v1::NetworkPolicy;
 use kube::api::{DeleteParams, ListParams, Patch, PatchParams};
 use kube::runtime::wait::{await_condition, Condition};
 use kube::{Api, Client};
