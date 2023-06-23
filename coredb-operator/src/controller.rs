@@ -4,6 +4,7 @@ use futures::{
     future::{BoxFuture, FutureExt},
     stream::StreamExt,
 };
+use std::collections::BTreeMap;
 
 use crate::{
     config::Config,
@@ -28,10 +29,14 @@ use kube::{
 use crate::{
     apis::coredb_types::{CoreDB, CoreDBStatus},
     extensions::{reconcile_extensions, Extension},
+    ingress::reconcile_postgres_ing_route_tcp,
     postgres_exporter::{create_postgres_exporter_role, reconcile_prom_configmap},
     secret::reconcile_secret,
 };
-use k8s_openapi::api::core::v1::{Namespace, Pod};
+use k8s_openapi::{
+    api::core::v1::{Namespace, Pod},
+    apimachinery::pkg::util::intstr::IntOrString,
+};
 use kube::runtime::wait::Condition;
 use serde::Serialize;
 use serde_json::json;
@@ -147,6 +152,21 @@ impl CoreDB {
         reconcile_svc(self, ctx.clone()).await.map_err(|e| {
             error!("Error reconciling service: {:?}", e);
             Action::requeue(Duration::from_secs(10))
+        })?;
+
+        reconcile_postgres_ing_route_tcp(
+            self,
+            ctx.clone(),
+            ns.as_str(),
+            "TODO: get this from an environment variable",
+            ns.as_str(),
+            self.name_any().as_str(),
+            IntOrString::Int(5432)
+        )
+        .await
+        .map_err(|e| {
+            error!("Error reconciling postgres ingress route: {:?}", e);
+            Action::requeue(Duration::from_secs(300))
         })?;
 
         let new_status = match self.spec.stop {

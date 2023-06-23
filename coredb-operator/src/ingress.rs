@@ -8,18 +8,17 @@ use k8s_openapi::apimachinery::pkg::{
 };
 use kube::{
     api::{Patch, PatchParams},
-    Api, Client,
+    Api, Client, Resource,
 };
-use std::collections::BTreeMap;
+use std::{collections::BTreeMap, sync::Arc};
 
-use crate::errors::OperatorError;
+use crate::{apis::coredb_types::CoreDB, errors::OperatorError, Context};
 use tracing::log::{debug, error, info, warn};
 
 fn postgres_ingress_route_tcp(
     name: String,
     namespace: String,
     owner_reference: OwnerReference,
-    labels: BTreeMap<String, String>,
     matcher: String,
     service_name: String,
     port: IntOrString,
@@ -28,7 +27,6 @@ fn postgres_ingress_route_tcp(
         metadata: ObjectMeta {
             name: Some(name),
             namespace: Some(namespace),
-            labels: Some(labels),
             owner_references: Some(vec![owner_reference]),
             ..ObjectMeta::default()
         },
@@ -71,18 +69,19 @@ fn postgres_ingress_route_tcp(
 // 3) We should allow for additional ingress route tcp to be created for different use cases
 //         For example read-only endpoints, we should not accidentally handle these other
 //         IngressRouteTCP in this code, so we check that we are working with the correct type of Service.
-pub async fn create_postgres_ing_route_tcp(
-    client: Client,
-    owner_reference: OwnerReference,
-    labels: BTreeMap<String, String>,
+pub async fn reconcile_postgres_ing_route_tcp(
+    cdb: &CoreDB,
+    ctx: Arc<Context>,
     subdomain: &str,
     basedomain: &str,
     namespace: &str,
     service_name_read_write: &str,
     port: IntOrString,
 ) -> Result<(), OperatorError> {
+    let client = ctx.client.clone();
     // Initialize kube api for ingress route tcp
     let ingress_route_tcp_api: Api<IngressRouteTCP> = Api::namespaced(client, namespace);
+    let owner_reference = cdb.controller_owner_ref(&()).unwrap();
 
     // get all IngressRouteTCPs in the namespace
     // After CNPG migration is done, this can look for only ingress route tcp with the correct owner reference
@@ -161,12 +160,11 @@ pub async fn create_postgres_ing_route_tcp(
             );
 
             // We will keep the matcher and the name the same, but update the service name and port.
-            // Also, we will set ownership and labels.
+            // Also, we will set ownership.
             let ingress_route_tcp_to_apply = postgres_ingress_route_tcp(
                 ingress_route_tcp_name.clone(),
                 namespace.to_string(),
                 owner_reference.clone(),
-                labels.clone(),
                 matcher_actual.clone(),
                 service_name_read_write.to_string(),
                 port.clone(),
@@ -219,7 +217,6 @@ pub async fn create_postgres_ing_route_tcp(
             ingress_route_tcp_name_new.clone(),
             namespace.to_string(),
             owner_reference.clone(),
-            labels.clone(),
             newest_matcher.clone(),
             service_name_read_write.to_string(),
             port.clone(),
