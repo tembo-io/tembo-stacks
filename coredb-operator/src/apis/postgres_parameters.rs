@@ -1,7 +1,19 @@
-use schemars::JsonSchema;
-use serde::{Deserialize, Deserializer, Serialize, Serializer};
-use std::collections::BTreeSet;
-
+use itertools::Itertools;
+use schemars::{
+    schema::{Schema, SchemaObject},
+    JsonSchema,
+};
+use serde::{
+    de::{Error, MapAccess, Visitor},
+    Deserialize, Deserializer, Serialize, Serializer,
+};
+use std::{
+    collections::BTreeSet, // used for BTreeSet.join
+    fmt,
+    str::FromStr,
+};
+use thiserror::Error;
+use tracing::*;
 
 // these values are multi-valued, and need to be merged across configuration layers
 pub const MULTI_VAL_CONFIGS: [&str; 5] = [
@@ -13,10 +25,9 @@ pub const MULTI_VAL_CONFIGS: [&str; 5] = [
 ];
 
 // defines the postgresql configuration
-#[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize, JsonSchema)]
+#[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Serialize, JsonSchema)]
 pub struct PgConfig {
     pub name: String,
-    #[serde(deserialize_with = "custom_deserialize_config_value")]
     pub value: ConfigValue,
 }
 
@@ -27,7 +38,6 @@ impl PgConfig {
     }
 }
 
-use thiserror::Error;
 
 #[derive(Error, Debug)]
 pub enum MergeError {
@@ -35,7 +45,6 @@ pub enum MergeError {
     SingleValueNotAllowed,
 }
 
-use tracing::*;
 
 impl ConfigValue {
     fn combine(self, other: Self) -> Result<Self, MergeError> {
@@ -82,8 +91,6 @@ pub enum ConfigValue {
     Multiple(BTreeSet<String>),
 }
 
-use schemars::schema::{Schema, SchemaObject};
-
 
 impl JsonSchema for ConfigValue {
     fn schema_name() -> String {
@@ -94,6 +101,7 @@ impl JsonSchema for ConfigValue {
         let mut schema_object = SchemaObject::default();
         schema_object.metadata().description = Some("A postgresql.conf configuration value".to_owned());
         schema_object.metadata().read_only = false;
+        // overriding the enums to be a string
         schema_object.instance_type = Some(schemars::schema::InstanceType::String.into());
         Schema::Object(schema_object)
     }
@@ -111,8 +119,6 @@ impl std::fmt::Display for ConfigValue {
     }
 }
 
-use std::str::FromStr;
-
 
 impl FromStr for ConfigValue {
     type Err = std::num::ParseIntError;
@@ -128,8 +134,6 @@ impl FromStr for ConfigValue {
     }
 }
 
-// used for BTreeSet.join
-use itertools::Itertools;
 
 impl Serialize for ConfigValue {
     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
@@ -147,78 +151,69 @@ impl Serialize for ConfigValue {
 }
 
 
-use serde::de::{self, MapAccess, Visitor};
-
-struct PgConfigVisitor;
-
-impl<'de> Visitor<'de> for PgConfigVisitor {
-    type Value = PgConfig;
-
-    fn expecting(&self, formatter: &mut std::fmt::Formatter) -> std::fmt::Result {
-        formatter.write_str("struct PgConfig")
-    }
-
-    fn visit_map<A>(self, mut map: A) -> Result<PgConfig, A::Error>
+impl<'de> Deserialize<'de> for PgConfig {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
     where
-        A: MapAccess<'de>,
+        D: Deserializer<'de>,
     {
-        let mut name: Option<String> = None;
-        let mut value: Option<String> = None;
-        while let Some(key) = map.next_key()? {
-            match key {
-                "name" => {
-                    if name.is_some() {
-                        return Err(de::Error::duplicate_field("name"));
+        struct PgConfigVisitor;
+
+        impl<'de> Visitor<'de> for PgConfigVisitor {
+            type Value = PgConfig;
+
+            fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
+                formatter.write_str("struct PgConfig")
+            }
+
+            fn visit_map<M>(self, mut map: M) -> Result<PgConfig, M::Error>
+            where
+                M: MapAccess<'de>,
+            {
+                let mut name: Option<String> = None;
+                let mut value: Option<String> = None;
+
+                while let Some(key) = map.next_key()? {
+                    match key {
+                        "name" => {
+                            if name.is_some() {
+                                return Err(Error::custom("duplicate key: 'name'"));
+                            }
+                            name = Some(map.next_value()?);
+                        }
+                        "value" => {
+                            if value.is_some() {
+                                return Err(Error::custom("duplicate key: 'value'"));
+                            }
+                            value = Some(map.next_value::<String>()?);
+                        }
+                        _ => return Err(Error::custom("unknown key")),
                     }
-                    name = Some(map.next_value()?);
                 }
-                "value" => {
-                    if value.is_some() {
-                        return Err(de::Error::duplicate_field("value"));
-                    }
-                    value = Some(map.next_value()?);
-                }
-                _ => return Err(de::Error::unknown_field(key, &["name", "value"])),
+
+                let name = name.ok_or_else(|| M::Error::custom("key 'name' not found"))?;
+                let raw_value = value.ok_or_else(|| M::Error::custom("key 'value' not found"))?;
+
+                let value = if MULTI_VAL_CONFIGS.contains(&name.as_str()) {
+                    let set: BTreeSet<String> = raw_value.split(',').map(|s| s.trim().to_string()).collect();
+                    ConfigValue::Multiple(set)
+                } else {
+                    ConfigValue::Single(raw_value)
+                };
+
+                Ok(PgConfig { name, value })
             }
         }
-        let name = name.ok_or_else(|| de::Error::missing_field("name"))?;
-        let value_string = value.ok_or_else(|| de::Error::missing_field("value"))?;
 
-        let value = if MULTI_VAL_CONFIGS.contains(&name.as_ref()) {
-            let mut set = BTreeSet::new();
-            set.insert(value_string);
-            ConfigValue::Multiple(set)
-        } else {
-            ConfigValue::Single(value_string)
-        };
-
-        Ok(PgConfig { name, value })
+        const FIELDS: &'static [&'static str] = &["name", "value"];
+        deserializer.deserialize_struct("PgConfig", FIELDS, PgConfigVisitor)
     }
 }
 
-// custom deserialize to handle converting specific config values to a multi value
-// configs in global MULTI_VAL_CONFIGS all become ConfigValue::Multiple
-fn custom_deserialize_config_value<'de, D>(deserializer: D) -> Result<ConfigValue, D::Error>
-where
-    D: Deserializer<'de>,
-{
-    let value_string = String::deserialize(deserializer)?;
-    let value = if MULTI_VAL_CONFIGS.contains(&value_string.as_ref()) {
-        let mut set = BTreeSet::new();
-        set.insert(value_string);
-        ConfigValue::Multiple(set)
-    } else {
-        ConfigValue::Single(value_string)
-    };
-
-    Ok(value)
-}
 
 #[cfg(test)]
-mod tests {
+mod pg_param_tests {
     use super::*;
     use crate::apis::coredb_types::{CoreDBSpec, Stack};
-
 
     #[test]
     fn test_pg_config() {
@@ -239,11 +234,20 @@ mod tests {
 
     #[test]
     fn test_get_configs() {
+        // test shared_preload_libs get 'merged' appropriately
+        let mut set = BTreeSet::new();
+        set.insert("pg_partman_bgw".to_string());
         let spec = CoreDBSpec {
-            runtime_config: Some(vec![PgConfig {
-                name: "shared_buffers".to_string(),
-                value: "0.5GB".parse().unwrap(),
-            }]),
+            runtime_config: Some(vec![
+                PgConfig {
+                    name: "shared_buffers".to_string(),
+                    value: "0.5GB".parse().unwrap(),
+                },
+                PgConfig {
+                    name: "shared_preload_libraries".to_string(),
+                    value: ConfigValue::Multiple(set),
+                },
+            ]),
             stack: Some(Stack {
                 name: "tembo".to_string(),
                 postgres_config: Some(vec![
@@ -263,13 +267,18 @@ mod tests {
             .get_pg_configs()
             .expect("failed to get pg configs")
             .expect("expected configs");
+
+        println!("pg_configs:  {:?}", pg_configs);
         assert_eq!(pg_configs.len(), 3);
         assert_eq!(pg_configs[0].name, "pg_stat_statements.track");
         assert_eq!(pg_configs[0].value.to_string(), "all");
-        assert_eq!(pg_configs[1].name, "shared_preload_libraries");
-        assert_eq!(pg_configs[1].value.to_string(), "pg_cron,pg_stat_statements");
-        assert_eq!(pg_configs[2].name, "shared_buffers");
-        assert_eq!(pg_configs[2].value.to_string(), "0.5GB");
+        assert_eq!(pg_configs[1].name, "shared_buffers");
+        assert_eq!(pg_configs[1].value.to_string(), "0.5GB");
+        assert_eq!(pg_configs[2].name, "shared_preload_libraries");
+        assert_eq!(
+            pg_configs[2].value.to_string(),
+            "pg_cron,pg_partman_bgw,pg_stat_statements"
+        );
     }
 
     #[test]
@@ -284,6 +293,8 @@ mod tests {
             name: "test_configuration".to_string(),
             value: "a,z,c".parse().unwrap(),
         };
+        println!("pgc: {:?}", pgc);
+        println!("pgcval: {:?}", pgc.to_postgres());
         assert_eq!(pgc.to_postgres(), "test_configuration = 'a,c,z'");
         let pgc = PgConfig {
             name: "test_configuration".to_string(),
@@ -319,5 +330,83 @@ mod tests {
         };
         let merged = merge_pg_configs(&vec![pgc_0], &vec![pgc_1], "test_configuration");
         assert!(merged.is_err())
+    }
+
+    #[test]
+    fn test_serialization() {
+        // assert a PgConfig can be serialized and deserialized
+        let pgc = PgConfig {
+            name: "shared_preload_libraries".to_string(),
+            value: "a,b,c".parse().unwrap(),
+        };
+        match pgc.clone().value {
+            ConfigValue::Multiple(set) => {
+                assert_eq!(set.len(), 3);
+                assert!(set.contains("a"));
+                assert!(set.contains("b"));
+                assert!(set.contains("c"));
+            }
+            ConfigValue::Single(_) => panic!("expected multiple values"),
+        }
+        let serialized = serde_json::to_string(&pgc).expect("failed to serialize");
+        assert_eq!(
+            serialized,
+            "{\"name\":\"shared_preload_libraries\",\"value\":\"a,b,c\"}"
+        );
+        let deserialized: PgConfig = serde_json::from_str(&serialized).expect("failed to deserialize");
+        match deserialized.value {
+            ConfigValue::Multiple(set) => {
+                assert_eq!(set.len(), 3);
+                assert!(set.contains("a"));
+                assert!(set.contains("b"));
+                assert!(set.contains("c"));
+            }
+
+            ConfigValue::Single(_) => panic!("expected multiple values"),
+        }
+        // a single val, in a MULTI_VAL_CONFIGS is still a ConfigValue::Multiple
+        let raw = "{\"name\":\"shared_preload_libraries\",\"value\":\"a\"}";
+        let deserialized: PgConfig = serde_json::from_str(&raw).expect("failed to deserialize");
+        match deserialized.value {
+            ConfigValue::Multiple(set) => {
+                assert_eq!(set.len(), 1);
+                assert!(set.contains("a"));
+            }
+            ConfigValue::Single(_) => panic!("expected multiple values"),
+        }
+
+        // a single val, in MULTI_VAL_CONFIGS is still a ConfigValue::Multiple
+        let raw = "{\"name\":\"shared_preload_libraries\",\"value\":\"a\"}";
+        let deserialized: PgConfig = serde_json::from_str(&raw).expect("failed to deserialize");
+        match deserialized.value {
+            ConfigValue::Multiple(set) => {
+                assert_eq!(set.len(), 1);
+                assert!(set.contains("a"));
+            }
+
+            ConfigValue::Single(_) => panic!("expected multiple values"),
+        }
+
+        // a single val is a ConfigValue::Single
+        let raw = "{\"name\":\"shared_buffers\",\"value\":\"1GB\"}";
+        let deserialized: PgConfig = serde_json::from_str(&raw).expect("failed to deserialize");
+        match deserialized.value {
+            ConfigValue::Single(s) => {
+                assert_eq!(s, "1GB");
+            }
+
+            ConfigValue::Multiple(_) => panic!("expected single value"),
+        }
+
+        // a known single val, with a comma in value, is still a ConfigValue::Single
+        let raw = "{\"name\":\"shared_buffers\",\"value\":\"1GB,2GB\"}";
+        let deserialized: PgConfig = serde_json::from_str(&raw).expect("failed to deserialize");
+        match deserialized.value {
+            ConfigValue::Single(s) => {
+                assert_eq!(s, "1GB,2GB");
+            }
+
+            ConfigValue::Multiple(_) => panic!("expected single value"),
+        }
     }
 }

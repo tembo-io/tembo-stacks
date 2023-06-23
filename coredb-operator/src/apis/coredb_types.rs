@@ -13,7 +13,7 @@ use kube::CustomResource;
 
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
-use std::collections::BTreeSet;
+use std::collections::BTreeMap;
 
 #[derive(Deserialize, Serialize, Clone, Debug, JsonSchema, Default)]
 pub struct ServiceAccountTemplate {
@@ -110,39 +110,38 @@ impl CoreDBSpec {
         // we need to merge the two configs into one,  shared_preload_libraries = pg_cron, pg_stat_statements
         let mut merged_multival_configs: Vec<PgConfig> = Vec::new();
         for cfg_name in MULTI_VAL_CONFIGS {
-            println!("handling multi-config: {}", cfg_name);
             let merged_config = merge_pg_configs(&stack_configs, &runtime_configs, cfg_name)?;
             if let Some(merged_config) = merged_config {
                 merged_multival_configs.push(merged_config);
             }
         }
 
-        // Order matters - to ensure anything down stream down not have to worry about ordering,
+        // Order matters - to ensure anything down stream does not have to worry about ordering,
         // set these into a BTreeSet now
         // 1. stack configs
         // 2. runtime configs
         // 3. merged multivals
         // 4. overrides
-        let mut pg_configs: BTreeSet<PgConfig> = BTreeSet::new();
+        let mut pg_configs: BTreeMap<String, PgConfig> = BTreeMap::new();
+
         for p in stack_configs {
-            pg_configs.insert(p);
+            pg_configs.insert(p.name.clone(), p);
         }
         for p in runtime_configs {
-            pg_configs.insert(p);
+            pg_configs.insert(p.name.clone(), p);
         }
         for p in merged_multival_configs {
-            pg_configs.insert(p);
+            pg_configs.insert(p.name.clone(), p);
         }
         if let Some(override_configs) = &self.override_configs {
             for p in override_configs {
-                pg_configs.insert(p.clone());
+                pg_configs.insert(p.name.clone(), p.clone());
             }
         }
-
         if pg_configs.is_empty() {
             Ok(None)
         } else {
-            Ok(Some(pg_configs.into_iter().collect()))
+            Ok(Some(pg_configs.values().cloned().collect()))
         }
     }
 }
