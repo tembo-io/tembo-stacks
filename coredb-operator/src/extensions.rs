@@ -575,7 +575,6 @@ mod tests {
         );
     }
 
-
     #[test]
     fn test_upgrade_ext_vers() {
         let pgmq_05 = Extension {
