@@ -106,6 +106,10 @@ impl CoreDBSpec {
             .unwrap_or_default();
         let runtime_configs = self.runtime_config.clone().unwrap_or_default();
         // TODO: configs that come with extension installation
+        // e.g. let extension_configs = ...
+        // these extensions could be set by the operator, or trunk + operator
+        // trunk install pg_partman could come with something like `pg_partman_bgw.dbname = xxx`
+
 
         // handle merge of any of the settings that are multi-value.
         // e.g. stack defines shared_preload_libraries = pg_cron, then operator installs pg_stat_statements at runtime
