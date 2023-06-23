@@ -146,7 +146,7 @@ impl CoreDB {
             .await
             .map_err(|e| {
                 error!("Error reconciling postgres configmap: {:?}", e);
-                Action::requeue(Duration::from_secs(10))
+                Action::requeue(Duration::from_secs(300))
             })?;
 
         // reconcile statefulset
