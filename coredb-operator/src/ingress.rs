@@ -1,13 +1,19 @@
+use crate::ingress_route_tcp_crd::{
+    IngressRouteTCP, IngressRouteTCPRoutes, IngressRouteTCPRoutesServices, IngressRouteTCPSpec,
+    IngressRouteTCPTls,
+};
+use k8s_openapi::apimachinery::pkg::{
+    apis::meta::v1::{ObjectMeta, OwnerReference},
+    util::intstr::IntOrString,
+};
+use kube::{
+    api::{Patch, PatchParams},
+    Api, Client,
+};
 use std::collections::BTreeMap;
-use k8s_openapi::apimachinery::pkg::apis::meta::v1::{ObjectMeta, OwnerReference};
-use crate::ingress_route_tcp_crd::{IngressRouteTCP, IngressRouteTCPRoutes, IngressRouteTCPRoutesServices, IngressRouteTCPSpec, IngressRouteTCPTls};
-use k8s_openapi::apimachinery::pkg::util::intstr::IntOrString;
-use kube::api::{Patch, PatchParams};
-use kube::{Api, Client};
-use serde_json::Value;
-use tracing::log::{debug, error, info, warn};
-use crate::errors::OperatorError;
 
+use crate::errors::OperatorError;
+use tracing::log::{debug, error, info, warn};
 
 fn postgres_ingress_route_tcp(
     name: String,
@@ -18,21 +24,20 @@ fn postgres_ingress_route_tcp(
     service_name: String,
     port: IntOrString,
 ) -> IngressRouteTCP {
-
-    return IngressRouteTCP {
+    IngressRouteTCP {
         metadata: ObjectMeta {
-            name: Some(name.clone()),
-            namespace: Some(namespace.clone()),
-            labels: Some(labels.clone()),
+            name: Some(name),
+            namespace: Some(namespace),
+            labels: Some(labels),
             owner_references: Some(vec![owner_reference]),
             ..ObjectMeta::default()
         },
         spec: IngressRouteTCPSpec {
             entry_points: Some(vec!["postgresql".to_string()]),
             routes: vec![IngressRouteTCPRoutes {
-                r#match: matcher.clone(),
+                r#match: matcher,
                 services: Some(vec![IngressRouteTCPRoutesServices {
-                    name: service_name.to_string(),
+                    name: service_name,
                     port,
                     // I'm not sure how to just use defaults, should look like this:
                     // ..IngressRouteTCPRoutesServices::default()
@@ -53,7 +58,7 @@ fn postgres_ingress_route_tcp(
                 store: None,
             }),
         },
-    };
+    }
 }
 
 // 1) We should never delete or update the hostname of an ingress route tcp.
@@ -76,7 +81,6 @@ pub async fn create_postgres_ing_route_tcp(
     service_name_read_write: &str,
     port: IntOrString,
 ) -> Result<(), OperatorError> {
-
     // Initialize kube api for ingress route tcp
     let ingress_route_tcp_api: Api<IngressRouteTCP> = Api::namespaced(client, namespace);
 
@@ -121,7 +125,10 @@ pub async fn create_postgres_ing_route_tcp(
                 return Err(OperatorError::IngressRouteTCPNameError);
             }
         };
-        debug!("Detected ingress route tcp read write endpoint {}.{}", ingress_route_tcp_name, namespace);
+        debug!(
+            "Detected ingress route tcp read write endpoint {}.{}",
+            ingress_route_tcp_name, namespace
+        );
         // Save list of names so we can pick a name that doesn't exist,
         // if we need to create a new ingress route tcp.
         present_ing_route_tcp_names_list.push(ingress_route_tcp_name.clone());
@@ -130,8 +137,12 @@ pub async fn create_postgres_ing_route_tcp(
         // endpoint, if needed.
 
         // TODO: before merge, clean this up and error handle
-        let service_name_actual = ingress_route_tcp.spec.routes[0].services.clone().unwrap()[0].name.clone();
-        let service_port_actual = ingress_route_tcp.spec.routes[0].services.clone().unwrap()[0].port.clone();
+        let service_name_actual = ingress_route_tcp.spec.routes[0].services.clone().unwrap()[0]
+            .name
+            .clone();
+        let service_port_actual = ingress_route_tcp.spec.routes[0].services.clone().unwrap()[0]
+            .port
+            .clone();
 
         // Keep the existing matcher (domain name) when updating an existing IngressRouteTCP,
         // so that we do not break connection strings with domain name updates.
@@ -151,7 +162,7 @@ pub async fn create_postgres_ing_route_tcp(
 
             // We will keep the matcher and the name the same, but update the service name and port.
             // Also, we will set ownership and labels.
-            let ingress_route_tcp_to_apply= postgres_ingress_route_tcp(
+            let ingress_route_tcp_to_apply = postgres_ingress_route_tcp(
                 ingress_route_tcp_name.clone(),
                 namespace.to_string(),
                 owner_reference.clone(),
@@ -163,7 +174,10 @@ pub async fn create_postgres_ing_route_tcp(
             // Apply this ingress route tcp
             let patch = Patch::Apply(&ingress_route_tcp_to_apply);
             let patch_parameters = PatchParams::apply("cntrlr").force();
-            match ingress_route_tcp_api.patch(&ingress_route_tcp_name.clone(), &patch_parameters, &patch).await {
+            match ingress_route_tcp_api
+                .patch(&ingress_route_tcp_name.clone(), &patch_parameters, &patch)
+                .await
+            {
                 Ok(_) => {
                     info!(
                         "Updated postgres read and write IngressRouteTCP {}.{}",
@@ -201,7 +215,7 @@ pub async fn create_postgres_ing_route_tcp(
         }
         let ingress_route_tcp_name_new = ingress_route_tcp_name_new;
 
-        let ingress_route_tcp_to_apply= postgres_ingress_route_tcp(
+        let ingress_route_tcp_to_apply = postgres_ingress_route_tcp(
             ingress_route_tcp_name_new.clone(),
             namespace.to_string(),
             owner_reference.clone(),
@@ -213,24 +227,30 @@ pub async fn create_postgres_ing_route_tcp(
         // Apply this ingress route tcp
         let patch = Patch::Apply(&ingress_route_tcp_to_apply);
         let patch_parameters = PatchParams::apply("cntrlr").force();
-        match ingress_route_tcp_api.patch(&ingress_route_tcp_name_new, &patch_parameters, &patch).await {
+        match ingress_route_tcp_api
+            .patch(&ingress_route_tcp_name_new, &patch_parameters, &patch)
+            .await
+        {
             Ok(_) => {
                 info!(
-                        "Created new postgres read and write IngressRouteTCP {}.{}",
-                        ingress_route_tcp_name_new, namespace
-                    );
+                    "Created new postgres read and write IngressRouteTCP {}.{}",
+                    ingress_route_tcp_name_new, namespace
+                );
             }
             Err(e) => {
                 error!(
-                        "Failed to create new postgres read and write IngressRouteTCP {}.{}: {}",
-                        ingress_route_tcp_name_new, namespace, e
-                    );
+                    "Failed to create new postgres read and write IngressRouteTCP {}.{}: {}",
+                    ingress_route_tcp_name_new, namespace, e
+                );
                 return Err(OperatorError::IngressRouteTCPCreateError);
             }
         }
     } else {
-        debug!("There is already an IngressRouteTCP for this matcher, so we don't need to create a new one: {}", newest_matcher);
+        debug!(
+            "There is already an IngressRouteTCP for this matcher, so we don't need to create a new one: {}",
+            newest_matcher
+        );
     }
 
-    return Ok(());
+    Ok(())
 }

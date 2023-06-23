@@ -1,5 +1,4 @@
 use thiserror::Error;
-use kube;
 
 #[derive(Error, Debug)]
 pub enum OperatorError {

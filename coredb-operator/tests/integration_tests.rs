@@ -385,8 +385,8 @@ mod test {
         let spec = coredbs.get(name).await.expect("spec not found");
         let status = spec.status.expect("no status on coredb");
         let extensions = status.extensions;
-        assert!(extensions.clone().expect("expected extensions").len() > 0);
-        assert!(extensions.expect("expected extensions")[0].description.len() > 0);
+        assert!(!extensions.clone().expect("expected extensions").is_empty());
+        assert!(!extensions.expect("expected extensions")[0].description.is_empty());
 
         // Change size of a PVC
         let coredb_json = serde_json::json!({
@@ -465,7 +465,7 @@ mod test {
 
         // Get the StatefulSet
         let stateful_sets_api: Api<StatefulSet> = Api::namespaced(client.clone(), namespace);
-        let stateful_set_name = format!("{}", name);
+        let stateful_set_name = name.to_string();
         let stateful_set = stateful_sets_api.get(&stateful_set_name).await.unwrap();
 
         //println!("stateful_set: {:#?}", stateful_set_name);
@@ -525,7 +525,7 @@ mod test {
                     .and_then(|annotations| annotations.get("kubectl.kubernetes.io/restartedAt"))
                     .and_then(|s| DateTime::parse_from_rfc3339(s).ok())
                     .map(|dt| dt.with_timezone(&Utc)) // Convert to DateTime<Utc>
-                    .unwrap_or_else(|| Utc::now());
+                    .unwrap_or_else(Utc::now);
                 let restart_time_as_datetime = DateTime::parse_from_rfc3339(&restart_time)
                     .unwrap()
                     .with_timezone(&Utc);
@@ -588,7 +588,7 @@ mod test {
 
         // assert that the destinationPath is set in the sts env
         let stateful_sets_api: Api<StatefulSet> = Api::namespaced(client.clone(), namespace);
-        let stateful_set_name = format!("{}", name);
+        let stateful_set_name = name.to_string();
         let stateful_set = stateful_sets_api.get(&stateful_set_name).await.unwrap();
 
         // Extract the environment variables from the StatefulSet
@@ -982,7 +982,7 @@ mod test {
             .await
             .unwrap();
         println!("{}", result.stdout.clone().unwrap());
-        assert!(result.stdout.clone().unwrap().contains("stop_test"));
+        assert!(result.stdout.unwrap().contains("stop_test"));
     }
 
     async fn kube_client() -> Client {
