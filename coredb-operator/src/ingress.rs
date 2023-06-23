@@ -18,6 +18,7 @@ fn postgres_ingress_route_tcp(
     service_name: String,
     port: IntOrString,
 ) -> IngressRouteTCP {
+
     return IngressRouteTCP {
         metadata: ObjectMeta {
             name: Some(name.clone()),
@@ -67,30 +68,33 @@ pub async fn create_postgres_ing_route_tcp(
 ) -> Result<(), ConductorError> {
 
     // Initialize kube api for ingress route tcp
-    let ing_api: Api<IngressRouteTCP> = Api::namespaced(client, namespace);
+    let ingress_route_tcp_api: Api<IngressRouteTCP> = Api::namespaced(client, namespace);
 
     // get all IngressRouteTCPs in the namespace
-    let ingress_route_tcps = ing_api.list(&Default::default()).await?;
+    // After CNPG migration is done, this can look for only ingress route tcp with the correct owner reference
+    let ingress_route_tcps = ingress_route_tcp_api.list(&Default::default()).await?;
 
-    // Build the expected IngressRouteTCP matcher we expect to find
-    let newest_matcher = format!("HostSNI(`{subdomain}.{basedomain}`)");
-
-    // There is only one per namespace, and we can name them as "postgres-rw-0"
     let ingress_route_tcp_name_prefix_rw = "postgres-rw-";
 
+    // We will save information about the existing ingress route tcp(s) in these vectors
     let mut present_matchers_list: Vec<String> = vec![];
+    let mut present_ing_route_tcp_names_list: Vec<String> = vec![];
 
-    // Check for all existing IngressRouteTCPs and grab the present matchers
+    // Check for all existing IngressRouteTCPs in this namespace
     for ingress_route_tcp in ingress_route_tcps {
-        // In this loop, we only are handling the read-write ingress route tcp
+        // Get the name
         let ingress_route_tcp_name = match ingress_route_tcp.metadata.name.clone() {
             Some(ingress_route_tcp_name) => {
-                // The read-write ingress route tcp will have either the name as
-                // the name of the namespace (if it was created by conductor) or
-                // postgres-rw- (if it was created by this code).
+                // We only are handling the read-write endpoint:
+                //        The read-write ingress route tcp will have either the same name as
+                //        namespace (if it was created by conductor) or postgres-rw-
+                //        (if it was created by this code).
                 if !(ingress_route_tcp_name.starts_with(ingress_route_tcp_name_prefix_rw)
                     || ingress_route_tcp_name == namespace)
                 {
+                    // Skipping unexpected ingress route TCP is important for allowing
+                    // manual creation of other ingress route TCPs, and other use cases
+                    // like read only endpoints.
                     debug!(
                         "Skipping non postgres-rw ingress route tcp: {}",
                         ingress_route_tcp_name
@@ -107,22 +111,34 @@ pub async fn create_postgres_ing_route_tcp(
                 return Err(ConductorError::IngressRouteTCPNameError);
             }
         };
+        debug!("Detected ingress route tcp read write endpoint {}.{}", ingress_route_tcp_name, namespace);
+        // Save list of names so we can pick a name that doesn't exist,
+        // if we need to create a new ingress route tcp.
+        present_ing_route_tcp_names_list.push(ingress_route_tcp_name.clone());
+
+        // Get the settings of our ingress route tcp, so we can update to a new
+        // endpoint, if needed.
         let service_name_actual = ingress_route_tcp.spec.routes[0].services[0].name;
         let service_port_actual = ingress_route_tcp.spec.routes[0].services[0].port;
+
+        // Keep the existing matcher (domain name) when updating an existing IngressRouteTCP,
+        // so that we do not break connection strings with domain name updates.
+        let matcher_actual = ingress_route_tcp.spec.routes[0].r#match.clone();
+
+        // Save the matchers to know if we need to create a new ingress route tcp or not.
+        present_matchers_list.push(matcher_actual);
 
         // Check if either the service name or port are mismatched
         if !(service_name_actual == service_name_read_write && service_port_actual == port) {
             // This situation should only occur when the service name or port is changed, for example during cut-over from
             // CoreDB operator managing the service to CNPG managing the service.
             warn!(
-                "Postgres read and write IngressRouteTCP {}, does not match the service name or port. Updating, and leaving the match rule the same.",
-                ingress_route_tcp_name
+                "Postgres read and write IngressRouteTCP {}.{}, does not match the service name or port. Updating service or port and leaving the match rule the same.",
+                ingress_route_tcp_name, namespace
             );
 
-            // Make sure to keep the existing matcher (domain name) when updating an existing
-            // IngressRouteTCP.
-            let matcher_actual = ingress_route_tcp.spec.routes[0].r#match.clone();
-
+            // We will keep the matcher and the name the same, but update the service name and port.
+            // Also, we will set ownership and labels.
             let ingress_route_tcp_to_apply= postgres_ingress_route_tcp(
                 ingress_route_tcp_name,
                 namespace.to_string(),
@@ -135,77 +151,74 @@ pub async fn create_postgres_ing_route_tcp(
             // Apply this ingress route tcp
             let patch = Patch::Apply(&ingress_route_tcp_to_apply);
             let patch_parameters = PatchParams::apply("cntrlr").force();
-            match ing_api.patch(&ingress_route_tcp_name, &patch_parameters, &patch).await {
+            match ingress_route_tcp_api.patch(&ingress_route_tcp_name, &patch_parameters, &patch).await {
                 Ok(_) => {
                     info!(
-                        "Updated postgres read and write IngressRouteTCP {}",
-                        ingress_route_tcp_name
+                        "Updated postgres read and write IngressRouteTCP {}.{}",
+                        ingress_route_tcp_name,
+                        namespace
                     );
                 }
                 Err(e) => {
                     error!(
-                        "Failed to update postgres read and write IngressRouteTCP {}: {}",
-                        ingress_route_tcp_name, e
+                        "Failed to update postgres read and write IngressRouteTCP {}.{}: {}",
+                        ingress_route_tcp_name, namespace, e
                     );
                     return Err(ConductorError::IngressRouteTCPUpdateError);
                 }
             }
-
-        }
-        return Ok(());
-    }
-
-    // We do not already have an ingress route of the same name.
-    let number_of_ingress_routes = ingress_route_tcps.len();
-    let name = format!("ingress-route-tcp-{}", number_of_ingress_routes);
-
-    // Check if there already is an IngressRouteTCP with the same name
-    let ing_route_tcp = ing_api.get(name).await;
-    if let Ok(ing_route_tcp) = ing_route_tcp {
-        // If the hostname is the same, do nothing
-        if ing_route_tcp.spec.routes[0].r#match == newest_matcher {
-            debug!(
-                "IngressRouteTCP already exists for {}, doing nothing.",
-                basedomain
-            );
-            return Ok(());
-        }
-        // If the hostname is different, create a new IngressRouteTCP
-        else {
-            info!("IngressRouteTCP already exists with name {}, but hostname is different. Creating new IngressRouteTCP", name);
-            let new_name = format!("{}-{}", name);
         }
     }
-    let params = PatchParams::apply("conductor").force();
-    let ing = serde_json::json!({
-        "apiVersion": "traefik.containo.us/v1alpha1",
-        "kind": "IngressRouteTCP",
-        "metadata": {
-            "name": format!("{name}"),
-            "namespace": format!("{name}"),
-        },
-        "spec": {
-            "entryPoints": ["postgresql"],
-            "routes": [
-                {
-                    "match": format!("HostSNI(`{name}.{basedomain}`)"),
-                    "services": [
-                        {
-                            "name": format!("{name}"),
-                            "port": 5432,
-                        },
-                    ],
-                },
-            ],
-            "tls": {
-                "passthrough": true,
-            },
-        },
-    });
-    info!("\nCreating or updating IngressRouteTCP: {}", name);
-    let _o = ing_api
-        .patch(name, &params, &Patch::Apply(&ing))
-        .await
-        .map_err(ConductorError::KubeError)?;
-    Ok(())
+
+    // At this point in the code, all applicable IngressRouteTCPs are pointing to the right
+    // service and port. Now, we just need to create a new IngressRouteTCP if we do not already
+    // have one for the specified domain name.
+
+    // Build the expected IngressRouteTCP matcher we expect to find
+    let newest_matcher = format!("HostSNI(`{subdomain}.{basedomain}`)");
+
+    if !present_matchers_list.contains(&newest_matcher) {
+        // In this block, we are creating a new IngressRouteTCP
+
+        // Pick a name for a new ingress route tcp that doesn't already exist
+        let mut index = 0;
+        let mut ingress_route_tcp_name_new = format!("{}{}", ingress_route_tcp_name_prefix_rw, index);
+        while present_ing_route_tcp_names_list.contains(&ingress_route_tcp_name_new) {
+            index += 1;
+            ingress_route_tcp_name_new = format!("{}{}", ingress_route_tcp_name_prefix_rw, index);
+        }
+        let ingress_route_tcp_name_new = ingress_route_tcp_name_new;
+
+        let ingress_route_tcp_to_apply= postgres_ingress_route_tcp(
+            ingress_route_tcp_name_new,
+            namespace.to_string(),
+            owner_reference.clone(),
+            labels.clone(),
+            newest_matcher.clone(),
+            service_name_read_write.to_string(),
+            port.clone(),
+        );
+        // Apply this ingress route tcp
+        let patch = Patch::Apply(&ingress_route_tcp_to_apply);
+        let patch_parameters = PatchParams::apply("cntrlr").force();
+        match ingress_route_tcp_api.patch(&ingress_route_tcp_name, &patch_parameters, &patch).await {
+            Ok(_) => {
+                info!(
+                        "Created new postgres read and write IngressRouteTCP {}.{}",
+                        ingress_route_tcp_name_new, namespace
+                    );
+            }
+            Err(e) => {
+                error!(
+                        "Failed to create new postgres read and write IngressRouteTCP {}.{}: {}",
+                        ingress_route_tcp_name_new, namespace, e
+                    );
+                return Err(ConductorError::IngressRouteTCPUpdateError);
+            }
+        }
+    } else {
+        debug!("There is already an ingress route tcp for this matcher: {}", newest_matcher);
+    }
+
+    return Ok(());
 }
