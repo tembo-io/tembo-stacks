@@ -5,7 +5,9 @@ use k8s_openapi::{
 };
 
 use crate::{
-    apis::postgres_parameters::{merge_pg_configs, MergeError, PgConfig, MULTI_VAL_CONFIGS},
+    apis::postgres_parameters::{
+        merge_pg_configs, MergeError, PgConfig, DISALLOWED_CONFIGS, MULTI_VAL_CONFIGS,
+    },
     defaults,
     postgres_exporter::PostgresMetrics,
 };
@@ -138,6 +140,12 @@ impl CoreDBSpec {
                 pg_configs.insert(p.name.clone(), p.clone());
             }
         }
+
+        // remove any configs that are not allowed
+        for key in DISALLOWED_CONFIGS {
+            pg_configs.remove(key);
+        }
+
         if pg_configs.is_empty() {
             Ok(None)
         } else {

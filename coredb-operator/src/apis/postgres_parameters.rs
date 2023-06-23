@@ -24,6 +24,76 @@ pub const MULTI_VAL_CONFIGS: [&str; 5] = [
     "search_path",
 ];
 
+// configurations that are not allowed to be set by the user
+pub const DISALLOWED_CONFIGS: [&str; 66] = [
+    "allow_system_table_mods",
+    "archive_cleanup_command",
+    "archive_command",
+    "archive_mode",
+    "bonjour",
+    "bonjour_name",
+    "cluster_name",
+    "config_file",
+    "data_directory",
+    "data_sync_retry",
+    "event_source",
+    "external_pid_file",
+    "full_page_writes",
+    "hba_file",
+    "hot_standby",
+    "ident_file",
+    "jit_provider",
+    "listen_addresses",
+    "log_destination",
+    "log_directory",
+    "log_file_mode",
+    "log_filename",
+    "log_rotation_age",
+    "log_rotation_size",
+    "log_truncate_on_rotation",
+    "logging_collector",
+    "port",
+    "primary_conninfo",
+    "primary_slot_name",
+    "promote_trigger_file",
+    "recovery_end_command",
+    "recovery_min_apply_delay",
+    "recovery_target",
+    "recovery_target_action",
+    "recovery_target_inclusive",
+    "recovery_target_lsn",
+    "recovery_target_name",
+    "recovery_target_time",
+    "recovery_target_timeline",
+    "recovery_target_xid",
+    "restart_after_crash",
+    "restore_command",
+    "ssl",
+    "ssl_ca_file",
+    "ssl_cert_file",
+    "ssl_ciphers",
+    "ssl_crl_file",
+    "ssl_dh_params_file",
+    "ssl_ecdh_curve",
+    "ssl_key_file",
+    "ssl_max_protocol_version",
+    "ssl_min_protocol_version",
+    "ssl_passphrase_command",
+    "ssl_passphrase_command_supports_reload",
+    "ssl_prefer_server_ciphers",
+    "stats_temp_directory",
+    "synchronous_standby_names",
+    "syslog_facility",
+    "syslog_ident",
+    "syslog_sequence_numbers",
+    "syslog_split_messages",
+    "unix_socket_directories",
+    "unix_socket_group",
+    "unix_socket_permissions",
+    "wal_level",
+    "wal_log_hints",
+];
+
 // defines the postgresql configuration
 #[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Serialize, JsonSchema)]
 pub struct PgConfig {
@@ -259,6 +329,11 @@ mod pg_param_tests {
                         name: "shared_preload_libraries".to_string(),
                         value: "pg_cron,pg_stat_statements".parse().unwrap(),
                     },
+                    // and a disallowed config. this must be filtered out
+                    PgConfig {
+                        name: "log_destination".to_string(),
+                        value: "yolo".parse().unwrap(),
+                    },
                 ]),
             }),
             ..Default::default()
@@ -269,6 +344,8 @@ mod pg_param_tests {
             .expect("expected configs");
 
         println!("pg_configs:  {:?}", pg_configs);
+        // assert 3. shared_preload_libraries is merged. log_destination is filtered out
+        // pg_stat_statements, shared_buffers, and shared_preload_libraries remain
         assert_eq!(pg_configs.len(), 3);
         assert_eq!(pg_configs[0].name, "pg_stat_statements.track");
         assert_eq!(pg_configs[0].value.to_string(), "all");
