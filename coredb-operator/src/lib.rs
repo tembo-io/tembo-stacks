@@ -25,6 +25,7 @@ mod rbac;
 mod secret;
 mod service;
 mod statefulset;
+mod errors;
 
 use thiserror::Error;
 
