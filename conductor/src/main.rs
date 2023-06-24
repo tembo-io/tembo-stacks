@@ -166,10 +166,9 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
                 // Merge backup and service_account_template into spec
                 let coredb_spec = CoreDBSpec {
                     serviceAccountTemplate: service_account_template,
-                    backup: backup,
+                    backup,
                     ..msg_spec.clone()
                 };
-                let coredb_spec = msg_spec.clone();
                 // create Namespace
                 create_namespace(client.clone(), &namespace).await?;
 
@@ -279,7 +278,7 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
                 current_spec.spec.extensions = current_spec
                     .status
                     .and_then(|o| o.extensions)
-                    .unwrap_or_else(Vec::new);
+                    .unwrap_or_default();
 
                 let report_event = match read_msg.message.event_type {
                     Event::Create => Event::Created,
@@ -351,7 +350,7 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
                 current_spec.spec.extensions = current_spec
                     .status
                     .and_then(|o| o.extensions)
-                    .unwrap_or_else(Vec::new);
+                    .unwrap_or_default();
 
                 let conn_info =
                     get_pg_conn(client.clone(), &namespace, &data_plane_basedomain).await;
