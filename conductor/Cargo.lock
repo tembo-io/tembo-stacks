@@ -752,7 +752,7 @@ dependencies = [
  "aws-sdk-cloudformation",
  "base64 0.21.0",
  "chrono",
- "coredb-controller",
+ "controller",
  "env_logger",
  "futures",
  "k8s-openapi 0.18.0",
@@ -766,6 +766,32 @@ dependencies = [
  "thiserror",
  "tokio",
  "tokio-retry",
+]
+
+[[package]]
+name = "controller"
+version = "0.0.1"
+dependencies = [
+ "actix-web",
+ "chrono",
+ "futures",
+ "itertools 0.11.0",
+ "k8s-openapi 0.17.0",
+ "kube 0.80.0",
+ "lazy_static",
+ "opentelemetry",
+ "passwords",
+ "prometheus",
+ "regex",
+ "schemars",
+ "serde",
+ "serde_json",
+ "serde_yaml 0.9.21",
+ "thiserror",
+ "tokio",
+ "tracing",
+ "tracing-opentelemetry",
+ "tracing-subscriber",
 ]
 
 [[package]]
@@ -800,33 +826,6 @@ name = "core-foundation-sys"
 version = "0.8.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "e496a50fda8aacccc86d7529e2c1e0892dbd0f898a6b5645b5561b89c3210efa"
-
-[[package]]
-name = "coredb-controller"
-version = "0.0.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e448748bf8b246a2531f43ad72bceca58dd48c9b7b622858649ff736cf0a945e"
-dependencies = [
- "actix-web",
- "chrono",
- "futures",
- "k8s-openapi 0.17.0",
- "kube 0.80.0",
- "lazy_static",
- "opentelemetry",
- "passwords",
- "prometheus",
- "regex",
- "schemars",
- "serde",
- "serde_json",
- "serde_yaml 0.9.21",
- "thiserror",
- "tokio",
- "tracing",
- "tracing-opentelemetry",
- "tracing-subscriber",
-]
 
 [[package]]
 name = "cpufeatures"
@@ -1595,6 +1594,15 @@ name = "itertools"
 version = "0.10.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "b0fd2260e829bddf4cb6ea802289de2f86d6a7a690192fbe91b3f46e0f2c8473"
+dependencies = [
+ "either",
+]
+
+[[package]]
+name = "itertools"
+version = "0.11.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "b1c173a5686ce8bfa551b3563d0c2170bf24ca44da99c7ca4bfdab5418c3fe57"
 dependencies = [
  "either",
 ]
@@ -2866,7 +2874,7 @@ version = "0.2.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "0c12bc9199d1db8234678b7051747c07f517cdcf019262d1847b94ec8b1aee3e"
 dependencies = [
- "itertools",
+ "itertools 0.10.5",
  "nom",
  "unicode_categories",
 ]
