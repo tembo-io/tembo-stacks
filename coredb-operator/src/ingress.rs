@@ -8,7 +8,7 @@ use k8s_openapi::apimachinery::pkg::{
 };
 use kube::{
     api::{Patch, PatchParams},
-    Api, Resource,
+    Api, Resource, ResourceExt,
 };
 use std::sync::Arc;
 
@@ -87,8 +87,8 @@ pub async fn reconcile_postgres_ing_route_tcp(
     // After CNPG migration is done, this can look for only ingress route tcp with the correct owner reference
     let ingress_route_tcps = ingress_route_tcp_api.list(&Default::default()).await?;
 
-    // Prefix by subdomain allows multiple per namespace
-    let ingress_route_tcp_name_prefix_rw = format!("{}-rw-", subdomain);
+    // Prefix by resource name allows multiple per namespace
+    let ingress_route_tcp_name_prefix_rw = format!("{}-rw-", cdb.name_any());
     let ingress_route_tcp_name_prefix_rw = ingress_route_tcp_name_prefix_rw.as_str();
 
     // We will save information about the existing ingress route tcp(s) in these vectors

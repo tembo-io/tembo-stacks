@@ -3,7 +3,7 @@ ORG := "localhost:5001"
 VERSION := `git rev-parse HEAD`
 SEMVER_VERSION := `grep version Cargo.toml | awk -F"\"" '{print $2}' | head -n 1`
 NAMESPACE := "default"
-KUBE_VERSION := "1.25.8"
+KUBE_VERSION := env_var_or_default('KUBE_VERSION', '1.25.8')
 
 default:
   @just --list --unsorted --color=always | rg -v "    default"
@@ -47,6 +47,7 @@ run:
 # annotate namespace to allow for tests
 annotate:
 	kubectl label namespace {{NAMESPACE}} safe-to-run-coredb-tests=true
+	kubectl patch storageclass standard -p '{"allowVolumeExpansion": true}'
 
 # run tests
 test:
