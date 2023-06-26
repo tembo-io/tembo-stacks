@@ -14,7 +14,6 @@ use std::{thread, time};
 use tokio_retry::strategy::FixedInterval;
 use tokio_retry::Retry;
 use types::{CRUDevent, Event};
-use std::io::ErrorKind;
 
 #[tokio::main]
 async fn run() -> Result<(), Box<dyn std::error::Error>> {
@@ -114,7 +113,7 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
                         "spec is required on create and update events, archiving message {}",
                         read_msg.msg_id
                     );
-                    let archived = queue
+                    let _archived = queue
                         .archive(&control_plane_events_queue, read_msg.msg_id)
                         .await
                         .expect("error archiving message from queue");
@@ -214,10 +213,16 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
 
                 // get connection string values from secret
 
-                let conn_info =
-                    match get_pg_conn(client.clone(), &namespace, &data_plane_basedomain).await {
-                        Ok(conn_info) => conn_info,
-                        Err(err) => match err {
+                let conn_info = match get_pg_conn(
+                    client.clone(),
+                    &namespace,
+                    &data_plane_basedomain,
+                )
+                .await
+                {
+                    Ok(conn_info) => conn_info,
+                    Err(err) => {
+                        match err {
                             ConductorError::PostgresConnectionInfoNotFound => {
                                 info!("Secret not ready, requeuing with short duration. message id {}", read_msg.msg_id);
                                 // Requeue the message for a short duration
@@ -245,7 +250,8 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
                                 continue;
                             }
                         }
-                    };
+                    }
+                };
 
                 let result = get_coredb_status(client.clone(), &namespace).await;
 

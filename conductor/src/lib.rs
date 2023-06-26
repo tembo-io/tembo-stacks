@@ -3,7 +3,6 @@ pub mod coredb_crd;
 pub mod errors;
 pub mod extensions;
 pub mod types;
-use std::io::ErrorKind;
 
 use crate::aws::cloudformation::{AWSConfigState, CloudFormationParams};
 use aws_sdk_cloudformation::config::Region;
@@ -15,9 +14,9 @@ use k8s_openapi::api::apps::v1::StatefulSet;
 use k8s_openapi::api::core::v1::{Namespace, Secret};
 use k8s_openapi::api::networking::v1::NetworkPolicy;
 use kube::api::{DeleteParams, ListParams, Patch, PatchParams};
-use kube::runtime::wait::{await_condition, Condition};
+
 use kube::{Api, Client};
-use log::{debug, error, info};
+use log::{debug, info};
 use rand::Rng;
 use serde_json::{from_str, to_string, Value};
 
@@ -202,15 +201,18 @@ async fn get_secret_for_db(client: Client, name: &str) -> Result<Secret, Conduct
 
     if let Some(secret) = secret_api.get_opt(secret_name_cnpg.as_str()).await? {
         debug!("Found the secret {}", secret_name_cnpg);
-        return Ok(secret);
+        Ok(secret)
     } else {
-        debug!("Didn't find the secret {}, trying cdb-style {}", secret_name_cnpg, secret_name_cdb);
+        debug!(
+            "Didn't find the secret {}, trying cdb-style {}",
+            secret_name_cnpg, secret_name_cdb
+        );
         if let Some(secret) = secret_api.get_opt(secret_name_cdb.as_str()).await? {
             debug!("Found the secret {}", secret_name_cdb);
-            return Ok(secret);
+            Ok(secret)
         } else {
             debug!("Didn't find the secret {}", secret_name_cdb);
-            return Err(ConductorError::PostgresConnectionInfoNotFound);
+            Err(ConductorError::PostgresConnectionInfoNotFound)
         }
     }
 }
@@ -220,7 +222,6 @@ pub async fn get_pg_conn(
     name: &str,
     basedomain: &str,
 ) -> Result<types::ConnectionInfo, ConductorError> {
-
     let secret = get_secret_for_db(client, name).await?;
 
     let data = secret.data.unwrap();
