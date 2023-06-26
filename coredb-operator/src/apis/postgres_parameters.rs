@@ -189,8 +189,8 @@ impl WrapValue {
 impl From<WrapValue> for Result<ConfigValue, JsonParsingError> {
     fn from(value: WrapValue) -> Self {
         if let Some(s) = value.as_str() {
-            if s.contains(",") {
-                let set: BTreeSet<String> = s.split(",").map(|s| s.trim().to_string()).collect();
+            if s.contains(',') {
+                let set: BTreeSet<String> = s.split(',').map(|s| s.trim().to_string()).collect();
                 Ok(ConfigValue::Multiple(set))
             } else {
                 Ok(ConfigValue::Single(s.to_string()))
@@ -234,9 +234,9 @@ impl FromStr for ConfigValue {
     type Err = std::num::ParseIntError;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
-        if s.contains(",") {
+        if s.contains(',') {
             Ok(ConfigValue::Multiple(
-                s.split(",").map(|s| s.to_string()).collect(),
+                s.split(',').map(|s| s.to_string()).collect(),
             ))
         } else {
             Ok(ConfigValue::Single(s.to_string()))
@@ -253,7 +253,7 @@ impl Serialize for ConfigValue {
         match self {
             ConfigValue::Single(val) => serializer.serialize_str(val),
             ConfigValue::Multiple(set) => {
-                let joined = set.into_iter().join(",");
+                let joined = set.iter().join(",");
                 serializer.serialize_str(&joined)
             }
         }
