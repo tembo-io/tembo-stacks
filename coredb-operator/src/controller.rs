@@ -26,7 +26,10 @@ use kube::{
 };
 
 use crate::{
-    apis::coredb_types::{CoreDB, CoreDBStatus},
+    apis::{
+        coredb_types::{CoreDB, CoreDBStatus},
+        postgres_parameters::reconcile_pg_parameters_configmap,
+    },
     extensions::{reconcile_extensions, Extension},
     ingress::reconcile_postgres_ing_route_tcp,
     postgres_exporter::{create_postgres_exporter_role, reconcile_prom_configmap},
@@ -165,6 +168,15 @@ impl CoreDB {
             error!("Error reconciling cronjob: {:?}", e);
             Action::requeue(Duration::from_secs(300))
         })?;
+
+
+        // handle postgres configs
+        reconcile_pg_parameters_configmap(self, client.clone(), &ns)
+            .await
+            .map_err(|e| {
+                error!("Error reconciling postgres configmap: {:?}", e);
+                Action::requeue(Duration::from_secs(300))
+            })?;
 
         // reconcile statefulset
         reconcile_sts(self, ctx.clone()).await.map_err(|e| {
