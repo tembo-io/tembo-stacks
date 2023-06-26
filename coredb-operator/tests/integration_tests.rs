@@ -1147,7 +1147,6 @@ mod test {
             .get(name)
             .await
             .unwrap_or_else(|_| panic!("Expected to find ingress route TCP {}", name));
-
     }
 
     #[tokio::test]
@@ -1223,13 +1222,13 @@ mod test {
             Duration::from_secs(TIMEOUT_SECONDS_START_POD),
             await_condition(pods.clone(), &pod_name, conditions::is_pod_running()),
         )
-            .await
-            .unwrap_or_else(|_| {
-                panic!(
-                    "Did not find the pod {} to be running after waiting {} seconds",
-                    pod_name, TIMEOUT_SECONDS_START_POD
-                )
-            });
+        .await
+        .unwrap_or_else(|_| {
+            panic!(
+                "Did not find the pod {} to be running after waiting {} seconds",
+                pod_name, TIMEOUT_SECONDS_START_POD
+            )
+        });
 
         // This TCP route is the one we adopted
         let ingress_route_tcp = ingress_route_tcp_api
@@ -1243,9 +1242,7 @@ mod test {
             .expect("Ingress route has no services")[0]
             .name
             .clone();
-        assert_eq!(
-            &service_name, name
-        );
+        assert_eq!(&service_name, name);
     }
 
     #[tokio::test]
@@ -1322,13 +1319,13 @@ mod test {
             Duration::from_secs(TIMEOUT_SECONDS_START_POD),
             await_condition(pods.clone(), &pod_name, conditions::is_pod_running()),
         )
-            .await
-            .unwrap_or_else(|_| {
-                panic!(
-                    "Did not find the pod {} to be running after waiting {} seconds",
-                    pod_name, TIMEOUT_SECONDS_START_POD
-                )
-            });
+        .await
+        .unwrap_or_else(|_| {
+            panic!(
+                "Did not find the pod {} to be running after waiting {} seconds",
+                pod_name, TIMEOUT_SECONDS_START_POD
+            )
+        });
 
         // This TCP route is the one we adopted
         let ingress_route_tcp = ingress_route_tcp_api
@@ -1337,9 +1334,7 @@ mod test {
             .unwrap_or_else(|_| panic!("Expected to find ingress route TCP {}", name));
 
         let actual_matcher_adopted_route = ingress_route_tcp.spec.routes[0].r#match.clone();
-        assert_eq!(
-            actual_matcher_adopted_route, old_matcher
-        );
+        assert_eq!(actual_matcher_adopted_route, old_matcher);
 
         let new_matcher = format!("HostSNI(`{name}.localhost`)");
         // This TCP route is the new one
@@ -1350,9 +1345,7 @@ mod test {
             .unwrap_or_else(|_| panic!("Expected to find ingress route TCP {}", name));
 
         let actual_matcher_new_route = ingress_route_tcp.spec.routes[0].r#match.clone();
-        assert_eq!(
-            actual_matcher_new_route, new_matcher
-        );
+        assert_eq!(actual_matcher_new_route, new_matcher);
     }
 
     async fn kube_client() -> Client {
