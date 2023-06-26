@@ -47,6 +47,7 @@ jobs:
           set -xe
           sudo apt-get update
           sudo apt-get install -y pkg-config libssl-dev git
+      - uses: azure/setup-helm@v3
       - uses: extractions/setup-just@v1
       - name: Install kind
         uses: helm/kind-action@v1.7.0
