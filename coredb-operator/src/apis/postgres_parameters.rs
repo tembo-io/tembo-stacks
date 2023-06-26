@@ -168,10 +168,37 @@ pub fn merge_pg_configs(
 }
 
 
-#[derive(Clone, Debug, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
+#[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord)]
 pub enum ConfigValue {
     Single(String),
     Multiple(BTreeSet<String>),
+}
+
+use serde_json::{Error as JsonParsingError, Value};
+
+use serde_json;
+
+pub struct WrapValue(Value);
+
+impl WrapValue {
+    fn as_str(&self) -> Option<&str> {
+        self.0.as_str()
+    }
+}
+
+impl From<WrapValue> for Result<ConfigValue, JsonParsingError> {
+    fn from(value: WrapValue) -> Self {
+        if let Some(s) = value.as_str() {
+            if s.contains(",") {
+                let set: BTreeSet<String> = s.split(",").map(|s| s.trim().to_string()).collect();
+                Ok(ConfigValue::Multiple(set))
+            } else {
+                Ok(ConfigValue::Single(s.to_string()))
+            }
+        } else {
+            Err(JsonParsingError::custom("Invalid value: expected string"))
+        }
+    }
 }
 
 
@@ -233,6 +260,41 @@ impl Serialize for ConfigValue {
     }
 }
 
+#[derive(Debug, PartialEq, Eq)]
+enum KeyValue {
+    Name,
+    Value,
+}
+
+impl<'de> Deserialize<'de> for KeyValue {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        struct KeyValueVisitor;
+
+        impl<'de> Visitor<'de> for KeyValueVisitor {
+            type Value = KeyValue;
+
+            fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
+                formatter.write_str("`name` or `value`")
+            }
+
+            fn visit_str<E>(self, value: &str) -> Result<KeyValue, E>
+            where
+                E: Error,
+            {
+                match value {
+                    "name" => Ok(KeyValue::Name),
+                    "value" => Ok(KeyValue::Value),
+                    _ => Err(Error::unknown_field(value, &["name", "value"])),
+                }
+            }
+        }
+
+        deserializer.deserialize_identifier(KeyValueVisitor)
+    }
+}
 
 impl<'de> Deserialize<'de> for PgConfig {
     fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
@@ -255,24 +317,39 @@ impl<'de> Deserialize<'de> for PgConfig {
                 let mut name: Option<String> = None;
                 let mut value: Option<String> = None;
 
+                // while let Some(key) = map.next_key::<&str>()? {
+                //     match key {
+                //         "name" => {
+                //             if name.is_some() {
+                //                 return Err(Error::custom("duplicate key: 'name'"));
+                //             }
+                //             name = Some(map.next_value()?);
+                //         }
+                //         "value" => {
+                //             if value.is_some() {
+                //                 return Err(Error::custom("duplicate key: 'value'"));
+                //             }
+                //             value = Some(map.next_value::<String>()?);
+                //         }
+                //         _ => return Err(Error::custom("unknown key")),
+                //     }
+                // }
                 while let Some(key) = map.next_key()? {
                     match key {
-                        "name" => {
+                        KeyValue::Name => {
                             if name.is_some() {
-                                return Err(Error::custom("duplicate key: 'name'"));
+                                return Err(Error::duplicate_field("name"));
                             }
                             name = Some(map.next_value()?);
                         }
-                        "value" => {
+                        KeyValue::Value => {
                             if value.is_some() {
-                                return Err(Error::custom("duplicate key: 'value'"));
+                                return Err(Error::duplicate_field("value"));
                             }
-                            value = Some(map.next_value::<String>()?);
+                            value = Some(map.next_value()?);
                         }
-                        _ => return Err(Error::custom("unknown key")),
                     }
                 }
-
                 let name = name.ok_or_else(|| M::Error::custom("key 'name' not found"))?;
                 let raw_value = value.ok_or_else(|| M::Error::custom("key 'value' not found"))?;
 
@@ -466,7 +543,7 @@ mod pg_param_tests {
             }
             ConfigValue::Single(_) => panic!("expected multiple values"),
         }
-        let serialized = serde_json::to_string(&pgc).expect("failed to serialize");
+        let serialized: String = serde_json::to_string(&pgc).expect("failed to serialize");
         assert_eq!(
             serialized,
             "{\"name\":\"shared_preload_libraries\",\"value\":\"a,b,c\"}"
@@ -525,6 +602,33 @@ mod pg_param_tests {
             }
 
             ConfigValue::Multiple(_) => panic!("expected single value"),
+        }
+
+        // from json
+        let js = serde_json::json!({
+            "name": "shared_preload_libraries",
+            "value": "a,b,c"
+        });
+        let deserialized: PgConfig = serde_json::from_value(js).expect("failed to deserialize");
+        match deserialized.value {
+            ConfigValue::Multiple(set) => {
+                assert_eq!(set.len(), 3);
+                assert!(set.contains("a"));
+                assert!(set.contains("b"));
+                assert!(set.contains("c"));
+            }
+
+            ConfigValue::Single(_) => panic!("expected multiple values"),
+        }
+        // a single with comma still parsed as a single
+        let js = serde_json::json!({
+            "name": "random_single",
+            "value": "a,b,c"
+        });
+        let deserialized: PgConfig = serde_json::from_value(js).expect("failed to deserialize");
+        match deserialized.value {
+            ConfigValue::Multiple(set) => panic!("expected single value"),
+            ConfigValue::Single(s) => assert_eq!(s, "a,b,c"),
         }
     }
 }

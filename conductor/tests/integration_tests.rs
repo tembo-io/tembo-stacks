@@ -124,7 +124,7 @@ mod test {
         let spec_js = serde_json::json!({
             "extensions": Some(vec![Extension {
                 name: "postgis_bundle".to_owned(),
-                description: "PostGIS extension".to_owned(),
+                description: Some("PostGIS extension".to_owned()),
                 locations: vec![ExtensionInstallLocation {
                     enabled: true,
                     version: Some("1.1.1".to_owned()),
@@ -238,7 +238,7 @@ mod test {
         let mut extensions_add = extensions.clone();
         extensions_add.push(Extension {
             name: "pgmq".to_owned(),
-            description: "pgmq description".to_string(),
+            description: Some("pgmq description".to_string()),
             locations: vec![ExtensionInstallLocation {
                 enabled: false,
                 version: Some("0.2.1".to_owned()),

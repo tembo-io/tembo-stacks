@@ -18,7 +18,7 @@ lazy_static! {
 pub struct Extension {
     pub name: String,
     #[serde(default = "defaults::default_description")]
-    pub description: String,
+    pub description: Option<String>,
     pub locations: Vec<ExtensionInstallLocation>,
 }
 
@@ -26,7 +26,9 @@ impl Default for Extension {
     fn default() -> Self {
         Extension {
             name: "pg_stat_statements".to_owned(),
-            description: " track planning and execution statistics of all SQL statements executed".to_owned(),
+            description: Some(
+                " track planning and execution statistics of all SQL statements executed".to_owned(),
+            ),
             locations: vec![ExtensionInstallLocation::default()],
         }
     }
@@ -344,7 +346,7 @@ pub async fn get_all_extensions(cdb: &CoreDB, ctx: Arc<Context>) -> Result<Vec<E
     for ((extname, extdescr), ext_locations) in &ext_hashmap {
         ext_spec.push(Extension {
             name: extname.clone(),
-            description: extdescr.clone(),
+            description: Some(extdescr.clone()),
             locations: ext_locations.clone(),
         });
     }
@@ -464,7 +466,7 @@ mod tests {
     fn test_extension_plan() {
         let postgis_disabled = Extension {
             name: "postgis".to_owned(),
-            description: "my description".to_owned(),
+            description: Some("my description".to_owned()),
             locations: vec![ExtensionInstallLocation {
                 enabled: false,
                 database: "postgres".to_owned(),
@@ -475,7 +477,7 @@ mod tests {
 
         let pgmq_disabled = Extension {
             name: "pgmq".to_owned(),
-            description: "my description".to_owned(),
+            description: Some("my description".to_owned()),
             locations: vec![ExtensionInstallLocation {
                 enabled: false,
                 database: "postgres".to_owned(),
@@ -499,7 +501,7 @@ mod tests {
     fn test_diff_and_plan() {
         let postgis_disabled = Extension {
             name: "postgis".to_owned(),
-            description: "my description".to_owned(),
+            description: Some("my description".to_owned()),
             locations: vec![ExtensionInstallLocation {
                 enabled: false,
                 database: "postgres".to_owned(),
@@ -509,7 +511,7 @@ mod tests {
         };
         let postgis_enabled = Extension {
             name: "postgis".to_owned(),
-            description: "my description".to_owned(),
+            description: Some("my description".to_owned()),
             locations: vec![ExtensionInstallLocation {
                 enabled: true,
                 database: "postgres".to_owned(),
@@ -519,7 +521,7 @@ mod tests {
         };
         let pgmq_disabled = Extension {
             name: "pgmq".to_owned(),
-            description: "my description".to_owned(),
+            description: Some("my description".to_owned()),
             locations: vec![ExtensionInstallLocation {
                 enabled: false,
                 database: "postgres".to_owned(),
@@ -529,7 +531,7 @@ mod tests {
         };
         let pg_stat_enabled = Extension {
             name: "pg_stat_statements".to_owned(),
-            description: "my description".to_owned(),
+            description: Some("my description".to_owned()),
             locations: vec![ExtensionInstallLocation {
                 enabled: true,
                 database: "postgres".to_owned(),
@@ -580,7 +582,7 @@ mod tests {
     fn test_upgrade_ext_vers() {
         let pgmq_05 = Extension {
             name: "pgmq".to_owned(),
-            description: "my description".to_owned(),
+            description: Some("my description".to_owned()),
             locations: vec![ExtensionInstallLocation {
                 enabled: true,
                 database: "postgres".to_owned(),
@@ -591,7 +593,7 @@ mod tests {
 
         let pgmq_06 = Extension {
             name: "pgmq".to_owned(),
-            description: "my description".to_owned(),
+            description: Some("my description".to_owned()),
             locations: vec![ExtensionInstallLocation {
                 enabled: true,
                 database: "postgres".to_owned(),
@@ -621,7 +623,7 @@ mod tests {
     fn test_diff() {
         let postgis_disabled = Extension {
             name: "postgis".to_owned(),
-            description: "my description".to_owned(),
+            description: Some("my description".to_owned()),
             locations: vec![ExtensionInstallLocation {
                 enabled: false,
                 database: "postgres".to_owned(),
@@ -632,7 +634,7 @@ mod tests {
 
         let pgmq_enabled = Extension {
             name: "pgmq".to_owned(),
-            description: "my description".to_owned(),
+            description: Some("my description".to_owned()),
             locations: vec![ExtensionInstallLocation {
                 enabled: true,
                 database: "postgres".to_owned(),
@@ -643,7 +645,7 @@ mod tests {
 
         let pgmq_disabled = Extension {
             name: "pgmq".to_owned(),
-            description: "my description".to_owned(),
+            description: Some("my description".to_owned()),
             locations: vec![ExtensionInstallLocation {
                 enabled: false,
                 database: "postgres".to_owned(),
