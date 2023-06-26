@@ -386,7 +386,12 @@ mod test {
         let status = spec.status.expect("no status on coredb");
         let extensions = status.extensions;
         assert!(extensions.clone().expect("expected extensions").len() > 0);
-        assert!(extensions.expect("expected extensions")[0].description.len() > 0);
+        let extension = extensions.expect("expected extensions")[0].clone();
+        assert_eq!(extension.name, "postgis");
+        assert_eq!(
+            extension.description.expect("expected descriptions"),
+            "PostGIS extension"
+        );
 
         // Change size of a PVC
         let coredb_json = serde_json::json!({
