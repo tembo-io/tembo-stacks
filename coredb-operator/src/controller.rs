@@ -182,15 +182,16 @@ impl CoreDB {
             false => {
                 let primary_pod = self.primary_pod(ctx.client.clone()).await;
                 if primary_pod.is_err() {
-                    debug!("Did not find primary pod");
+                    info!("Did not find primary pod of {}, waiting a short period", self.name_any());
                     return Ok(Action::requeue(Duration::from_secs(1)));
                 }
                 let primary_pod = primary_pod.unwrap();
 
                 if !is_postgres_ready().matches_object(Some(&primary_pod)) {
-                    debug!("Postgres is not ready");
+                    info!("Did not find postgres ready {}, waiting a short period", self.name_any());
                     return Ok(Action::requeue(Duration::from_secs(1)));
                 }
+
                 // creating exporter role is pre-requisite to the postgres pod becoming "ready"
                 create_postgres_exporter_role(self, ctx.clone())
                     .await
@@ -200,11 +201,11 @@ impl CoreDB {
                             self.metadata.name.clone().unwrap(),
                             e
                         );
-                        Action::requeue(Duration::from_secs(5))
+                        Action::requeue(Duration::from_secs(300))
                     })?;
 
                 if !is_pod_ready().matches_object(Some(&primary_pod)) {
-                    debug!("Did not find primary pod");
+                    info!("Did not pod ready {}, waiting a short period", self.name_any());
                     return Ok(Action::requeue(Duration::from_secs(1)));
                 }
 
@@ -212,7 +213,7 @@ impl CoreDB {
                     .await
                     .map_err(|e| {
                         error!("Error reconciling extensions: {:?}", e);
-                        Action::requeue(Duration::from_secs(10))
+                        Action::requeue(Duration::from_secs(300))
                     })?;
 
                 // Check cfg.enable_initial_backup to make sure we should run the initial backup
@@ -229,7 +230,7 @@ impl CoreDB {
                         .await
                         .map_err(|e| {
                             error!("Error running backup: {:?}", e);
-                            Action::requeue(Duration::from_secs(10))
+                            Action::requeue(Duration::from_secs(300))
                         })?;
                 }
 

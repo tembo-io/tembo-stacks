@@ -341,7 +341,6 @@ mod test {
             },
             "spec": {
                 "replicas": replicas,
-
                 "extensions": [
                     {
                         "name": "postgis",
