@@ -175,17 +175,6 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
                 // create NetworkPolicy to allow internet access only
                 create_networkpolicy(client.clone(), &namespace).await?;
 
-                // create IngressRouteTCP
-                create_ing_route_tcp(client.clone(), &namespace, &data_plane_basedomain).await?;
-
-                // create /metrics ingress
-                //
-                // Disable this feature until IP allow list
-                //
-                // create_metrics_ingress(client.clone(), &namespace, &data_plane_basedomain)
-                //     .await
-                //     .expect("error creating ingress for /metrics");
-
                 // generate CoreDB spec based on values in body
                 let spec = generate_spec(&namespace, &coredb_spec).await;
 

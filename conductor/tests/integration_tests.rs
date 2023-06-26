@@ -203,7 +203,7 @@ mod test {
         );
         let extensions = spec.extensions;
         assert!(
-            extensions.len() > 0,
+            !extensions.is_empty(),
             "Expected at least one extension: {:?}",
             extensions
         );
