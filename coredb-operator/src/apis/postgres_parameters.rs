@@ -260,6 +260,11 @@ impl Serialize for ConfigValue {
     }
 }
 
+// we need a special enum to handle deserializing PgConfig
+// rust wants to map the the serde_json::Value keys to String,
+// but serde_json expects &str
+// unable to figure out how to get around this, but mapping
+// to enum does the trick.
 #[derive(Debug, PartialEq, Eq)]
 enum KeyValue {
     Name,
@@ -317,23 +322,9 @@ impl<'de> Deserialize<'de> for PgConfig {
                 let mut name: Option<String> = None;
                 let mut value: Option<String> = None;
 
-                // while let Some(key) = map.next_key::<&str>()? {
-                //     match key {
-                //         "name" => {
-                //             if name.is_some() {
-                //                 return Err(Error::custom("duplicate key: 'name'"));
-                //             }
-                //             name = Some(map.next_value()?);
-                //         }
-                //         "value" => {
-                //             if value.is_some() {
-                //                 return Err(Error::custom("duplicate key: 'value'"));
-                //             }
-                //             value = Some(map.next_value::<String>()?);
-                //         }
-                //         _ => return Err(Error::custom("unknown key")),
-                //     }
-                // }
+                // normally these would be &str values to match on
+                // but when these are serde_json::Value, they are always String
+                // see note related to the KeyValue enum
                 while let Some(key) = map.next_key()? {
                     match key {
                         KeyValue::Name => {
