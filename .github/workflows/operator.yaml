@@ -35,6 +35,7 @@ jobs:
         # https://github.com/kubernetes-sigs/kind/releases
         node_image:
           - 'kindest/node:v1.25.8'
+          - 'kindest/node:v1.26.6'
     steps:
       - uses: actions/checkout@v2
       - name: Install system dependencies
