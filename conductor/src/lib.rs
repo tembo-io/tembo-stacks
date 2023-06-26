@@ -3,6 +3,7 @@ pub mod coredb_crd;
 pub mod errors;
 pub mod extensions;
 pub mod types;
+use std::io::ErrorKind;
 
 use crate::aws::cloudformation::{AWSConfigState, CloudFormationParams};
 use aws_sdk_cloudformation::config::Region;
@@ -16,7 +17,7 @@ use k8s_openapi::api::networking::v1::NetworkPolicy;
 use kube::api::{DeleteParams, ListParams, Patch, PatchParams};
 use kube::runtime::wait::{await_condition, Condition};
 use kube::{Api, Client};
-use log::info;
+use log::{debug, error, info};
 use rand::Rng;
 use serde_json::{from_str, to_string, Value};
 
@@ -192,30 +193,38 @@ pub async fn delete_namespace(client: Client, name: &str) -> Result<(), Conducto
     Ok(())
 }
 
-// remove after COR-166
-#[allow(unused_variables)]
+async fn get_secret_for_db(client: Client, name: &str) -> Result<Secret, ConductorError> {
+    // read secret <name>-connection
+    let secret_name_cdb = format!("{name}-connection");
+    let secret_name_cnpg = format!("{name}-superuser");
+
+    let secret_api: Api<Secret> = Api::namespaced(client, name);
+
+    if let Some(secret) = secret_api.get_opt(secret_name_cnpg.as_str()).await? {
+        debug!("Found the secret {}", secret_name_cnpg);
+        return Ok(secret);
+    } else {
+        debug!("Didn't find the secret {}, trying cdb-style {}", secret_name_cnpg, secret_name_cdb);
+        if let Some(secret) = secret_api.get_opt(secret_name_cdb.as_str()).await? {
+            debug!("Found the secret {}", secret_name_cdb);
+            return Ok(secret);
+        } else {
+            debug!("Didn't find the secret {}", secret_name_cdb);
+            return Err(ConductorError::PostgresConnectionInfoNotFound);
+        }
+    }
+}
+
 pub async fn get_pg_conn(
     client: Client,
     name: &str,
     basedomain: &str,
 ) -> Result<types::ConnectionInfo, ConductorError> {
-    // read secret <name>-connection
-    let secret_name = format!("{name}-connection");
 
-    let secret_api: Api<Secret> = Api::namespaced(client, name);
-
-    // wait for secret to exist
-    let establish = await_condition(secret_api.clone(), &secret_name, wait_for_secret());
-    let _ = tokio::time::timeout(std::time::Duration::from_secs(90), establish).await;
-
-    let secret = secret_api
-        .get(secret_name.as_str())
-        .await
-        .expect("error getting Secret");
+    let secret = get_secret_for_db(client, name).await?;
 
     let data = secret.data.unwrap();
 
-    // TODO(ianstanton) There has to be a better way to do this
     let user_data = data.get("user").unwrap();
     let byte_user = to_string(user_data).unwrap();
     let string_user: String = from_str(&byte_user).unwrap();
@@ -234,23 +243,9 @@ pub async fn get_pg_conn(
     })
 }
 
-#[allow(dead_code)]
 fn b64_decode(b64_encoded: &str) -> String {
     let bytes = general_purpose::STANDARD.decode(b64_encoded).unwrap();
     std::str::from_utf8(&bytes).unwrap().to_owned()
-}
-
-// TODO(ianstanton) This is a hack for now. We need to find a more 'official' way of checking for
-//  existing resources in the cluster.
-pub fn wait_for_secret() -> impl Condition<Secret> {
-    |obj: Option<&Secret>| {
-        if let Some(secret) = &obj {
-            if let Some(t) = &secret.type_ {
-                return t == "Opaque";
-            }
-        }
-        false
-    }
 }
 
 pub async fn restart_statefulset(
@@ -354,6 +349,8 @@ async fn get_stack_outputs(
     let region = Region::new(aws_region);
     let aws_config_state = AWSConfigState::new(region).await;
     let stack_name = format!("org-{}-inst-{}-cf", org_name, db_name);
+    // When moving this into operator, handle the specific errors that mean
+    // "cloudformation is not done yet" and return a more specific error
     let (role_name, role_arn) = aws_config_state
         .lookup_cloudformation_stack(&stack_name)
         .await
