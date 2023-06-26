@@ -121,7 +121,7 @@ impl CoreDB {
                 reconcile_postgres_ing_route_tcp(
                     self,
                     ctx.clone(),
-                    ns.as_str(),
+                    self.name_any().as_str(),
                     basedomain.as_str(),
                     ns.as_str(),
                     self.name_any().as_str(),

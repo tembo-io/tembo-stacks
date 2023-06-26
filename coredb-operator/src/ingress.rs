@@ -101,7 +101,7 @@ pub async fn reconcile_postgres_ing_route_tcp(
         let ingress_route_tcp_name = match ingress_route_tcp.metadata.name.clone() {
             Some(ingress_route_tcp_name) => {
                 if !(ingress_route_tcp_name.starts_with(ingress_route_tcp_name_prefix_rw)
-                    || ingress_route_tcp_name == namespace)
+                    || ingress_route_tcp_name == cdb.name_any())
                 {
                     debug!(
                         "Skipping non postgres-rw ingress route tcp: {}",
