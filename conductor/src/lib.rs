@@ -6,7 +6,7 @@ pub mod types;
 
 use crate::aws::cloudformation::{AWSConfigState, CloudFormationParams};
 use aws_sdk_cloudformation::config::Region;
-use base64::{engine::general_purpose, Engine as _};
+
 use coredb_crd as crd;
 use coredb_crd::CoreDB;
 use errors::ConductorError;
@@ -244,11 +244,6 @@ pub async fn get_pg_conn(
     })
 }
 
-fn b64_decode(b64_encoded: &str) -> String {
-    let bytes = general_purpose::STANDARD.decode(b64_encoded).unwrap();
-    std::str::from_utf8(&bytes).unwrap().to_owned()
-}
-
 pub async fn restart_statefulset(
     client: Client,
     namespace: &str,
@@ -370,22 +365,4 @@ pub async fn generate_rand_schedule() -> String {
     let hour: u8 = rng.gen_range(4..10);
 
     format!("{} {} * * *", minute, hour)
-}
-
-#[test]
-fn test_b64_decode_string() {
-    let encoded = "SGVsbG8sIFdvcmxkIQ==";
-    let decoded = b64_decode(encoded);
-    assert_eq!(decoded, "Hello, World!");
-
-    let encoded = "ZnJpZGF5";
-    let decoded = b64_decode(encoded);
-    assert_eq!(decoded, "friday");
-}
-
-#[test]
-fn test_b64_decode_empty_string() {
-    let encoded = "";
-    let decoded = b64_decode(encoded);
-    assert_eq!(decoded, "");
 }
