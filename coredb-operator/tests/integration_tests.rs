@@ -145,7 +145,7 @@ mod test {
                         "description": "PostGIS extension",
                         "locations": [{
                             "enabled": true,
-                            "version": "1.1.1",
+                            "version": "3.3.3",
                             "database": "postgres",
                             "schema": "public"}
                         ]
@@ -348,7 +348,7 @@ mod test {
                         "description": "PostGIS extension",
                         "locations": [{
                             "enabled": false,
-                            "version": "1.1.1",
+                            "version": "3.3.3",
                             "database": "postgres",
                             "schema": "public"}
                         ]
@@ -733,7 +733,7 @@ mod test {
                         "description": "PostGIS extension",
                         "locations": [{
                             "enabled": false,
-                            "version": "1.1.1",
+                            "version": "3.3.3",
                             "database": "postgres",
                             "schema": "public"}
                         ]

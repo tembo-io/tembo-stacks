@@ -471,7 +471,7 @@ mod tests {
                 enabled: false,
                 database: "postgres".to_owned(),
                 schema: "public".to_owned(),
-                version: Some("1.1.1".to_owned()),
+                version: Some("3.3.3".to_owned()),
             }],
         };
 
@@ -482,7 +482,7 @@ mod tests {
                 enabled: false,
                 database: "postgres".to_owned(),
                 schema: "public".to_owned(),
-                version: Some("1.1.1".to_owned()),
+                version: Some("3.3.3".to_owned()),
             }],
         };
         let diff = vec![pgmq_disabled.clone()];
@@ -506,7 +506,7 @@ mod tests {
                 enabled: false,
                 database: "postgres".to_owned(),
                 schema: "public".to_owned(),
-                version: Some("1.1.1".to_owned()),
+                version: Some("3.3.3".to_owned()),
             }],
         };
         let postgis_enabled = Extension {
@@ -516,7 +516,7 @@ mod tests {
                 enabled: true,
                 database: "postgres".to_owned(),
                 schema: "public".to_owned(),
-                version: Some("1.1.1".to_owned()),
+                version: Some("3.3.3".to_owned()),
             }],
         };
         let pgmq_disabled = Extension {
@@ -526,7 +526,7 @@ mod tests {
                 enabled: false,
                 database: "postgres".to_owned(),
                 schema: "public".to_owned(),
-                version: Some("1.1.1".to_owned()),
+                version: Some("3.3.3".to_owned()),
             }],
         };
         let pg_stat_enabled = Extension {
@@ -536,7 +536,7 @@ mod tests {
                 enabled: true,
                 database: "postgres".to_owned(),
                 schema: "public".to_owned(),
-                version: Some("1.1.1".to_owned()),
+                version: Some("3.3.3".to_owned()),
             }],
         };
         // three desired
@@ -627,7 +627,7 @@ mod tests {
                 enabled: false,
                 database: "postgres".to_owned(),
                 schema: "public".to_owned(),
-                version: Some("1.1.1".to_owned()),
+                version: Some("3.3.3".to_owned()),
             }],
         };
 
@@ -638,7 +638,7 @@ mod tests {
                 enabled: true,
                 database: "postgres".to_owned(),
                 schema: "public".to_owned(),
-                version: Some("1.1.1".to_owned()),
+                version: Some("3.3.3".to_owned()),
             }],
         };
 
@@ -649,7 +649,7 @@ mod tests {
                 enabled: false,
                 database: "postgres".to_owned(),
                 schema: "public".to_owned(),
-                version: Some("1.1.1".to_owned()),
+                version: Some("3.3.3".to_owned()),
             }],
         };
 
