@@ -140,7 +140,7 @@ mod test {
                 "replicas": replicas,
                 "extensions": [
                     {
-                        "name": "postgis",
+                        "name": "postgis_bundle",
                         "description": "PostGIS extension",
                         "locations": [{
                             "enabled": true,
@@ -344,7 +344,7 @@ mod test {
 
                 "extensions": [
                     {
-                        "name": "postgis",
+                        "name": "postgis_bundle",
                         "description": "PostGIS extension",
                         "locations": [{
                             "enabled": false,
@@ -729,7 +729,7 @@ mod test {
                 "replicas": 1,
                 "extensions": [
                     {
-                        "name": "postgis",
+                        "name": "postgis_bundle",
                         "description": "PostGIS extension",
                         "locations": [{
                             "enabled": false,

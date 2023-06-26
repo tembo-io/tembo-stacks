@@ -465,7 +465,7 @@ mod tests {
     #[test]
     fn test_extension_plan() {
         let postgis_disabled = Extension {
-            name: "postgis".to_owned(),
+            name: "postgis_bundle".to_owned(),
             description: Some("my description".to_owned()),
             locations: vec![ExtensionInstallLocation {
                 enabled: false,
@@ -500,7 +500,7 @@ mod tests {
     #[test]
     fn test_diff_and_plan() {
         let postgis_disabled = Extension {
-            name: "postgis".to_owned(),
+            name: "postgis_bundle".to_owned(),
             description: Some("my description".to_owned()),
             locations: vec![ExtensionInstallLocation {
                 enabled: false,
@@ -510,7 +510,7 @@ mod tests {
             }],
         };
         let postgis_enabled = Extension {
-            name: "postgis".to_owned(),
+            name: "postgis_bundle".to_owned(),
             description: Some("my description".to_owned()),
             locations: vec![ExtensionInstallLocation {
                 enabled: true,
