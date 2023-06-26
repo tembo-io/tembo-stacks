@@ -199,9 +199,9 @@ impl FromStr for ConfigValue {
     type Err = std::num::ParseIntError;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
-        if s.contains(",") {
+        if s.contains(',') {
             Ok(ConfigValue::Multiple(
-                s.split(",").map(|s| s.to_string()).collect(),
+                s.split(',').map(|s| s.to_string()).collect(),
             ))
         } else {
             Ok(ConfigValue::Single(s.to_string()))
@@ -217,7 +217,7 @@ impl Serialize for ConfigValue {
         match self {
             ConfigValue::Single(val) => serializer.serialize_str(val),
             ConfigValue::Multiple(set) => {
-                let joined = set.into_iter().join(",");
+                let joined = set.iter().join(",");
                 serializer.serialize_str(&joined)
             }
         }
@@ -277,7 +277,7 @@ impl<'de> Deserialize<'de> for PgConfig {
             }
         }
 
-        const FIELDS: &'static [&'static str] = &["name", "value"];
+        const FIELDS: &[&str] = &["name", "value"];
         deserializer.deserialize_struct("PgConfig", FIELDS, PgConfigVisitor)
     }
 }
@@ -421,7 +421,7 @@ mod pg_param_tests {
             value: "x,y,z".parse().unwrap(),
         };
 
-        let merged = merge_pg_configs(&vec![pgc_0.clone()], &vec![pgc_1], "test_configuration")
+        let merged = merge_pg_configs(&vec![pgc_0], &vec![pgc_1], "test_configuration")
             .expect("failed to merge pg configs")
             .expect("expected configs");
         assert_eq!(merged.value.to_string(), "a,b,c,x,y,z");
@@ -473,7 +473,7 @@ mod pg_param_tests {
         }
         // a single val, in a MULTI_VAL_CONFIGS is still a ConfigValue::Multiple
         let raw = "{\"name\":\"shared_preload_libraries\",\"value\":\"a\"}";
-        let deserialized: PgConfig = serde_json::from_str(&raw).expect("failed to deserialize");
+        let deserialized: PgConfig = serde_json::from_str(raw).expect("failed to deserialize");
         match deserialized.value {
             ConfigValue::Multiple(set) => {
                 assert_eq!(set.len(), 1);
@@ -484,7 +484,7 @@ mod pg_param_tests {
 
         // a single val, in MULTI_VAL_CONFIGS is still a ConfigValue::Multiple
         let raw = "{\"name\":\"shared_preload_libraries\",\"value\":\"a\"}";
-        let deserialized: PgConfig = serde_json::from_str(&raw).expect("failed to deserialize");
+        let deserialized: PgConfig = serde_json::from_str(raw).expect("failed to deserialize");
         match deserialized.value {
             ConfigValue::Multiple(set) => {
                 assert_eq!(set.len(), 1);
@@ -496,7 +496,7 @@ mod pg_param_tests {
 
         // a single val is a ConfigValue::Single
         let raw = "{\"name\":\"shared_buffers\",\"value\":\"1GB\"}";
-        let deserialized: PgConfig = serde_json::from_str(&raw).expect("failed to deserialize");
+        let deserialized: PgConfig = serde_json::from_str(raw).expect("failed to deserialize");
         match deserialized.value {
             ConfigValue::Single(s) => {
                 assert_eq!(s, "1GB");
@@ -507,7 +507,7 @@ mod pg_param_tests {
 
         // a known single val, with a comma in value, is still a ConfigValue::Single
         let raw = "{\"name\":\"shared_buffers\",\"value\":\"1GB,2GB\"}";
-        let deserialized: PgConfig = serde_json::from_str(&raw).expect("failed to deserialize");
+        let deserialized: PgConfig = serde_json::from_str(raw).expect("failed to deserialize");
         match deserialized.value {
             ConfigValue::Single(s) => {
                 assert_eq!(s, "1GB,2GB");

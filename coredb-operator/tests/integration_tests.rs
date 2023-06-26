@@ -15,6 +15,7 @@ mod test {
     use controller::{
         apis::coredb_types::CoreDB,
         defaults::{default_resources, default_storage},
+        ingress_route_tcp_crd::IngressRouteTCP,
         is_pod_ready,
     };
     use k8s_openapi::{
@@ -38,7 +39,6 @@ mod test {
     use rand::Rng;
     use std::{collections::BTreeMap, str, thread, time::Duration};
     use tokio::io::AsyncReadExt;
-    use controller::ingress_route_tcp_crd::IngressRouteTCP;
 
     const API_VERSION: &str = "coredb.io/v1alpha1";
     // Timeout settings while waiting for an event
@@ -1003,7 +1003,7 @@ mod test {
 
         // Apply a basic configuration of CoreDB
         println!("Creating CoreDB resource {}", name);
-        let test_metric_decr = format!("coredb_integration_test_{}", rng.gen_range(0..100000));
+        let _test_metric_decr = format!("coredb_integration_test_{}", rng.gen_range(0..100000));
         let coredbs: Api<CoreDB> = Api::namespaced(client.clone(), namespace);
         let coredb_json = serde_json::json!({
             "apiVersion": API_VERSION,
@@ -1017,7 +1017,7 @@ mod test {
         });
         let params = PatchParams::apply("functional-test-ingress-route-tcp");
         let patch = Patch::Apply(&coredb_json);
-        let coredb_resource = coredbs.patch(name, &params, &patch).await.unwrap();
+        let _coredb_resource = coredbs.patch(name, &params, &patch).await.unwrap();
 
         // Wait for Pod to be created
         let pod_name = format!("{}-0", name);
@@ -1039,7 +1039,7 @@ mod test {
         let ing_route_tcp = ingress_route_tcp_api
             .get(&ing_route_tcp_name)
             .await
-            .expect(format!("Expected to find ingress route TCP {}", ing_route_tcp_name).as_str());
+            .unwrap_or_else(|_| panic!("Expected to find ingress route TCP {}", ing_route_tcp_name));
         let service_name = ing_route_tcp.spec.routes[0]
             .services
             .clone()
@@ -1048,9 +1048,7 @@ mod test {
             .clone();
         // Assert the ingress route tcp service points to coredb service
         // The coredb service is named the same as the coredb resource
-        assert_eq!(
-            &service_name, name
-        );
+        assert_eq!(&service_name, name);
     }
 
     #[tokio::test]
@@ -1097,14 +1095,15 @@ mod test {
         let params = PatchParams::apply("functional-test-ingress-route-tcp");
         let _o = ingress_route_tcp_api
             .patch(name, &params, &Patch::Apply(&ing))
-            .await.unwrap();
+            .await
+            .unwrap();
 
         // Create a pod we can use to run commands in the cluster
         let pods: Api<Pod> = Api::namespaced(client.clone(), namespace);
 
         // Apply a basic configuration of CoreDB
         println!("Creating CoreDB resource {}", &name);
-        let test_metric_decr = format!("coredb_integration_test_{}", rng.gen_range(0..100000));
+        let _test_metric_decr = format!("coredb_integration_test_{}", rng.gen_range(0..100000));
         let coredbs: Api<CoreDB> = Api::namespaced(client.clone(), namespace);
         let coredb_json = serde_json::json!({
             "apiVersion": API_VERSION,
@@ -1117,7 +1116,7 @@ mod test {
             }
         });
         let patch = Patch::Apply(&coredb_json);
-        let coredb_resource = coredbs.patch(name, &params, &patch).await.unwrap();
+        let _coredb_resource = coredbs.patch(name, &params, &patch).await.unwrap();
 
         // Wait for Pod to be created
         let pod_name = format!("{}-0", name);
@@ -1125,27 +1124,29 @@ mod test {
             Duration::from_secs(TIMEOUT_SECONDS_START_POD),
             await_condition(pods.clone(), &pod_name, conditions::is_pod_running()),
         )
-            .await
-            .unwrap_or_else(|_| {
-                panic!(
-                    "Did not find the pod {} to be running after waiting {} seconds",
-                    pod_name, TIMEOUT_SECONDS_START_POD
-                )
-            });
+        .await
+        .unwrap_or_else(|_| {
+            panic!(
+                "Did not find the pod {} to be running after waiting {} seconds",
+                pod_name, TIMEOUT_SECONDS_START_POD
+            )
+        });
 
         // This TCP route should not exist, because instead we adopted the existing one
         let ing_route_tcp_name = format!("{}-rw-0", name);
         // Get the ingress route tcp
-        let get_result = ingress_route_tcp_api
-            .get(&ing_route_tcp_name)
-            .await;
-        assert!(get_result.is_err(), "Expected to not find ingress route TCP with name {}", ing_route_tcp_name);
+        let get_result = ingress_route_tcp_api.get(&ing_route_tcp_name).await;
+        assert!(
+            get_result.is_err(),
+            "Expected to not find ingress route TCP with name {}",
+            ing_route_tcp_name
+        );
 
         // This TCP route is the one we adopted
-        let get_result = ingress_route_tcp_api
+        let _get_result = ingress_route_tcp_api
             .get(name)
             .await
-            .expect(format!("Expected to find ingress route TCP {}", name).as_str());
+            .unwrap_or_else(|_| panic!("Expected to find ingress route TCP {}", name));
     }
 
     async fn kube_client() -> Client {
