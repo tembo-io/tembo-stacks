@@ -1,5 +1,11 @@
 name: Operator workflow
 
+permissions:
+  pull-requests: write
+  deployments: write
+  id-token: write
+  contents: read
+
 defaults:
   run:
     shell: bash
@@ -12,7 +18,6 @@ on:
     paths:
     - '.github/workflows/operator.yaml'
     - 'coredb-operator/**'
-  # Always run tests on main or release branches
   push:
     branches:
       - main
