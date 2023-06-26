@@ -101,11 +101,9 @@ pub const DISALLOWED_CONFIGS: [&str; 66] = [
     "wal_log_hints",
 ];
 
-
 pub const TEMBO_POSTGRESQL_CONF: &str = "tembo.postgresql.conf";
 pub const TEMBO_POSTGRESQL_CONF_VOLUME_PATH: &str = "/tembo/config";
 pub const TEMBO_POSTGRESQL_CONFIGMAP: &str = "tembo-postgresql-conf";
-
 
 // defines the postgresql configuration
 #[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Serialize, JsonSchema)]
@@ -121,13 +119,11 @@ impl PgConfig {
     }
 }
 
-
 #[derive(Error, Debug)]
 pub enum MergeError {
     #[error("SingleValError")]
     SingleValueNotAllowed,
 }
-
 
 impl ConfigValue {
     fn combine(self, other: Self) -> Result<Self, MergeError> {
@@ -142,7 +138,6 @@ impl ConfigValue {
         }
     }
 }
-
 
 pub fn merge_pg_configs(
     vec1: &Vec<PgConfig>,
@@ -167,13 +162,11 @@ pub fn merge_pg_configs(
     }
 }
 
-
 #[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord)]
 pub enum ConfigValue {
     Single(String),
     Multiple(BTreeSet<String>),
 }
-
 
 impl JsonSchema for ConfigValue {
     fn schema_name() -> String {
@@ -202,7 +195,6 @@ impl std::fmt::Display for ConfigValue {
     }
 }
 
-
 impl FromStr for ConfigValue {
     type Err = std::num::ParseIntError;
 
@@ -216,7 +208,6 @@ impl FromStr for ConfigValue {
         }
     }
 }
-
 
 impl Serialize for ConfigValue {
     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
@@ -232,7 +223,6 @@ impl Serialize for ConfigValue {
         }
     }
 }
-
 
 impl<'de> Deserialize<'de> for PgConfig {
     fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
@@ -291,7 +281,6 @@ impl<'de> Deserialize<'de> for PgConfig {
         deserializer.deserialize_struct("PgConfig", FIELDS, PgConfigVisitor)
     }
 }
-
 
 pub async fn reconcile_pg_parameters_configmap(
     cdb: &CoreDB,

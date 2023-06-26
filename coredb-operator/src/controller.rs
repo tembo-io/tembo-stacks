@@ -169,7 +169,6 @@ impl CoreDB {
             Action::requeue(Duration::from_secs(300))
         })?;
 
-
         // handle postgres configs
         reconcile_pg_parameters_configmap(self, client.clone(), &ns)
             .await
@@ -194,13 +193,19 @@ impl CoreDB {
             false => {
                 let primary_pod = self.primary_pod(ctx.client.clone()).await;
                 if primary_pod.is_err() {
-                    info!("Did not find primary pod of {}, waiting a short period", self.name_any());
+                    info!(
+                        "Did not find primary pod of {}, waiting a short period",
+                        self.name_any()
+                    );
                     return Ok(Action::requeue(Duration::from_secs(1)));
                 }
                 let primary_pod = primary_pod.unwrap();
 
                 if !is_postgres_ready().matches_object(Some(&primary_pod)) {
-                    info!("Did not find postgres ready {}, waiting a short period", self.name_any());
+                    info!(
+                        "Did not find postgres ready {}, waiting a short period",
+                        self.name_any()
+                    );
                     return Ok(Action::requeue(Duration::from_secs(1)));
                 }
 
