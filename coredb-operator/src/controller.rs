@@ -5,7 +5,6 @@ use futures::{
     stream::StreamExt,
 };
 
-
 use crate::{
     config::Config,
     cronjob::reconcile_cronjob,
@@ -114,13 +113,38 @@ impl CoreDB {
         let name = self.name_any();
         let coredbs: Api<CoreDB> = Api::namespaced(client.clone(), &ns);
 
+        match std::env::var("DATA_PLANE_BASEDOMAIN") {
+            Ok(basedomain) => {
+                reconcile_postgres_ing_route_tcp(
+                    self,
+                    ctx.clone(),
+                    ns.as_str(),
+                    basedomain.as_str(),
+                    ns.as_str(),
+                    self.name_any().as_str(),
+                    IntOrString::Int(5432),
+                )
+                .await
+                .map_err(|e| {
+                    error!("Error reconciling postgres ingress route: {:?}", e);
+                    // For unexpected errors, we should requeue for several minutes at least,
+                    // for expected, "waiting" type of requeuing, those should be shorter, just a few seconds.
+                    // IngressRouteTCP does not have expected errors during reconciliation.
+                    Action::requeue(Duration::from_secs(300))
+                })?;
+            }
+            Err(_e) => {
+                warn!("DATA_PLANE_BASEDOMAIN is not set, skipping reconciliation of IngressRouteTCP");
+            }
+        };
+
         // create/update configmap when postgres exporter enabled
         if self.spec.postgresExporterEnabled {
             reconcile_prom_configmap(self, client.clone(), &ns)
                 .await
                 .map_err(|e| {
                     error!("Error reconciling prometheus configmap: {:?}", e);
-                    Action::requeue(Duration::from_secs(10))
+                    Action::requeue(Duration::from_secs(300))
                 })?;
         }
 
@@ -133,39 +157,24 @@ impl CoreDB {
         // reconcile secret
         reconcile_secret(self, ctx.clone()).await.map_err(|e| {
             error!("Error reconciling secret: {:?}", e);
-            Action::requeue(Duration::from_secs(10))
+            Action::requeue(Duration::from_secs(300))
         })?;
 
         // reconcile cronjob for backups
         reconcile_cronjob(self, ctx.clone()).await.map_err(|e| {
             error!("Error reconciling cronjob: {:?}", e);
-            Action::requeue(Duration::from_secs(10))
+            Action::requeue(Duration::from_secs(300))
         })?;
 
         // reconcile statefulset
         reconcile_sts(self, ctx.clone()).await.map_err(|e| {
             error!("Error reconciling statefulset: {:?}", e);
-            Action::requeue(Duration::from_secs(10))
+            Action::requeue(Duration::from_secs(300))
         })?;
 
         // reconcile service
         reconcile_svc(self, ctx.clone()).await.map_err(|e| {
             error!("Error reconciling service: {:?}", e);
-            Action::requeue(Duration::from_secs(10))
-        })?;
-
-        reconcile_postgres_ing_route_tcp(
-            self,
-            ctx.clone(),
-            ns.as_str(),
-            "TODO: get this from an environment variable",
-            ns.as_str(),
-            self.name_any().as_str(),
-            IntOrString::Int(5432),
-        )
-        .await
-        .map_err(|e| {
-            error!("Error reconciling postgres ingress route: {:?}", e);
             Action::requeue(Duration::from_secs(300))
         })?;
 
@@ -251,8 +260,8 @@ impl CoreDB {
 
         patch_cdb_status_force(&coredbs, &name, patch_status).await?;
 
-        // If no events were received, check back every minute
-        Ok(Action::requeue(Duration::from_secs(60)))
+        // Check back every 5 minutes
+        Ok(Action::requeue(Duration::from_secs(300)))
     }
 
     // Finalizer cleanup (the object was deleted, ensure nothing is orphaned)

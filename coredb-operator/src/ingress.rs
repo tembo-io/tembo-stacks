@@ -37,8 +37,6 @@ fn postgres_ingress_route_tcp(
                 services: Some(vec![IngressRouteTCPRoutesServices {
                     name: service_name,
                     port,
-                    // I'm not sure how to just use defaults, should look like this:
-                    // ..IngressRouteTCPRoutesServices::default()
                     namespace: None,
                     proxy_protocol: None,
                     termination_delay: None,
@@ -60,15 +58,17 @@ fn postgres_ingress_route_tcp(
 }
 
 // 1) We should never delete or update the hostname of an ingress route tcp.
-//         Instead, just create another one if the hostname does not match.
-//         This allows for domain name reconfiguration (e.g. coredb.io -> tembo.io),
-//         with the old connection string still working.
+//    Instead, just create another one if the hostname does not match.
+//    This allows for domain name reconfiguration (e.g. coredb.io -> tembo.io),
+//    with the old connection string still working.
+//
 // 2) We should replace the service and port target of all ingress route tcp
-//         During a migration, the Service target will change, for example from CoreDB-operator managed
-//         to CNPG managed read-write endpoints.
+//    During a migration, the Service target will change, for example from CoreDB-operator managed
+//    to CNPG managed read-write endpoints.
+//
 // 3) We should allow for additional ingress route tcp to be created for different use cases
-//         For example read-only endpoints, we should not accidentally handle these other
-//         IngressRouteTCP in this code, so we check that we are working with the correct type of Service.
+//    For example read-only endpoints, we should not accidentally handle these other
+//    IngressRouteTCP in this code, so we check that we are working with the correct type of Service.
 pub async fn reconcile_postgres_ing_route_tcp(
     cdb: &CoreDB,
     ctx: Arc<Context>,
@@ -87,27 +87,22 @@ pub async fn reconcile_postgres_ing_route_tcp(
     // After CNPG migration is done, this can look for only ingress route tcp with the correct owner reference
     let ingress_route_tcps = ingress_route_tcp_api.list(&Default::default()).await?;
 
-    let ingress_route_tcp_name_prefix_rw = "postgres-rw-";
+    // Prefix by subdomain allows multiple per namespace
+    let ingress_route_tcp_name_prefix_rw = format!("{}-rw-", subdomain);
+    let ingress_route_tcp_name_prefix_rw = ingress_route_tcp_name_prefix_rw.as_str();
 
     // We will save information about the existing ingress route tcp(s) in these vectors
     let mut present_matchers_list: Vec<String> = vec![];
     let mut present_ing_route_tcp_names_list: Vec<String> = vec![];
 
     // Check for all existing IngressRouteTCPs in this namespace
+    // Filter out any that are not for this DB or are not read-write
     for ingress_route_tcp in ingress_route_tcps {
-        // Get the name
         let ingress_route_tcp_name = match ingress_route_tcp.metadata.name.clone() {
             Some(ingress_route_tcp_name) => {
-                // We only are handling the read-write endpoint:
-                //        The read-write ingress route tcp will have either the same name as
-                //        namespace (if it was created by conductor) or postgres-rw-
-                //        (if it was created by this code).
                 if !(ingress_route_tcp_name.starts_with(ingress_route_tcp_name_prefix_rw)
                     || ingress_route_tcp_name == namespace)
                 {
-                    // Skipping unexpected ingress route TCP is important for allowing
-                    // manual creation of other ingress route TCPs, and other use cases
-                    // like read only endpoints.
                     debug!(
                         "Skipping non postgres-rw ingress route tcp: {}",
                         ingress_route_tcp_name
@@ -135,11 +130,16 @@ pub async fn reconcile_postgres_ing_route_tcp(
         // Get the settings of our ingress route tcp, so we can update to a new
         // endpoint, if needed.
 
-        // TODO: before merge, clean this up and error handle
-        let service_name_actual = ingress_route_tcp.spec.routes[0].services.clone().unwrap()[0]
+        let service_name_actual = ingress_route_tcp.spec.routes[0]
+            .services
+            .clone()
+            .expect("Ingress route has no services")[0]
             .name
             .clone();
-        let service_port_actual = ingress_route_tcp.spec.routes[0].services.clone().unwrap()[0]
+        let service_port_actual = ingress_route_tcp.spec.routes[0]
+            .services
+            .clone()
+            .expect("Ingress route has no services")[0]
             .port
             .clone();
 
