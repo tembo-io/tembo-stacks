@@ -153,7 +153,7 @@ spec:
                     description: 'Requests describes the minimum amount of compute resources required. If Requests is omitted for a container, it defaults to Limits if that is explicitly specified, otherwise to an implementation-defined value. More info: https://kubernetes.io/docs/concepts/configuration/manage-resources-containers/'
                     type: object
                 type: object
-              runtime_config:
+              runtime_configs:
                 items:
                   properties:
                     name:
@@ -314,7 +314,7 @@ spec:
                 properties:
                   name:
                     type: string
-                  postgres_config:
+                  postgres_configs:
                     items:
                       properties:
                         name:
