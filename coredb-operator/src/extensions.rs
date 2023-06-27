@@ -464,14 +464,14 @@ mod tests {
 
     #[test]
     fn test_extension_plan() {
-        let pg_cron_disabled = Extension {
-            name: "pg_cron".to_owned(),
+        let aggs_for_vecs_disabled = Extension {
+            name: "aggs_for_vecs".to_owned(),
             description: Some("my description".to_owned()),
             locations: vec![ExtensionInstallLocation {
                 enabled: false,
                 database: "postgres".to_owned(),
                 schema: "public".to_owned(),
-                version: Some("1.5.2".to_owned()),
+                version: Some("1.3.0".to_owned()),
             }],
         };
 
@@ -482,11 +482,11 @@ mod tests {
                 enabled: false,
                 database: "postgres".to_owned(),
                 schema: "public".to_owned(),
-                version: Some("1.5.2".to_owned()),
+                version: Some("0.9.0".to_owned()),
             }],
         };
         let diff = vec![pgmq_disabled.clone()];
-        let actual = vec![pg_cron_disabled];
+        let actual = vec![aggs_for_vecs_disabled];
         let (changed, to_install) = extension_plan(&diff, &actual);
         assert!(changed.is_empty());
         assert!(to_install.len() == 1);
@@ -499,24 +499,24 @@ mod tests {
     }
     #[test]
     fn test_diff_and_plan() {
-        let pg_cron_disabled = Extension {
-            name: "pg_cron".to_owned(),
+        let aggs_for_vecs_disabled = Extension {
+            name: "aggs_for_vecs".to_owned(),
             description: Some("my description".to_owned()),
             locations: vec![ExtensionInstallLocation {
                 enabled: false,
                 database: "postgres".to_owned(),
                 schema: "public".to_owned(),
-                version: Some("1.5.2".to_owned()),
+                version: Some("1.3.0".to_owned()),
             }],
         };
-        let pg_cron_enabled = Extension {
-            name: "pg_cron".to_owned(),
+        let aggs_for_vecs_enabled = Extension {
+            name: "aggs_for_vecs".to_owned(),
             description: Some("my description".to_owned()),
             locations: vec![ExtensionInstallLocation {
                 enabled: true,
                 database: "postgres".to_owned(),
                 schema: "public".to_owned(),
-                version: Some("1.5.2".to_owned()),
+                version: Some("1.3.0".to_owned()),
             }],
         };
         let pgmq_disabled = Extension {
@@ -526,7 +526,7 @@ mod tests {
                 enabled: false,
                 database: "postgres".to_owned(),
                 schema: "public".to_owned(),
-                version: Some("1.5.2".to_owned()),
+                version: Some("0.9.0".to_owned()),
             }],
         };
         let pg_stat_enabled = Extension {
@@ -541,13 +541,13 @@ mod tests {
         };
         // three desired
         let desired = vec![
-            pg_cron_disabled.clone(),
+            aggs_for_vecs_disabled.clone(),
             pgmq_disabled.clone(),
             pg_stat_enabled.clone(),
         ];
         // two currently installed
-        let actual = vec![pg_cron_enabled, pgmq_disabled];
-        // pg_cron changed from enabled to disabled, and pg_stat is added
+        let actual = vec![aggs_for_vecs_enabled, pgmq_disabled];
+        // aggs_for_vecs changed from enabled to disabled, and pg_stat is added
         // no change to pgmq
 
         // determine which extensions have changed or are new
@@ -557,15 +557,19 @@ mod tests {
             "expected two changed extensions, found extensions {:?}",
             diff
         );
-        // should be pg_cron and pg_stat that are the diff
+        // should be aggs_for_vecs and pg_stat that are the diff
         assert_eq!(diff[0], pg_stat_enabled, "expected pg_stat, found {:?}", diff[0]);
-        assert_eq!(diff[1], pg_cron_disabled, "expected pg_cron, found {:?}", diff[1]);
+        assert_eq!(
+            diff[1], aggs_for_vecs_disabled,
+            "expected aggs_for_vecs, found {:?}",
+            diff[1]
+        );
         // determine which of these are is a change and which is an install op
         let (changed, to_install) = extension_plan(&diff, &actual);
         assert_eq!(changed.len(), 1);
         assert!(
-            changed[0] == pg_cron_disabled,
-            "expected pg_cron changed to disabled, found {:?}",
+            changed[0] == aggs_for_vecs_disabled,
+            "expected aggs_for_vecs changed to disabled, found {:?}",
             changed[0]
         );
 
@@ -620,8 +624,8 @@ mod tests {
 
     #[test]
     fn test_diff() {
-        let pg_cron_disabled = Extension {
-            name: "pg_cron".to_owned(),
+        let aggs_for_vecs_disabled = Extension {
+            name: "aggs_for_vecs".to_owned(),
             description: Some("my description".to_owned()),
             locations: vec![ExtensionInstallLocation {
                 enabled: false,
@@ -656,41 +660,41 @@ mod tests {
         // case where there are extensions in db but not on spec
         // happens on startup, for example
         let desired = vec![];
-        let actual = vec![pg_cron_disabled.clone(), pgmq_enabled.clone()];
+        let actual = vec![aggs_for_vecs_disabled.clone(), pgmq_enabled.clone()];
         // diff should be that we need to enable pgmq
         let diff = diff_extensions(&desired, &actual);
         assert!(diff.is_empty());
 
-        let desired = vec![pg_cron_disabled.clone(), pgmq_enabled.clone()];
-        let actual = vec![pg_cron_disabled.clone(), pgmq_disabled.clone()];
+        let desired = vec![aggs_for_vecs_disabled.clone(), pgmq_enabled.clone()];
+        let actual = vec![aggs_for_vecs_disabled.clone(), pgmq_disabled.clone()];
         // diff should be that we need to enable pgmq
         let diff = diff_extensions(&desired, &actual);
         assert_eq!(diff.len(), 1);
         assert_eq!(diff[0], pgmq_enabled);
 
         // order does not matter
-        let desired = vec![pgmq_enabled.clone(), pg_cron_disabled.clone()];
-        let actual = vec![pg_cron_disabled.clone(), pgmq_disabled.clone()];
+        let desired = vec![pgmq_enabled.clone(), aggs_for_vecs_disabled.clone()];
+        let actual = vec![aggs_for_vecs_disabled.clone(), pgmq_disabled.clone()];
         // diff will still be to enable pgmq
         let diff = diff_extensions(&desired, &actual);
         assert_eq!(diff.len(), 1);
         assert_eq!(diff[0], pgmq_enabled);
 
-        let desired = vec![pg_cron_disabled.clone(), pgmq_enabled.clone()];
-        let actual = vec![pg_cron_disabled.clone(), pgmq_disabled];
+        let desired = vec![aggs_for_vecs_disabled.clone(), pgmq_enabled.clone()];
+        let actual = vec![aggs_for_vecs_disabled.clone(), pgmq_disabled];
         // diff should be that we need to enable pgmq
         let diff = diff_extensions(&desired, &actual);
         assert_eq!(diff.len(), 1);
         assert_eq!(diff[0], pgmq_enabled);
 
-        let desired = vec![pg_cron_disabled.clone(), pgmq_enabled.clone()];
-        let actual = vec![pg_cron_disabled.clone(), pgmq_enabled.clone()];
+        let desired = vec![aggs_for_vecs_disabled.clone(), pgmq_enabled.clone()];
+        let actual = vec![aggs_for_vecs_disabled.clone(), pgmq_enabled.clone()];
         // diff == actual, so diff should be empty
         let diff = diff_extensions(&desired, &actual);
         assert_eq!(diff.len(), 0);
 
-        let desired = vec![pg_cron_disabled.clone()];
-        let actual = vec![pg_cron_disabled, pgmq_enabled];
+        let desired = vec![aggs_for_vecs_disabled.clone()];
+        let actual = vec![aggs_for_vecs_disabled, pgmq_enabled];
         // less extensions desired than exist - should be a no op
         let diff = diff_extensions(&desired, &actual);
         assert_eq!(diff.len(), 0);

@@ -123,11 +123,11 @@ mod test {
         // conductor receives a CRUDevent from control plane
         let spec_js = serde_json::json!({
             "extensions": Some(vec![Extension {
-                name: "postgis_bundle".to_owned(),
-                description: Some("PostGIS extension".to_owned()),
+                name: "aggs_for_vecs".to_owned(),
+                description: Some("aggs_for_vecs extension".to_owned()),
                 locations: vec![ExtensionInstallLocation {
                     enabled: true,
-                    version: Some("1.1.1".to_owned()),
+                    version: Some("1.3.0".to_owned()),
                     schema: "public".to_owned(),
                     database: "postgres".to_owned(),
                 }],

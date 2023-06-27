@@ -141,11 +141,11 @@ mod test {
                 "replicas": replicas,
                 "extensions": [
                     {
-                        "name": "pg_cron",
-                        "description": "pg_cron extension",
+                        "name": "aggs_for_vecs",
+                        "description": "aggs_for_vecs extension",
                         "locations": [{
                             "enabled": true,
-                            "version": "1.5.2",
+                            "version": "1.3.0",
                             "database": "postgres",
                             "schema": "public"}
                         ]
@@ -290,10 +290,10 @@ mod test {
         println!("{}", result.stdout.clone().unwrap());
         assert!(result.stdout.clone().unwrap().contains("customers"));
 
-        // TODO(ianstanton) we need to properly wait for 'pg_cron' extension to be created
+        // TODO(ianstanton) we need to properly wait for 'aggs_for_vecs' extension to be created
         thread::sleep(Duration::from_millis(10000));
 
-        // Assert extension 'pg_cron' was created
+        // Assert extension 'aggs_for_vecs' was created
         let result = coredb_resource
             .psql(
                 "select extname from pg_catalog.pg_extension;".to_string(),
@@ -304,7 +304,7 @@ mod test {
             .unwrap();
 
         println!("{}", result.stdout.clone().unwrap());
-        assert!(result.stdout.clone().unwrap().contains("pg_cron"));
+        assert!(result.stdout.clone().unwrap().contains("aggs_for_vecs"));
 
         // Assert role 'postgres_exporter' was created
         let result = coredb_resource
@@ -344,11 +344,11 @@ mod test {
                 "replicas": replicas,
                 "extensions": [
                     {
-                        "name": "pg_cron",
-                        "description": "pg_cron extension",
+                        "name": "aggs_for_vecs",
+                        "description": "aggs_for_vecs extension",
                         "locations": [{
                             "enabled": false,
-                            "version": "1.5.2",
+                            "version": "1.3.0",
                             "database": "postgres",
                             "schema": "public"}
                         ]
@@ -374,10 +374,10 @@ mod test {
             .await
             .unwrap();
 
-        // assert does not contain pg_cron
+        // assert does not contain aggs_for_vecs
         assert!(
-            !result.stdout.clone().unwrap().contains("pg_cron"),
-            "results should not contain pg_cron: {}",
+            !result.stdout.clone().unwrap().contains("aggs_for_vecs"),
+            "results should not contain aggs_for_vecs: {}",
             result.stdout.clone().unwrap()
         );
 
@@ -387,10 +387,10 @@ mod test {
         let extensions = status.extensions;
         assert!(extensions.clone().expect("expected extensions").len() > 0);
         let extension = extensions.expect("expected extensions")[0].clone();
-        assert_eq!(extension.name, "pg_cron");
+        assert_eq!(extension.name, "aggs_for_vecs");
         assert_eq!(
             extension.description.expect("expected descriptions"),
-            "pg_cron extension"
+            "aggs_for_vecs extension"
         );
 
         // Change size of a PVC
@@ -729,11 +729,11 @@ mod test {
                 "replicas": 1,
                 "extensions": [
                     {
-                        "name": "pg_cron",
-                        "description": "pg_cron extension",
+                        "name": "aggs_for_vecs",
+                        "description": "aggs_for_vecs extension",
                         "locations": [{
                             "enabled": false,
-                            "version": "1.5.2",
+                            "version": "1.3.0",
                             "database": "postgres",
                             "schema": "public"}
                         ]
