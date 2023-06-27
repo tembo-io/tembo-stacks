@@ -407,7 +407,7 @@ mod pg_param_tests {
         let mut set = BTreeSet::new();
         set.insert("pg_partman_bgw".to_string());
         let spec = CoreDBSpec {
-            runtime_config: Some(vec![
+            runtime_configs: Some(vec![
                 PgConfig {
                     name: "shared_buffers".to_string(),
                     value: "0.5GB".parse().unwrap(),
@@ -419,7 +419,7 @@ mod pg_param_tests {
             ]),
             stack: Some(Stack {
                 name: "tembo".to_string(),
-                postgres_config: Some(vec![
+                postgres_configs: Some(vec![
                     PgConfig {
                         name: "pg_stat_statements.track".to_string(),
                         value: "all".parse().unwrap(),

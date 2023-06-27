@@ -90,7 +90,7 @@ pub struct CoreDBSpec {
 
     pub stack: Option<Stack>,
     // dynamic runtime configs
-    pub runtime_config: Option<Vec<PgConfig>>,
+    pub runtime_configs: Option<Vec<PgConfig>>,
     // configuration overrides, typically defined by the user
     pub override_configs: Option<Vec<PgConfig>>,
 }
@@ -102,9 +102,9 @@ impl CoreDBSpec {
         let stack_configs = self
             .stack
             .as_ref()
-            .and_then(|s| s.postgres_config.clone())
+            .and_then(|s| s.postgres_configs.clone())
             .unwrap_or_default();
-        let runtime_configs = self.runtime_config.clone().unwrap_or_default();
+        let runtime_configs = self.runtime_configs.clone().unwrap_or_default();
         // TODO: configs that come with extension installation
         // e.g. let extension_configs = ...
         // these extensions could be set by the operator, or trunk + operator
@@ -177,6 +177,6 @@ pub struct CoreDBStatus {
 pub struct Stack {
     pub name: String,
     // static configs defined in the tembo stack
-    pub postgres_config: Option<Vec<PgConfig>>,
+    pub postgres_configs: Option<Vec<PgConfig>>,
     // TODO: add other stack attributes as they are supported
 }

@@ -351,4 +351,105 @@ mod test {
         .expect("Custom Resource Definition for CoreDB was not found, do you need to install that before running the tests?");
         client
     }
+
+    #[tokio::test]
+    async fn test_serialization() {
+        let msg = serde_json::json!({
+          "spec": {
+            "image": "quay.io/coredb/coredb-pg-slim:32478b8",
+            "stack": {
+              "name": "Standard",
+              "image": "quay.io/coredb/coredb-pg-slim:32478b8",
+              "services": null,
+              "extensions": [
+                {
+                  "name": "pg_stat_statements",
+                  "locations": [
+                    {
+                      "schema": "public",
+                      "enabled": true,
+                      "version": "1.10.0",
+                      "database": "postgres"
+                    }
+                  ],
+                  "description": null
+                }
+              ],
+              "description": "A balanced Postgres instance",
+              "stack_version": "0.1.0",
+              "infrastructure": {
+                "cpu": "1",
+                "memory": "2Gi",
+                "region": "us-east-1",
+                "provider": "aws",
+                "storage_size": "1Gi",
+                "instance_type": "GeneralPurpose",
+                "storage_class": "gp3"
+              },
+              "postgres_config": [
+                {
+                  "name": "track_activity_query_size",
+                  "value": "2048"
+                },
+                {
+                  "name": "pg_stat_statements.track",
+                  "value": "all"
+                },
+                {
+                  "name": "shared_preload_libraries",
+                  "value": "pg_stat_statements"
+                }
+              ],
+              "postgres_metrics": null,
+              "postgres_config_engine": "standard"
+            },
+            "metrics": {
+              "image": "quay.io/prometheuscommunity/postgres-exporter:v0.12.0",
+              "enabled": true,
+              "queries": null
+            },
+            "storage": "1Gi",
+            "resources": {
+              "limits": {
+                "cpu": "1",
+                "memory": "2Gi"
+              }
+            },
+            "extensions": [
+              {
+                "name": "pg_stat_statements",
+                "locations": [
+                  {
+                    "schema": "public",
+                    "enabled": true,
+                    "version": "1.10.0",
+                    "database": "postgres"
+                  }
+                ],
+                "description": null
+              }
+            ],
+            "runtime_configs": [
+              {
+                "name": "shared_buffers",
+                "value": "0.5GB"
+              }
+            ],
+            "postgresExporterEnabled": true
+          },
+          "dbname": "adam-dev-2g",
+          "event_id": "NA.org_2ONiyjwzgzh8fkw8WUVpJc6Zuhc.Standard.inst_1687838860996_DanO7r_1",
+          "event_type": "Create",
+          "data_plane_id": "org_2ONiyjwzgzh8fkw8WUVpJc6Zuhc",
+          "organization_name": "coredb"
+        });
+        let msg: types::CRUDevent = serde_json::from_value(msg).expect("deserialization failed");
+        println!("msg: {:#?}", msg);
+        let configs = msg
+            .spec
+            .expect("no spec")
+            .runtime_configs
+            .expect("no runtime configs");
+        assert_eq!(configs.len(), 1);
+    }
 }
