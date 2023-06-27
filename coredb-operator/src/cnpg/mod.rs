@@ -1,4 +1,4 @@
 mod backups;
 mod clusters;
 mod poolers;
-mod secheduledbackups;
+mod scheduledbackups;
