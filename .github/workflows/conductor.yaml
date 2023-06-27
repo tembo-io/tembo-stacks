@@ -18,13 +18,7 @@ on:
     paths:
     - '.github/workflows/conductor.yaml'
     - 'conductor/**'
-  # Always run tests on main or release branches
-  push:
-    branches:
-      - main
-    paths:
-    - '.github/workflows/conductor.yaml'
-    - 'conductor/**'
+    - 'charts/coredb-operator/templates/crd.yaml'
 
 jobs:
   functional_test:
