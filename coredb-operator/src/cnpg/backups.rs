@@ -3,10 +3,15 @@
 // kopium version: 0.15.0
 
 use kube::CustomResource;
-use serde::{Serialize, Deserialize};
+use serde::{Deserialize, Serialize};
 
 #[derive(CustomResource, Serialize, Deserialize, Clone, Debug)]
-#[kube(group = "postgresql.cnpg.io", version = "v1", kind = "Backup", plural = "backups")]
+#[kube(
+    group = "postgresql.cnpg.io",
+    version = "v1",
+    kind = "Backup",
+    plural = "backups"
+)]
 #[kube(namespaced)]
 #[kube(status = "BackupStatus")]
 #[kube(schema = "disabled")]
@@ -60,7 +65,11 @@ pub struct BackupStatus {
     pub endpoint_url: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub error: Option<String>,
-    #[serde(default, skip_serializing_if = "Option::is_none", rename = "googleCredentials")]
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        rename = "googleCredentials"
+    )]
     pub google_credentials: Option<BackupStatusGoogleCredentials>,
     #[serde(default, skip_serializing_if = "Option::is_none", rename = "instanceID")]
     pub instance_id: Option<BackupStatusInstanceId>,
@@ -80,7 +89,11 @@ pub struct BackupStatus {
 pub struct BackupStatusAzureCredentials {
     #[serde(default, skip_serializing_if = "Option::is_none", rename = "connectionString")]
     pub connection_string: Option<BackupStatusAzureCredentialsConnectionString>,
-    #[serde(default, skip_serializing_if = "Option::is_none", rename = "inheritFromAzureAD")]
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        rename = "inheritFromAzureAD"
+    )]
     pub inherit_from_azure_ad: Option<bool>,
     #[serde(default, skip_serializing_if = "Option::is_none", rename = "storageAccount")]
     pub storage_account: Option<BackupStatusAzureCredentialsStorageAccount>,
@@ -122,7 +135,11 @@ pub struct BackupStatusEndpointCa {
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct BackupStatusGoogleCredentials {
-    #[serde(default, skip_serializing_if = "Option::is_none", rename = "applicationCredentials")]
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        rename = "applicationCredentials"
+    )]
     pub application_credentials: Option<BackupStatusGoogleCredentialsApplicationCredentials>,
     #[serde(default, skip_serializing_if = "Option::is_none", rename = "gkeEnvironment")]
     pub gke_environment: Option<bool>,
@@ -146,7 +163,11 @@ pub struct BackupStatusInstanceId {
 pub struct BackupStatusS3Credentials {
     #[serde(default, skip_serializing_if = "Option::is_none", rename = "accessKeyId")]
     pub access_key_id: Option<BackupStatusS3CredentialsAccessKeyId>,
-    #[serde(default, skip_serializing_if = "Option::is_none", rename = "inheritFromIAMRole")]
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        rename = "inheritFromIAMRole"
+    )]
     pub inherit_from_iam_role: Option<bool>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub region: Option<BackupStatusS3CredentialsRegion>,
@@ -179,4 +200,3 @@ pub struct BackupStatusS3CredentialsSessionToken {
     pub key: String,
     pub name: String,
 }
-
