@@ -608,7 +608,7 @@ mod pg_param_tests {
         });
         let deserialized: PgConfig = serde_json::from_value(js).expect("failed to deserialize");
         match deserialized.value {
-            ConfigValue::Multiple(set) => panic!("expected single value"),
+            ConfigValue::Multiple(_) => panic!("expected single value"),
             ConfigValue::Single(s) => assert_eq!(s, "a,b,c"),
         }
     }

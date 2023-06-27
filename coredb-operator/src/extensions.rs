@@ -499,24 +499,24 @@ mod tests {
     }
     #[test]
     fn test_diff_and_plan() {
-        let aggs_for_vecs_disabled = Extension {
-            name: "aggs_for_vecs".to_owned(),
+        let postgis_disabled = Extension {
+            name: "postgis".to_owned(),
             description: Some("my description".to_owned()),
             locations: vec![ExtensionInstallLocation {
                 enabled: false,
                 database: "postgres".to_owned(),
                 schema: "public".to_owned(),
-                version: Some("1.3.0".to_owned()),
+                version: Some("1.1.1".to_owned()),
             }],
         };
-        let aggs_for_vecs_enabled = Extension {
-            name: "aggs_for_vecs".to_owned(),
+        let postgis_enabled = Extension {
+            name: "postgis".to_owned(),
             description: Some("my description".to_owned()),
             locations: vec![ExtensionInstallLocation {
                 enabled: true,
                 database: "postgres".to_owned(),
                 schema: "public".to_owned(),
-                version: Some("1.3.0".to_owned()),
+                version: Some("1.1.1".to_owned()),
             }],
         };
         let pgmq_disabled = Extension {
@@ -526,7 +526,7 @@ mod tests {
                 enabled: false,
                 database: "postgres".to_owned(),
                 schema: "public".to_owned(),
-                version: Some("0.9.0".to_owned()),
+                version: Some("1.1.1".to_owned()),
             }],
         };
         let pg_stat_enabled = Extension {
@@ -536,18 +536,18 @@ mod tests {
                 enabled: true,
                 database: "postgres".to_owned(),
                 schema: "public".to_owned(),
-                version: Some("1.5.2".to_owned()),
+                version: Some("1.1.1".to_owned()),
             }],
         };
         // three desired
         let desired = vec![
-            aggs_for_vecs_disabled.clone(),
+            postgis_disabled.clone(),
             pgmq_disabled.clone(),
             pg_stat_enabled.clone(),
         ];
         // two currently installed
-        let actual = vec![aggs_for_vecs_enabled, pgmq_disabled];
-        // aggs_for_vecs changed from enabled to disabled, and pg_stat is added
+        let actual = vec![postgis_enabled, pgmq_disabled];
+        // postgis changed from enabled to disabled, and pg_stat is added
         // no change to pgmq
 
         // determine which extensions have changed or are new
@@ -557,19 +557,15 @@ mod tests {
             "expected two changed extensions, found extensions {:?}",
             diff
         );
-        // should be aggs_for_vecs and pg_stat that are the diff
+        // should be postgis and pg_stat that are the diff
         assert_eq!(diff[0], pg_stat_enabled, "expected pg_stat, found {:?}", diff[0]);
-        assert_eq!(
-            diff[1], aggs_for_vecs_disabled,
-            "expected aggs_for_vecs, found {:?}",
-            diff[1]
-        );
+        assert_eq!(diff[1], postgis_disabled, "expected postgis, found {:?}", diff[1]);
         // determine which of these are is a change and which is an install op
         let (changed, to_install) = extension_plan(&diff, &actual);
         assert_eq!(changed.len(), 1);
         assert!(
-            changed[0] == aggs_for_vecs_disabled,
-            "expected aggs_for_vecs changed to disabled, found {:?}",
+            changed[0] == postgis_disabled,
+            "expected postgis changed to disabled, found {:?}",
             changed[0]
         );
 
