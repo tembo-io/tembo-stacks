@@ -141,11 +141,11 @@ mod test {
                 "replicas": replicas,
                 "extensions": [
                     {
-                        "name": "postgis_bundle",
-                        "description": "PostGIS extension",
+                        "name": "pg_cron",
+                        "description": "pg_cron extension",
                         "locations": [{
                             "enabled": true,
-                            "version": "3.3.3",
+                            "version": "1.5.2",
                             "database": "postgres",
                             "schema": "public"}
                         ]
@@ -290,10 +290,10 @@ mod test {
         println!("{}", result.stdout.clone().unwrap());
         assert!(result.stdout.clone().unwrap().contains("customers"));
 
-        // TODO(ianstanton) we need to properly wait for 'postgis' extension to be created
+        // TODO(ianstanton) we need to properly wait for 'pg_cron' extension to be created
         thread::sleep(Duration::from_millis(10000));
 
-        // Assert extension 'postgis' was created
+        // Assert extension 'pg_cron' was created
         let result = coredb_resource
             .psql(
                 "select extname from pg_catalog.pg_extension;".to_string(),
@@ -304,7 +304,7 @@ mod test {
             .unwrap();
 
         println!("{}", result.stdout.clone().unwrap());
-        assert!(result.stdout.clone().unwrap().contains("postgis"));
+        assert!(result.stdout.clone().unwrap().contains("pg_cron"));
 
         // Assert role 'postgres_exporter' was created
         let result = coredb_resource
@@ -344,11 +344,11 @@ mod test {
                 "replicas": replicas,
                 "extensions": [
                     {
-                        "name": "postgis_bundle",
-                        "description": "PostGIS extension",
+                        "name": "pg_cron",
+                        "description": "pg_cron extension",
                         "locations": [{
                             "enabled": false,
-                            "version": "3.3.3",
+                            "version": "1.5.2",
                             "database": "postgres",
                             "schema": "public"}
                         ]
@@ -374,10 +374,10 @@ mod test {
             .await
             .unwrap();
 
-        // assert does not contain postgis
+        // assert does not contain pg_cron
         assert!(
-            !result.stdout.clone().unwrap().contains("postgis"),
-            "results should not contain postgis: {}",
+            !result.stdout.clone().unwrap().contains("pg_cron"),
+            "results should not contain pg_cron: {}",
             result.stdout.clone().unwrap()
         );
 
@@ -387,10 +387,10 @@ mod test {
         let extensions = status.extensions;
         assert!(extensions.clone().expect("expected extensions").len() > 0);
         let extension = extensions.expect("expected extensions")[0].clone();
-        assert_eq!(extension.name, "postgis");
+        assert_eq!(extension.name, "pg_cron");
         assert_eq!(
             extension.description.expect("expected descriptions"),
-            "PostGIS extension"
+            "pg_cron extension"
         );
 
         // Change size of a PVC
@@ -729,11 +729,11 @@ mod test {
                 "replicas": 1,
                 "extensions": [
                     {
-                        "name": "postgis_bundle",
-                        "description": "PostGIS extension",
+                        "name": "pg_cron",
+                        "description": "pg_cron extension",
                         "locations": [{
                             "enabled": false,
-                            "version": "3.3.3",
+                            "version": "1.5.2",
                             "database": "postgres",
                             "schema": "public"}
                         ]
