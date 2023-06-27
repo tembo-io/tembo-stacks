@@ -198,7 +198,7 @@ mod test {
             .contains_key("pg_postmaster"));
 
         assert!(
-            spec.extensions.len() > 0,
+            !spec.extensions.is_empty(),
             "Extension object missing from spec"
         );
         let extensions = spec.extensions;
