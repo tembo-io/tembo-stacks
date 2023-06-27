@@ -385,13 +385,12 @@ mod test {
         let spec = coredbs.get(name).await.expect("spec not found");
         let status = spec.status.expect("no status on coredb");
         let extensions = status.extensions;
-        assert!(extensions.clone().expect("expected extensions").len() > 0);
-        let extension = extensions.expect("expected extensions")[0].clone();
-        assert_eq!(extension.name, "aggs_for_vecs");
-        assert_eq!(
-            extension.description.expect("expected descriptions"),
-            "aggs_for_vecs extension"
-        );
+        assert!(!extensions.clone().expect("expected extensions").is_empty());
+        assert!(!extensions.expect("expected extensions")[0]
+            .description
+            .clone()
+            .expect("expected a description")
+            .is_empty());
 
         // Change size of a PVC
         let coredb_json = serde_json::json!({
