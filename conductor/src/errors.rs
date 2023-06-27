@@ -27,6 +27,6 @@ pub enum ConductorError {
     #[error("Didn't find Postgres connection information")]
     PostgresConnectionInfoNotFound,
 
-    #[error("Didn't find Postgres connection information")]
+    #[error("Failed to parse postgres connection information")]
     ParsingPostgresConnectionError,
 }
