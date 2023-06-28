@@ -8,6 +8,7 @@ use futures::{
 use crate::{
     config::Config,
     cronjob::reconcile_cronjob,
+    deployment_postgres_exporter::reconcile_prometheus_exporter,
     exec::{ExecCommand, ExecOutput},
     psql::{PsqlCommand, PsqlOutput},
     rbac::reconcile_rbac,
@@ -36,7 +37,10 @@ use crate::{
     secret::reconcile_secret,
 };
 use k8s_openapi::{
-    api::core::v1::{Namespace, Pod},
+    api::{
+        core::v1::{Namespace, Pod},
+        rbac::v1::PolicyRule,
+    },
     apimachinery::pkg::util::intstr::IntOrString,
 };
 use kube::runtime::wait::Condition;
@@ -107,6 +111,49 @@ fn error_policy(cdb: Arc<CoreDB>, error: &Error, ctx: Arc<Context>) -> Action {
     Action::requeue(Duration::from_secs(5 * 60))
 }
 
+// Create role policy rulesets
+async fn create_policy_rules(cdb: &CoreDB) -> Vec<PolicyRule> {
+    vec![
+        // This policy allows get, list, watch access to the coredb resource
+        PolicyRule {
+            api_groups: Some(vec!["coredb.io".to_owned()]),
+            resource_names: Some(vec![cdb.name_any()]),
+            resources: Some(vec!["coredbs".to_owned()]),
+            verbs: vec!["get".to_string(), "list".to_string(), "watch".to_string()],
+            ..PolicyRule::default()
+        },
+        // This policy allows get, patch, update, watch access to the coredb/status resource
+        PolicyRule {
+            api_groups: Some(vec!["coredb.io".to_owned()]),
+            resource_names: Some(vec![cdb.name_any()]),
+            resources: Some(vec!["coredbs/status".to_owned()]),
+            verbs: vec![
+                "get".to_string(),
+                "patch".to_string(),
+                "update".to_string(),
+                "watch".to_string(),
+            ],
+            ..PolicyRule::default()
+        },
+        // This policy allows get, watch access to a secret in the namespace
+        PolicyRule {
+            api_groups: Some(vec!["".to_owned()]),
+            resource_names: Some(vec![format!("{}-connection", cdb.name_any())]),
+            resources: Some(vec!["secrets".to_owned()]),
+            verbs: vec!["get".to_string(), "watch".to_string()],
+            ..PolicyRule::default()
+        },
+        // This policy for now is specifically open for all configmaps in the namespace
+        // We currently do not have any configmaps
+        PolicyRule {
+            api_groups: Some(vec!["".to_owned()]),
+            resources: Some(vec!["configmaps".to_owned()]),
+            verbs: vec!["get".to_string(), "watch".to_string()],
+            ..PolicyRule::default()
+        },
+    ]
+}
+
 impl CoreDB {
     // Reconcile (for non-finalizer related changes)
     async fn reconcile(&self, ctx: Arc<Context>, cfg: &Config) -> Result<Action, Action> {
@@ -151,8 +198,9 @@ impl CoreDB {
                 })?;
         }
 
+
         // reconcile service account, role, and role binding
-        reconcile_rbac(self, ctx.clone()).await.map_err(|e| {
+        reconcile_rbac(self, ctx.clone(), None, create_policy_rules(self).await).await.map_err(|e| {
             error!("Error reconciling service account: {:?}", e);
             Action::requeue(Duration::from_secs(300))
         })?;
@@ -182,6 +230,14 @@ impl CoreDB {
             error!("Error reconciling statefulset: {:?}", e);
             Action::requeue(Duration::from_secs(300))
         })?;
+
+        // reconcile prometheus exporter deployment if enabled
+        if self.spec.postgresExporterEnabled {
+            reconcile_prometheus_exporter(self, ctx.clone()).await.map_err(|e| {
+                error!("Error reconciling prometheus exporter deployment: {:?}", e);
+                Action::requeue(Duration::from_secs(300))
+            })?;
+        };
 
         // reconcile service
         reconcile_svc(self, ctx.clone()).await.map_err(|e| {

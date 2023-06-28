@@ -27,6 +27,7 @@ mod rbac;
 mod secret;
 mod service;
 mod statefulset;
+mod deployment_postgres_exporter;
 
 use thiserror::Error;
 
