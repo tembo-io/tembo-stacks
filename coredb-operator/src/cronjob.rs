@@ -1,8 +1,4 @@
-use crate::{
-    rbac::reconcile_rbac,
-    apis::coredb_types::CoreDB,
-    Context, Error,
-};
+use crate::{apis::coredb_types::CoreDB, rbac::reconcile_rbac, Context, Error};
 use k8s_openapi::{
     api::{
         batch::v1::{CronJob, CronJobSpec, JobSpec, JobTemplateSpec},

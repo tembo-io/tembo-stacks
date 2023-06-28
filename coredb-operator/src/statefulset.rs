@@ -1,8 +1,4 @@
-use crate::{
-    apis::coredb_types::CoreDB,
-    defaults::default_image,
-    Context, Error, Result,
-};
+use crate::{apis::coredb_types::CoreDB, defaults::default_image, Context, Error, Result};
 use k8s_openapi::{
     api::{
         apps::v1::{StatefulSet, StatefulSetSpec},
@@ -114,7 +110,7 @@ pub fn stateful_set_from_cdb(cdb: &CoreDB) -> StatefulSet {
             security_context: Some(SecurityContext {
                 run_as_user: Some(cdb.spec.uid as i64),
                 allow_privilege_escalation: Some(false),
-    ..SecurityContext::default()
+                ..SecurityContext::default()
             }),
             name: "postgres".to_string(),
             image: if image.is_empty() {

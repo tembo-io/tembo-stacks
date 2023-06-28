@@ -19,7 +19,12 @@ pub struct Rbac {
 }
 
 // reconcile kubernetes rbac resources
-pub async fn reconcile_rbac(cdb: &CoreDB, ctx: Arc<Context>, suffix: Option<&str>, policy_rules: Vec<PolicyRule>) -> Result<Rbac, Error> {
+pub async fn reconcile_rbac(
+    cdb: &CoreDB,
+    ctx: Arc<Context>,
+    suffix: Option<&str>,
+    policy_rules: Vec<PolicyRule>,
+) -> Result<Rbac, Error> {
     // reconcile service account
     let service_account = reconcile_service_account(cdb, ctx.clone(), suffix).await?;
     let sa = service_account.clone();
@@ -37,11 +42,17 @@ pub async fn reconcile_rbac(cdb: &CoreDB, ctx: Arc<Context>, suffix: Option<&str
 }
 
 // reconcile a kubernetes service account
-async fn reconcile_service_account(cdb: &CoreDB, ctx: Arc<Context>, suffix: Option<&str>) -> Result<ServiceAccount, Error> {
-    let suffix = suffix.map_or("sa".to_owned(), |s| if s.is_empty() { 
-        "sa".to_owned() 
-    } else { 
-        s.to_owned() 
+async fn reconcile_service_account(
+    cdb: &CoreDB,
+    ctx: Arc<Context>,
+    suffix: Option<&str>,
+) -> Result<ServiceAccount, Error> {
+    let suffix = suffix.map_or("sa".to_owned(), |s| {
+        if s.is_empty() {
+            "sa".to_owned()
+        } else {
+            s.to_owned()
+        }
     });
     let client = ctx.client.clone();
     let ns = cdb.namespace().unwrap();
@@ -79,11 +90,18 @@ async fn reconcile_service_account(cdb: &CoreDB, ctx: Arc<Context>, suffix: Opti
     Ok(sa)
 }
 
-async fn reconcile_role(cdb: &CoreDB, ctx: Arc<Context>, suffix: Option<&str>, policy_rules: Vec<PolicyRule>) -> Result<Role, Error> {
-    let suffix = suffix.map_or("role".to_owned(), |s| if s.is_empty() { 
-        "role".to_owned() 
-    } else { 
-        s.to_owned() 
+async fn reconcile_role(
+    cdb: &CoreDB,
+    ctx: Arc<Context>,
+    suffix: Option<&str>,
+    policy_rules: Vec<PolicyRule>,
+) -> Result<Role, Error> {
+    let suffix = suffix.map_or("role".to_owned(), |s| {
+        if s.is_empty() {
+            "role".to_owned()
+        } else {
+            s.to_owned()
+        }
     });
     let client = ctx.client.clone();
     let ns = cdb.namespace().unwrap();
@@ -121,10 +139,12 @@ async fn reconcile_role_binding(
     role: Role,
     suffix: Option<&str>,
 ) -> Result<RoleBinding, Error> {
-    let suffix = suffix.map_or("role-binding".to_owned(), |s| if s.is_empty() { 
-        "role-binding".to_owned() 
-    } else { 
-        s.to_owned() 
+    let suffix = suffix.map_or("role-binding".to_owned(), |s| {
+        if s.is_empty() {
+            "role-binding".to_owned()
+        } else {
+            s.to_owned()
+        }
     });
     let client = ctx.client.clone();
     let ns = cdb.namespace().unwrap();

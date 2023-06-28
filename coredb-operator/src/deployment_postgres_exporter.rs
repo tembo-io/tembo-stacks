@@ -9,19 +9,16 @@ use k8s_openapi::{
     api::{
         apps::v1::{Deployment, DeploymentSpec},
         core::v1::{
-            Container, ContainerPort, EnvVar, PodSpec, PodTemplateSpec, Probe, SecurityContext, VolumeMount,
+            ConfigMapVolumeSource, Container, ContainerPort, EnvVar, HTTPGetAction, PodSpec, PodTemplateSpec,
+            Probe, SecurityContext, Volume, VolumeMount,
         },
         rbac::v1::PolicyRule,
     },
-    apimachinery::pkg::apis::meta::v1::LabelSelector,
+    apimachinery::pkg::{apis::meta::v1::LabelSelector, util::intstr::IntOrString},
 };
 use kube::{
     api::{Api, ObjectMeta, Patch, PatchParams, ResourceExt},
     Resource,
-};
-use k8s_openapi::{
-    api::core::v1::{ConfigMapVolumeSource, HTTPGetAction, Volume},
-    apimachinery::pkg::util::intstr::IntOrString,
 };
 use std::{collections::BTreeMap, sync::Arc};
 
@@ -69,14 +66,12 @@ pub async fn reconcile_prometheus_exporter(cdb: &CoreDB, ctx: Arc<Context>) -> R
     };
 
     // Generate ContainerPort for the Container
-    let container_port = vec![
-        ContainerPort {
-            container_port: 9187,
-            name: Some("metrics".to_string()),
-            protocol: Some("TCP".to_string()),
-            ..ContainerPort::default()
-        },
-    ];
+    let container_port = vec![ContainerPort {
+        container_port: 9187,
+        name: Some("metrics".to_string()),
+        protocol: Some("TCP".to_string()),
+        ..ContainerPort::default()
+    }];
 
     // Generate SecurityContext for the Container
     let security_context = SecurityContext {
@@ -100,44 +95,38 @@ pub async fn reconcile_prometheus_exporter(cdb: &CoreDB, ctx: Arc<Context>) -> R
     ];
 
     // Generate VolumeMounts for the Container
-    let exporter_vol_mounts = vec![
-        VolumeMount {
-            name: EXPORTER_VOLUME.to_owned(),
-            mount_path: PROM_CFG_DIR.to_string(),
-            ..VolumeMount::default()
-        },
-    ];
+    let exporter_vol_mounts = vec![VolumeMount {
+        name: EXPORTER_VOLUME.to_owned(),
+        mount_path: PROM_CFG_DIR.to_string(),
+        ..VolumeMount::default()
+    }];
 
     // Generate Volumes for the PodSpec
-    let exporter_volumes = vec![
-        Volume {
-            config_map: Some(ConfigMapVolumeSource {
-                name: Some(EXPORTER_VOLUME.to_owned()),
-                ..ConfigMapVolumeSource::default()
-            }),
-            name: EXPORTER_CONFIGMAP.to_owned(),
-            ..Volume::default()
-        },
-    ];
+    let exporter_volumes = vec![Volume {
+        config_map: Some(ConfigMapVolumeSource {
+            name: Some(EXPORTER_VOLUME.to_owned()),
+            ..ConfigMapVolumeSource::default()
+        }),
+        name: EXPORTER_CONFIGMAP.to_owned(),
+        ..Volume::default()
+    }];
 
     // Generate the PodSpec for the PodTemplateSpec
     let pod_spec = PodSpec {
-        containers: vec![
-            Container {
-                args: Some(vec!["--auto-discover-databases".to_string()]),
-                env: Some(env_vars),
-                image: Some(default_postgres_exporter_image()),
-                name: name.to_string(),
-                ports: Some(container_port),
-                readiness_probe: Some(readiness_probe),
-                security_context: Some(security_context),
-                volume_mounts: Some(exporter_vol_mounts),
-                ..Container::default()
-            },
-        ],
+        containers: vec![Container {
+            args: Some(vec!["--auto-discover-databases".to_string()]),
+            env: Some(env_vars),
+            image: Some(default_postgres_exporter_image()),
+            name: name.to_string(),
+            ports: Some(container_port),
+            readiness_probe: Some(readiness_probe),
+            security_context: Some(security_context),
+            volume_mounts: Some(exporter_vol_mounts),
+            ..Container::default()
+        }],
         service_account: rbac.service_account.metadata.name.clone(),
         service_account_name: rbac.service_account.metadata.name.clone(),
-        volumes: Some(exporter_volumes), 
+        volumes: Some(exporter_volumes),
         ..PodSpec::default()
     };
 

@@ -200,10 +200,12 @@ impl CoreDB {
 
 
         // reconcile service account, role, and role binding
-        reconcile_rbac(self, ctx.clone(), None, create_policy_rules(self).await).await.map_err(|e| {
-            error!("Error reconciling service account: {:?}", e);
-            Action::requeue(Duration::from_secs(300))
-        })?;
+        reconcile_rbac(self, ctx.clone(), None, create_policy_rules(self).await)
+            .await
+            .map_err(|e| {
+                error!("Error reconciling service account: {:?}", e);
+                Action::requeue(Duration::from_secs(300))
+            })?;
 
         // reconcile secret
         reconcile_secret(self, ctx.clone()).await.map_err(|e| {
@@ -233,10 +235,12 @@ impl CoreDB {
 
         // reconcile prometheus exporter deployment if enabled
         if self.spec.postgresExporterEnabled {
-            reconcile_prometheus_exporter(self, ctx.clone()).await.map_err(|e| {
-                error!("Error reconciling prometheus exporter deployment: {:?}", e);
-                Action::requeue(Duration::from_secs(300))
-            })?;
+            reconcile_prometheus_exporter(self, ctx.clone())
+                .await
+                .map_err(|e| {
+                    error!("Error reconciling prometheus exporter deployment: {:?}", e);
+                    Action::requeue(Duration::from_secs(300))
+                })?;
         };
 
         // reconcile service

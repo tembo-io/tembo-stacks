@@ -19,6 +19,7 @@ pub mod defaults;
 mod errors;
 
 #[allow(unused_imports)] mod cnpg;
+mod deployment_postgres_exporter;
 #[cfg(test)] pub mod fixtures;
 mod ingress;
 pub mod ingress_route_tcp_crd;
@@ -27,7 +28,6 @@ mod rbac;
 mod secret;
 mod service;
 mod statefulset;
-mod deployment_postgres_exporter;
 
 use thiserror::Error;
 
