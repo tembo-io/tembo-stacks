@@ -954,7 +954,7 @@ mod test {
         thread::sleep(Duration::from_millis(8000));
 
         // pod must not be ready
-        let res = coredb_resource.primary_pod(client.clone()).await;
+        let res = coredb_resource.primary_pod_coredb(client.clone()).await;
         assert!(res.is_err());
 
         // start again

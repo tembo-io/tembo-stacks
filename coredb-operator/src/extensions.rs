@@ -139,7 +139,7 @@ pub async fn install_extension(
     let client = ctx.client.clone();
 
     let pod_name = cdb
-        .primary_pod(client.clone())
+        .primary_pod_coredb(client.clone())
         .await
         .unwrap()
         .metadata

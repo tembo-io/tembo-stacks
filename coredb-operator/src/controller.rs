@@ -115,9 +115,27 @@ impl CoreDB {
         let ns = self.namespace().unwrap();
         let name = self.name_any();
         let coredbs: Api<CoreDB> = Api::namespaced(client.clone(), &ns);
+        let ns_api: Api<Namespace> = Api::all(client.clone());
+
+        // We will migrate databases by applying this label manually to the namespace
+        let cnpg_enabled_label = "tembo-pod-init.tembo.io/watch";
+        // Get labels of the current namespace
+        let ns_labels = ns_api
+            .get(&ns)
+            .await
+            .map_err(|e| Error::KubeError(e.into()))?
+            .metadata
+            .labels
+            .unwrap_or_default();
+        let cnpg_enabled = ns_labels.contains_key(cnpg_enabled_label);
 
         match std::env::var("DATA_PLANE_BASEDOMAIN") {
             Ok(basedomain) => {
+                let service_name_read_write = match cnpg_enabled {
+                    // When CNPG is enabled, we use the CNPG service name
+                    true => format!("{}-rw", self.name_any().as_str()).as_str(),
+                    false => self.name_any().as_str(),
+                };
                 reconcile_postgres_ing_route_tcp(
                     self,
                     ctx.clone(),
@@ -151,47 +169,52 @@ impl CoreDB {
                 })?;
         }
 
-        // reconcile service account, role, and role binding
-        reconcile_rbac(self, ctx.clone()).await.map_err(|e| {
-            error!("Error reconciling service account: {:?}", e);
-            Action::requeue(Duration::from_secs(300))
-        })?;
-
-        // reconcile secret
-        reconcile_secret(self, ctx.clone()).await.map_err(|e| {
-            error!("Error reconciling secret: {:?}", e);
-            Action::requeue(Duration::from_secs(300))
-        })?;
-
-        // reconcile cronjob for backups
-        reconcile_cronjob(self, ctx.clone()).await.map_err(|e| {
-            error!("Error reconciling cronjob: {:?}", e);
-            Action::requeue(Duration::from_secs(300))
-        })?;
-
-        // handle postgres configs
-        reconcile_pg_parameters_configmap(self, client.clone(), &ns)
-            .await
-            .map_err(|e| {
-                error!("Error reconciling postgres configmap: {:?}", e);
+        // Skip reconcilation of CoreDB-specific resources if CNPG is enabled
+        // After migration, configure deletion of these resources TEM-1208
+        // Then, remove this block TEM-1209
+        if !cnpg_enabled {
+            // reconcile service account, role, and role binding
+            reconcile_rbac(self, ctx.clone()).await.map_err(|e| {
+                error!("Error reconciling service account: {:?}", e);
                 Action::requeue(Duration::from_secs(300))
             })?;
 
-        // reconcile statefulset
-        reconcile_sts(self, ctx.clone()).await.map_err(|e| {
-            error!("Error reconciling statefulset: {:?}", e);
-            Action::requeue(Duration::from_secs(300))
-        })?;
+            // reconcile secret
+            reconcile_secret(self, ctx.clone()).await.map_err(|e| {
+                error!("Error reconciling secret: {:?}", e);
+                Action::requeue(Duration::from_secs(300))
+            })?;
 
-        // reconcile service
-        reconcile_svc(self, ctx.clone()).await.map_err(|e| {
-            error!("Error reconciling service: {:?}", e);
-            Action::requeue(Duration::from_secs(300))
-        })?;
+            // reconcile cronjob for backups
+            reconcile_cronjob(self, ctx.clone()).await.map_err(|e| {
+                error!("Error reconciling cronjob: {:?}", e);
+                Action::requeue(Duration::from_secs(300))
+            })?;
+
+            // handle postgres configs
+            reconcile_pg_parameters_configmap(self, client.clone(), &ns)
+                .await
+                .map_err(|e| {
+                    error!("Error reconciling postgres configmap: {:?}", e);
+                    Action::requeue(Duration::from_secs(300))
+                })?;
+
+            // reconcile statefulset
+            reconcile_sts(self, ctx.clone()).await.map_err(|e| {
+                error!("Error reconciling statefulset: {:?}", e);
+                Action::requeue(Duration::from_secs(300))
+            })?;
+
+            // reconcile service
+            reconcile_svc(self, ctx.clone()).await.map_err(|e| {
+                error!("Error reconciling service: {:?}", e);
+                Action::requeue(Duration::from_secs(300))
+            })?;
+        }
 
         let new_status = match self.spec.stop {
             false => {
-                let primary_pod = self.primary_pod(ctx.client.clone()).await;
+                let primary_pod = self.primary_pod_coredb(ctx.client.clone()).await;
                 if primary_pod.is_err() {
                     info!(
                         "Did not find primary pod of {}, waiting a short period",
@@ -222,7 +245,10 @@ impl CoreDB {
                     })?;
 
                 if !is_pod_ready().matches_object(Some(&primary_pod)) {
-                    info!("Did not pod ready {}, waiting a short period", self.name_any());
+                    info!(
+                        "Did not find pod ready {}, waiting a short period",
+                        self.name_any()
+                    );
                     return Ok(Action::requeue(Duration::from_secs(1)));
                 }
 
@@ -232,24 +258,6 @@ impl CoreDB {
                         error!("Error reconciling extensions: {:?}", e);
                         Action::requeue(Duration::from_secs(300))
                     })?;
-
-                // Check cfg.enable_initial_backup to make sure we should run the initial backup
-                // if it's true, run the backup
-                if cfg.enable_initial_backup {
-                    let backup_command = vec![
-                        "/bin/sh".to_string(),
-                        "-c".to_string(),
-                        "/usr/bin/wal-g backup-push /var/lib/postgresql/data --full --verify".to_string(),
-                    ];
-
-                    let _backup_result = self
-                        .exec(primary_pod.name_any(), client, &backup_command)
-                        .await
-                        .map_err(|e| {
-                            error!("Error running backup: {:?}", e);
-                            Action::requeue(Duration::from_secs(300))
-                        })?;
-                }
 
                 CoreDBStatus {
                     running: true,
@@ -311,11 +319,58 @@ impl CoreDB {
         Ok(Action::await_change())
     }
 
-    pub async fn primary_pod(&self, client: Client) -> Result<Pod, Error> {
+    pub async fn all_running_pods(&self, client: Client) -> Result<Vec<Pod>, Error> {
         let sts = stateful_set_from_cdb(self);
         let sts_name = sts.metadata.name.unwrap();
         let sts_namespace = sts.metadata.namespace.unwrap();
         let label_selector = format!("statefulset={sts_name}");
+        let list_params = ListParams::default().labels(&label_selector);
+        let pods: Api<Pod> = Api::namespaced(client, &sts_namespace);
+        let pods = pods.list(&list_params);
+        // Return an error if the query fails
+        let pod_list = pods.await.map_err(Error::KubeError)?;
+        // Return an error if the list is empty
+        if pod_list.items.is_empty() {
+            return Err(Error::KubeError(kube::Error::Api(kube::error::ErrorResponse {
+                status: "404".to_string(),
+                message: "No pods found".to_string(),
+                reason: "Not Found".to_string(),
+                code: 404,
+            })));
+        }
+        let primary = pod_list.items[0].clone();
+        Ok(vec![primary])
+    }
+
+    pub async fn primary_pod_coredb(&self, client: Client) -> Result<Pod, Error> {
+        let sts = stateful_set_from_cdb(self);
+        let sts_name = sts.metadata.name.unwrap();
+        let sts_namespace = sts.metadata.namespace.unwrap();
+        let label_selector = format!("statefulset={sts_name}");
+        let list_params = ListParams::default().labels(&label_selector);
+        let pods: Api<Pod> = Api::namespaced(client, &sts_namespace);
+        let pods = pods.list(&list_params);
+        // Return an error if the query fails
+        let pod_list = pods.await.map_err(Error::KubeError)?;
+        // Return an error if the list is empty
+        if pod_list.items.is_empty() {
+            return Err(Error::KubeError(kube::Error::Api(kube::error::ErrorResponse {
+                status: "404".to_string(),
+                message: "No pods found".to_string(),
+                reason: "Not Found".to_string(),
+                code: 404,
+            })));
+        }
+        let primary = pod_list.items[0].clone();
+        Ok(primary)
+    }
+
+    pub async fn primary_pod_cnpg(&self, client: Client) -> Result<Pod, Error> {
+        let sts = stateful_set_from_cdb(self);
+        let sts_name = sts.metadata.name.unwrap();
+        let sts_namespace = sts.metadata.namespace.unwrap();
+        let label_selector = format!("statefulset={sts_name}");
+        // cnpg.io/cluster: org-coredb-inst-test-1205
         let list_params = ListParams::default().labels(&label_selector);
         let pods: Api<Pod> = Api::namespaced(client, &sts_namespace);
         let pods = pods.list(&list_params);
@@ -341,7 +396,7 @@ impl CoreDB {
         client: Client,
     ) -> Result<PsqlOutput, kube::Error> {
         let pod_name = self
-            .primary_pod(client.clone())
+            .primary_pod_coredb(client.clone())
             .await
             .unwrap()
             .metadata

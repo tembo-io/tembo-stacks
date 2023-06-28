@@ -412,7 +412,7 @@ pub async fn handle_create_update(
 
     if !pvcs_to_create.is_empty() {
         delete_sts_no_cascade(&sts_api, sts_name).await?;
-        let primary_pod = cdb.primary_pod(client.clone()).await?;
+        let primary_pod = cdb.primary_pod_coredb(client.clone()).await?;
         let pod_api: Api<Pod> = Api::namespaced(client.clone(), sts_namespace);
         let prim_pod_name = primary_pod
             .metadata
