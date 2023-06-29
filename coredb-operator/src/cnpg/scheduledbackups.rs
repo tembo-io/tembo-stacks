@@ -3,15 +3,24 @@
 // kopium version: 0.15.0
 
 use kube::CustomResource;
-use serde::{Serialize, Deserialize};
+use serde::{Deserialize, Serialize};
 
 #[derive(CustomResource, Serialize, Deserialize, Clone, Debug, Default)]
-#[kube(group = "postgresql.cnpg.io", version = "v1", kind = "ScheduledBackup", plural = "scheduledbackups")]
+#[kube(
+    group = "postgresql.cnpg.io",
+    version = "v1",
+    kind = "ScheduledBackup",
+    plural = "scheduledbackups"
+)]
 #[kube(namespaced)]
 #[kube(status = "ScheduledBackupStatus")]
 #[kube(schema = "disabled")]
 pub struct ScheduledBackupSpec {
-    #[serde(default, skip_serializing_if = "Option::is_none", rename = "backupOwnerReference")]
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        rename = "backupOwnerReference"
+    )]
     pub backup_owner_reference: Option<ScheduledBackupBackupOwnerReference>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub cluster: Option<ScheduledBackupCluster>,
@@ -56,4 +65,3 @@ pub struct ScheduledBackupStatus {
     #[serde(default, skip_serializing_if = "Option::is_none", rename = "nextScheduleTime")]
     pub next_schedule_time: Option<String>,
 }
-
