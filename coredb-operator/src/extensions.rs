@@ -1,5 +1,5 @@
 use crate::{apis::coredb_types::CoreDB, controller::patch_cdb_status_merge, defaults, Context, Error};
-use crate::cnpg::cnpg::cnpg_cluster_from_cdb;
+
 use kube::api::Api;
 use lazy_static::lazy_static;
 use regex::Regex;
@@ -249,13 +249,9 @@ pub fn check_input(input: &str) -> bool {
 
 /// returns all the databases in an instance
 pub async fn list_databases(cdb: &CoreDB, ctx: Arc<Context>) -> Result<Vec<String>, Error> {
-    let client = ctx.client.clone();
+    let _client = ctx.client.clone();
     let psql_out = cdb
-        .psql(
-            LIST_DATABASES_QUERY.to_owned(),
-            "postgres".to_owned(),
-            ctx,
-        )
+        .psql(LIST_DATABASES_QUERY.to_owned(), "postgres".to_owned(), ctx)
         .await?;
     let result_string = psql_out.stdout.unwrap();
     Ok(parse_databases(&result_string))
@@ -283,11 +279,7 @@ fn parse_databases(psql_str: &str) -> Vec<String> {
 /// lists all extensions in a single database
 pub async fn list_extensions(cdb: &CoreDB, ctx: Arc<Context>, database: &str) -> Result<Vec<ExtRow>, Error> {
     let psql_out = cdb
-        .psql(
-            LIST_EXTENSIONS_QUERY.to_owned(),
-            database.to_owned(),
-            ctx,
-        )
+        .psql(LIST_EXTENSIONS_QUERY.to_owned(), database.to_owned(), ctx)
         .await
         .unwrap();
     let result_string = psql_out.stdout.unwrap();
@@ -416,7 +408,7 @@ pub async fn reconcile_extensions(
     coredb: &CoreDB,
     ctx: Arc<Context>,
     cdb_api: &Api<CoreDB>,
-    name: &str
+    name: &str,
 ) -> Result<Vec<Extension>, Error> {
     // always get the current state of extensions in the database
     // this is due to out of band changes - manual create/drop extension

@@ -1,8 +1,3 @@
-use crate::cnpg::clusters::{
-    ClusterMonitoringCustomQueriesConfigMap, ClusterPostgresql,
-    ClusterPostgresqlSyncReplicaElectionConstraint, ClusterPrimaryUpdateMethod, ClusterPrimaryUpdateStrategy,
-    ClusterServiceAccountTemplate, ClusterServiceAccountTemplateMetadata, ClusterStorage,
-};
 use crate::{
     apis::coredb_types::CoreDB,
     cnpg::clusters::{
@@ -13,7 +8,10 @@ use crate::{
         ClusterBackupBarmanObjectStoreWal, ClusterBackupBarmanObjectStoreWalCompression,
         ClusterBackupBarmanObjectStoreWalEncryption, ClusterBootstrap, ClusterBootstrapPgBasebackup,
         ClusterExternalClusters, ClusterExternalClustersPassword, ClusterLogLevel, ClusterMonitoring,
-        ClusterSpec, ClusterSuperuserSecret,
+        ClusterMonitoringCustomQueriesConfigMap, ClusterPostgresql,
+        ClusterPostgresqlSyncReplicaElectionConstraint, ClusterPrimaryUpdateMethod,
+        ClusterPrimaryUpdateStrategy, ClusterServiceAccountTemplate, ClusterServiceAccountTemplateMetadata,
+        ClusterSpec, ClusterStorage, ClusterSuperuserSecret,
     },
 };
 use k8s_openapi::apimachinery::pkg::apis::meta::v1::{ObjectMeta, OwnerReference};
@@ -41,10 +39,9 @@ pub fn cnpg_backup_configuration(
         warn!("Backups are disabled because we don't have a service account template with annotations");
         return (None, None);
     }
-    let service_account_annotations = service_account_annotations
-        .expect("Expected service account template annotations");
-    let service_account_role_arn = service_account_annotations
-        .get("eks.amazonaws.com/role-arn");
+    let service_account_annotations =
+        service_account_annotations.expect("Expected service account template annotations");
+    let service_account_role_arn = service_account_annotations.get("eks.amazonaws.com/role-arn");
     if service_account_role_arn.is_none() {
         warn!("Backups are disabled because we don't have a service account template with an EKS role ARN");
         return (None, None);
@@ -86,7 +83,7 @@ pub fn cnpg_backup_configuration(
         },
     });
 
-    return (cluster_backup, service_account_template);
+    (cluster_backup, service_account_template)
 }
 
 pub fn cnpg_cluster_bootstrap_from_cdb(
@@ -110,7 +107,7 @@ pub fn cnpg_cluster_bootstrap_from_cdb(
     // The CoreDB operator rw service name is the CoreDB cluster name
     coredb_connection_parameters.insert("host".to_string(), cluster_name.clone());
 
-    let superuser_secret_name = format!("{}-connection", cluster_name.clone());
+    let superuser_secret_name = format!("{}-connection", cluster_name);
 
     let coredb_cluster = ClusterExternalClusters {
         name: "coredb".to_string(),
@@ -129,14 +126,14 @@ pub fn cnpg_cluster_bootstrap_from_cdb(
         name: superuser_secret_name,
     };
 
-    return (
+    (
         Some(cluster_bootstrap),
         Some(vec![coredb_cluster]),
         Some(superuser_secret),
-    );
+    )
 }
 
-fn cnpg_postgres_config(cdb: &CoreDB) -> (Option<BTreeMap<String, String>>, Option<Vec<String>>) {
+fn cnpg_postgres_config(_cdb: &CoreDB) -> (Option<BTreeMap<String, String>>, Option<Vec<String>>) {
     let mut postgres_parameters = BTreeMap::new();
     postgres_parameters.insert("archive_mode".to_string(), "on".to_string());
     postgres_parameters.insert("archive_timeout".to_string(), "5min".to_string());
@@ -157,7 +154,7 @@ fn cnpg_postgres_config(cdb: &CoreDB) -> (Option<BTreeMap<String, String>>, Opti
     postgres_parameters.insert("wal_sender_timeout".to_string(), "5s".to_string());
     // TODO: right here, overlay other postgres configs
     let shared_preload_libraries = None;
-    return (Some(postgres_parameters), shared_preload_libraries);
+    (Some(postgres_parameters), shared_preload_libraries)
 }
 
 fn cnpg_cluster_storage(cdb: &CoreDB) -> Option<ClusterStorage> {

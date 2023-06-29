@@ -1,8 +1,8 @@
-use std::sync::Arc;
-use k8s_openapi::{api::core::v1::Pod, apimachinery::pkg::apis::meta::v1::Status};
-use kube::{api::Api, client::Client, core::subresource::AttachParams};
-use tokio::io::AsyncReadExt;
 use crate::Context;
+use k8s_openapi::{api::core::v1::Pod, apimachinery::pkg::apis::meta::v1::Status};
+use kube::{api::Api, core::subresource::AttachParams};
+use std::sync::Arc;
+use tokio::io::AsyncReadExt;
 
 pub struct PsqlOutput {
     pub stdout: Option<String>,

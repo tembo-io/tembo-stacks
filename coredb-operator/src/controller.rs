@@ -30,6 +30,7 @@ use crate::{
         coredb_types::{CoreDB, CoreDBStatus},
         postgres_parameters::reconcile_pg_parameters_configmap,
     },
+    cnpg::cnpg::cnpg_cluster_from_cdb,
     extensions::{reconcile_extensions, Extension},
     ingress::reconcile_postgres_ing_route_tcp,
     postgres_exporter::{create_postgres_exporter_role, reconcile_prom_configmap},
@@ -45,7 +46,6 @@ use serde_json::json;
 use std::sync::Arc;
 use tokio::{sync::RwLock, time::Duration};
 use tracing::*;
-use crate::cnpg::cnpg::cnpg_cluster_from_cdb;
 
 pub static COREDB_FINALIZER: &str = "coredbs.coredb.io";
 pub static COREDB_ANNOTATION: &str = "coredbs.coredb.io/watch";
@@ -109,7 +109,6 @@ fn error_policy(cdb: Arc<CoreDB>, error: &Error, ctx: Arc<Context>) -> Action {
 }
 
 impl CoreDB {
-
     // How to not query this every time we want to check?
     // TODO: Answer - add something to context
     async fn cnpg_enabled(&self, ctx: Arc<Context>) -> bool {
@@ -128,7 +127,7 @@ impl CoreDB {
             .labels
             .unwrap_or_default();
 
-        return ns_labels.contains_key(cnpg_enabled_label);
+        ns_labels.contains_key(cnpg_enabled_label)
     }
 
     // Reconcile (for non-finalizer related changes)
@@ -213,7 +212,7 @@ impl CoreDB {
                         let service_name_read_write = match cnpg_enabled {
                             // When CNPG is enabled, we use the CNPG service name
                             true => format!("{}-rw", self.name_any().as_str()),
-                            false => format!("{}", self.name_any().as_str()),
+                            false => self.name_any().as_str().to_string(),
                         };
                         reconcile_postgres_ing_route_tcp(
                             self,
@@ -224,14 +223,14 @@ impl CoreDB {
                             service_name_read_write.as_str(),
                             IntOrString::Int(5432),
                         )
-                            .await
-                            .map_err(|e| {
-                                error!("Error reconciling postgres ingress route: {:?}", e);
-                                // For unexpected errors, we should requeue for several minutes at least,
-                                // for expected, "waiting" type of requeuing, those should be shorter, just a few seconds.
-                                // IngressRouteTCP does not have expected errors during reconciliation.
-                                Action::requeue(Duration::from_secs(300))
-                            })?;
+                        .await
+                        .map_err(|e| {
+                            error!("Error reconciling postgres ingress route: {:?}", e);
+                            // For unexpected errors, we should requeue for several minutes at least,
+                            // for expected, "waiting" type of requeuing, those should be shorter, just a few seconds.
+                            // IngressRouteTCP does not have expected errors during reconciliation.
+                            Action::requeue(Duration::from_secs(300))
+                        })?;
                     }
                     Err(_e) => {
                         warn!("DATA_PLANE_BASEDOMAIN is not set, skipping reconciliation of IngressRouteTCP");
@@ -242,18 +241,18 @@ impl CoreDB {
                     let primary_pod_cnpg = self.primary_pod_cnpg(ctx.client.clone()).await;
                     if primary_pod_cnpg.is_err() {
                         info!(
-                        "Did not find primary pod of CNPG for {}, waiting a short period",
-                        self.name_any()
-                    );
+                            "Did not find primary pod of CNPG for {}, waiting a short period",
+                            self.name_any()
+                        );
                         return Ok(Action::requeue(Duration::from_secs(1)));
                     }
                     let primary_pod_cnpg = primary_pod_cnpg.unwrap();
 
                     if !is_postgres_ready().matches_object(Some(&primary_pod_cnpg)) {
                         info!(
-                        "Did not find postgres ready {}, waiting a short period",
-                        self.name_any()
-                    );
+                            "Did not find CNPG postgres pod ready for {}, waiting a short period",
+                            self.name_any()
+                        );
                         return Ok(Action::requeue(Duration::from_secs(1)));
                     }
                 }
@@ -390,11 +389,20 @@ impl CoreDB {
 
     pub async fn primary_pod_cnpg(&self, client: Client) -> Result<Pod, Error> {
         let cluster = cnpg_cluster_from_cdb(self);
-        let cluster_name = cluster.metadata.name.expect("CNPG Cluster should always have a name");
-        let namespace = self.metadata.namespace.clone().expect("Operator should always be namespaced");
+        let cluster_name = cluster
+            .metadata
+            .name
+            .expect("CNPG Cluster should always have a name");
+        let namespace = self
+            .metadata
+            .namespace
+            .clone()
+            .expect("Operator should always be namespaced");
         let cluster_selector = format!("cnpg.io/cluster={cluster_name}");
-        let role_selector = format!("role=primary");
-        let list_params = ListParams::default().labels(&cluster_selector).labels(&role_selector);
+        let role_selector = "role=primary".to_string();
+        let list_params = ListParams::default()
+            .labels(&cluster_selector)
+            .labels(&role_selector);
         let pods: Api<Pod> = Api::namespaced(client, &namespace);
         let pods = pods.list(&list_params);
         // Return an error if the query fails
@@ -404,7 +412,7 @@ impl CoreDB {
             return Err(Error::KubeError(kube::Error::Api(kube::error::ErrorResponse {
                 status: "404".to_string(),
                 message: "Did not find CNPG primary".to_string(),
-                reason: "Selecting by cluster name and role did not find any pods".to_string(),
+                reason: "Selecting using the labels 'cnpg.io/cluster' and 'role' did not find any pods. This can happen when there is a pod moving, switching over, or a new cluster.".to_string(),
                 code: 404,
             })));
         }
@@ -418,7 +426,6 @@ impl CoreDB {
         database: String,
         context: Arc<Context>,
     ) -> Result<PsqlOutput, kube::Error> {
-
         let client = context.client.clone();
 
         let pod_name_coredb = self
@@ -460,7 +467,7 @@ impl CoreDB {
             return cnpg_exec.await;
         }
 
-        return coredb_exec.await;
+        coredb_exec.await
     }
 
     pub async fn exec(
