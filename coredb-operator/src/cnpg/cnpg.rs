@@ -13,10 +13,14 @@ use crate::{
         ClusterPrimaryUpdateStrategy, ClusterServiceAccountTemplate, ClusterServiceAccountTemplateMetadata,
         ClusterSpec, ClusterStorage, ClusterSuperuserSecret,
     },
+    Context, Error,
 };
 use k8s_openapi::apimachinery::pkg::apis::meta::v1::{ObjectMeta, OwnerReference};
-use kube::{Resource, ResourceExt};
-use std::collections::BTreeMap;
+use kube::{
+    api::{Patch, PatchParams},
+    Api, Resource, ResourceExt,
+};
+use std::{collections::BTreeMap, sync::Arc};
 use tracing::log::warn;
 
 pub fn cnpg_backup_configuration(
@@ -249,4 +253,25 @@ pub fn cnpg_cluster_from_cdb(cdb: &CoreDB) -> Cluster {
         },
         status: None,
     }
+}
+
+pub async fn reconcile_cnpg(cdb: &CoreDB, ctx: Arc<Context>) -> Result<(), Error> {
+    let cluster = cnpg_cluster_from_cdb(cdb);
+    let namespace = cluster
+        .metadata
+        .namespace
+        .clone()
+        .expect("CNPG Cluster should always have a namespace");
+    let name = cluster
+        .metadata
+        .name
+        .clone()
+        .expect("CNPG Cluster should always have a name");
+    let cluster_api: Api<Cluster> = Api::namespaced(ctx.client.clone(), namespace.as_str());
+    let ps = PatchParams::apply("cntrlr");
+    let _o = cluster_api
+        .patch(&name, &ps, &Patch::Apply(&cluster))
+        .await
+        .map_err(Error::KubeError)?;
+    Ok(())
 }

@@ -30,7 +30,7 @@ use crate::{
         coredb_types::{CoreDB, CoreDBStatus},
         postgres_parameters::reconcile_pg_parameters_configmap,
     },
-    cnpg::cnpg::cnpg_cluster_from_cdb,
+    cnpg::cnpg::{cnpg_cluster_from_cdb, reconcile_cnpg},
     extensions::{reconcile_extensions, Extension},
     ingress::reconcile_postgres_ing_route_tcp,
     postgres_exporter::{create_postgres_exporter_role, reconcile_prom_configmap},
@@ -238,6 +238,11 @@ impl CoreDB {
                 };
 
                 if cnpg_enabled {
+                    reconcile_cnpg(self, ctx.clone()).await.map_err(|e| {
+                        error!("Error reconciling CNPG: {:?}", e);
+                        Action::requeue(Duration::from_secs(300))
+                    })?;
+
                     let primary_pod_cnpg = self.primary_pod_cnpg(ctx.client.clone()).await;
                     if primary_pod_cnpg.is_err() {
                         info!(
