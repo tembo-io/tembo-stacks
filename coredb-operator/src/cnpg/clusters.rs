@@ -2,13 +2,18 @@
 // kopium command: kopium -D Default clusters.postgresql.cnpg.io
 // kopium version: 0.15.0
 
-use kube::CustomResource;
-use serde::{Serialize, Deserialize};
-use std::collections::BTreeMap;
 use k8s_openapi::apimachinery::pkg::util::intstr::IntOrString;
+use kube::CustomResource;
+use serde::{Deserialize, Serialize};
+use std::collections::BTreeMap;
 
 #[derive(CustomResource, Serialize, Deserialize, Clone, Debug, Default)]
-#[kube(group = "postgresql.cnpg.io", version = "v1", kind = "Cluster", plural = "clusters")]
+#[kube(
+    group = "postgresql.cnpg.io",
+    version = "v1",
+    kind = "Cluster",
+    plural = "clusters"
+)]
 #[kube(namespaced)]
 #[kube(status = "ClusterStatus")]
 #[kube(schema = "disabled")]
@@ -23,7 +28,11 @@ pub struct ClusterSpec {
     pub certificates: Option<ClusterCertificates>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub description: Option<String>,
-    #[serde(default, skip_serializing_if = "Option::is_none", rename = "enableSuperuserAccess")]
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        rename = "enableSuperuserAccess"
+    )]
     pub enable_superuser_access: Option<bool>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub env: Option<Vec<ClusterEnv>>,
@@ -39,7 +48,11 @@ pub struct ClusterSpec {
     pub image_pull_policy: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none", rename = "imagePullSecrets")]
     pub image_pull_secrets: Option<Vec<ClusterImagePullSecrets>>,
-    #[serde(default, skip_serializing_if = "Option::is_none", rename = "inheritedMetadata")]
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        rename = "inheritedMetadata"
+    )]
     pub inherited_metadata: Option<ClusterInheritedMetadata>,
     pub instances: i64,
     #[serde(default, skip_serializing_if = "Option::is_none", rename = "logLevel")]
@@ -52,7 +65,11 @@ pub struct ClusterSpec {
     pub min_sync_replicas: Option<i64>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub monitoring: Option<ClusterMonitoring>,
-    #[serde(default, skip_serializing_if = "Option::is_none", rename = "nodeMaintenanceWindow")]
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        rename = "nodeMaintenanceWindow"
+    )]
     pub node_maintenance_window: Option<ClusterNodeMaintenanceWindow>,
     #[serde(default, skip_serializing_if = "Option::is_none", rename = "postgresGID")]
     pub postgres_gid: Option<i64>,
@@ -60,11 +77,23 @@ pub struct ClusterSpec {
     pub postgres_uid: Option<i64>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub postgresql: Option<ClusterPostgresql>,
-    #[serde(default, skip_serializing_if = "Option::is_none", rename = "primaryUpdateMethod")]
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        rename = "primaryUpdateMethod"
+    )]
     pub primary_update_method: Option<ClusterPrimaryUpdateMethod>,
-    #[serde(default, skip_serializing_if = "Option::is_none", rename = "primaryUpdateStrategy")]
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        rename = "primaryUpdateStrategy"
+    )]
     pub primary_update_strategy: Option<ClusterPrimaryUpdateStrategy>,
-    #[serde(default, skip_serializing_if = "Option::is_none", rename = "projectedVolumeTemplate")]
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        rename = "projectedVolumeTemplate"
+    )]
     pub projected_volume_template: Option<ClusterProjectedVolumeTemplate>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub replica: Option<ClusterReplica>,
@@ -76,7 +105,11 @@ pub struct ClusterSpec {
     pub scheduler_name: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none", rename = "seccompProfile")]
     pub seccomp_profile: Option<ClusterSeccompProfile>,
-    #[serde(default, skip_serializing_if = "Option::is_none", rename = "serviceAccountTemplate")]
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        rename = "serviceAccountTemplate"
+    )]
     pub service_account_template: Option<ClusterServiceAccountTemplate>,
     #[serde(default, skip_serializing_if = "Option::is_none", rename = "startDelay")]
     pub start_delay: Option<i32>,
@@ -88,7 +121,11 @@ pub struct ClusterSpec {
     pub superuser_secret: Option<ClusterSuperuserSecret>,
     #[serde(default, skip_serializing_if = "Option::is_none", rename = "switchoverDelay")]
     pub switchover_delay: Option<i32>,
-    #[serde(default, skip_serializing_if = "Option::is_none", rename = "topologySpreadConstraints")]
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        rename = "topologySpreadConstraints"
+    )]
     pub topology_spread_constraints: Option<Vec<ClusterTopologySpreadConstraints>>,
     #[serde(default, skip_serializing_if = "Option::is_none", rename = "walStorage")]
     pub wal_storage: Option<ClusterWalStorage>,
@@ -96,17 +133,33 @@ pub struct ClusterSpec {
 
 #[derive(Serialize, Deserialize, Clone, Debug, Default)]
 pub struct ClusterAffinity {
-    #[serde(default, skip_serializing_if = "Option::is_none", rename = "additionalPodAffinity")]
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        rename = "additionalPodAffinity"
+    )]
     pub additional_pod_affinity: Option<ClusterAffinityAdditionalPodAffinity>,
-    #[serde(default, skip_serializing_if = "Option::is_none", rename = "additionalPodAntiAffinity")]
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        rename = "additionalPodAntiAffinity"
+    )]
     pub additional_pod_anti_affinity: Option<ClusterAffinityAdditionalPodAntiAffinity>,
-    #[serde(default, skip_serializing_if = "Option::is_none", rename = "enablePodAntiAffinity")]
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        rename = "enablePodAntiAffinity"
+    )]
     pub enable_pod_anti_affinity: Option<bool>,
     #[serde(default, skip_serializing_if = "Option::is_none", rename = "nodeAffinity")]
     pub node_affinity: Option<ClusterAffinityNodeAffinity>,
     #[serde(default, skip_serializing_if = "Option::is_none", rename = "nodeSelector")]
     pub node_selector: Option<BTreeMap<String, String>>,
-    #[serde(default, skip_serializing_if = "Option::is_none", rename = "podAntiAffinityType")]
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        rename = "podAntiAffinityType"
+    )]
     pub pod_anti_affinity_type: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub tolerations: Option<Vec<ClusterAffinityTolerations>>,
@@ -116,16 +169,27 @@ pub struct ClusterAffinity {
 
 #[derive(Serialize, Deserialize, Clone, Debug, Default)]
 pub struct ClusterAffinityAdditionalPodAffinity {
-    #[serde(default, skip_serializing_if = "Option::is_none", rename = "preferredDuringSchedulingIgnoredDuringExecution")]
-    pub preferred_during_scheduling_ignored_during_execution: Option<Vec<ClusterAffinityAdditionalPodAffinityPreferredDuringSchedulingIgnoredDuringExecution>>,
-    #[serde(default, skip_serializing_if = "Option::is_none", rename = "requiredDuringSchedulingIgnoredDuringExecution")]
-    pub required_during_scheduling_ignored_during_execution: Option<Vec<ClusterAffinityAdditionalPodAffinityRequiredDuringSchedulingIgnoredDuringExecution>>,
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        rename = "preferredDuringSchedulingIgnoredDuringExecution"
+    )]
+    pub preferred_during_scheduling_ignored_during_execution:
+        Option<Vec<ClusterAffinityAdditionalPodAffinityPreferredDuringSchedulingIgnoredDuringExecution>>,
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        rename = "requiredDuringSchedulingIgnoredDuringExecution"
+    )]
+    pub required_during_scheduling_ignored_during_execution:
+        Option<Vec<ClusterAffinityAdditionalPodAffinityRequiredDuringSchedulingIgnoredDuringExecution>>,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, Default)]
 pub struct ClusterAffinityAdditionalPodAffinityPreferredDuringSchedulingIgnoredDuringExecution {
     #[serde(rename = "podAffinityTerm")]
-    pub pod_affinity_term: ClusterAffinityAdditionalPodAffinityPreferredDuringSchedulingIgnoredDuringExecutionPodAffinityTerm,
+    pub pod_affinity_term:
+        ClusterAffinityAdditionalPodAffinityPreferredDuringSchedulingIgnoredDuringExecutionPodAffinityTerm,
     pub weight: i32,
 }
 
@@ -150,7 +214,8 @@ pub struct ClusterAffinityAdditionalPodAffinityPreferredDuringSchedulingIgnoredD
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, Default)]
-pub struct ClusterAffinityAdditionalPodAffinityPreferredDuringSchedulingIgnoredDuringExecutionPodAffinityTermLabelSelectorMatchExpressions {
+pub struct ClusterAffinityAdditionalPodAffinityPreferredDuringSchedulingIgnoredDuringExecutionPodAffinityTermLabelSelectorMatchExpressions
+{
     pub key: String,
     pub operator: String,
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -166,7 +231,8 @@ pub struct ClusterAffinityAdditionalPodAffinityPreferredDuringSchedulingIgnoredD
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, Default)]
-pub struct ClusterAffinityAdditionalPodAffinityPreferredDuringSchedulingIgnoredDuringExecutionPodAffinityTermNamespaceSelectorMatchExpressions {
+pub struct ClusterAffinityAdditionalPodAffinityPreferredDuringSchedulingIgnoredDuringExecutionPodAffinityTermNamespaceSelectorMatchExpressions
+{
     pub key: String,
     pub operator: String,
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -176,9 +242,17 @@ pub struct ClusterAffinityAdditionalPodAffinityPreferredDuringSchedulingIgnoredD
 #[derive(Serialize, Deserialize, Clone, Debug, Default)]
 pub struct ClusterAffinityAdditionalPodAffinityRequiredDuringSchedulingIgnoredDuringExecution {
     #[serde(default, skip_serializing_if = "Option::is_none", rename = "labelSelector")]
-    pub label_selector: Option<ClusterAffinityAdditionalPodAffinityRequiredDuringSchedulingIgnoredDuringExecutionLabelSelector>,
-    #[serde(default, skip_serializing_if = "Option::is_none", rename = "namespaceSelector")]
-    pub namespace_selector: Option<ClusterAffinityAdditionalPodAffinityRequiredDuringSchedulingIgnoredDuringExecutionNamespaceSelector>,
+    pub label_selector: Option<
+        ClusterAffinityAdditionalPodAffinityRequiredDuringSchedulingIgnoredDuringExecutionLabelSelector,
+    >,
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        rename = "namespaceSelector"
+    )]
+    pub namespace_selector: Option<
+        ClusterAffinityAdditionalPodAffinityRequiredDuringSchedulingIgnoredDuringExecutionNamespaceSelector,
+    >,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub namespaces: Option<Vec<String>>,
     #[serde(rename = "topologyKey")]
@@ -194,7 +268,8 @@ pub struct ClusterAffinityAdditionalPodAffinityRequiredDuringSchedulingIgnoredDu
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, Default)]
-pub struct ClusterAffinityAdditionalPodAffinityRequiredDuringSchedulingIgnoredDuringExecutionLabelSelectorMatchExpressions {
+pub struct ClusterAffinityAdditionalPodAffinityRequiredDuringSchedulingIgnoredDuringExecutionLabelSelectorMatchExpressions
+{
     pub key: String,
     pub operator: String,
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -210,7 +285,8 @@ pub struct ClusterAffinityAdditionalPodAffinityRequiredDuringSchedulingIgnoredDu
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, Default)]
-pub struct ClusterAffinityAdditionalPodAffinityRequiredDuringSchedulingIgnoredDuringExecutionNamespaceSelectorMatchExpressions {
+pub struct ClusterAffinityAdditionalPodAffinityRequiredDuringSchedulingIgnoredDuringExecutionNamespaceSelectorMatchExpressions
+{
     pub key: String,
     pub operator: String,
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -219,10 +295,20 @@ pub struct ClusterAffinityAdditionalPodAffinityRequiredDuringSchedulingIgnoredDu
 
 #[derive(Serialize, Deserialize, Clone, Debug, Default)]
 pub struct ClusterAffinityAdditionalPodAntiAffinity {
-    #[serde(default, skip_serializing_if = "Option::is_none", rename = "preferredDuringSchedulingIgnoredDuringExecution")]
-    pub preferred_during_scheduling_ignored_during_execution: Option<Vec<ClusterAffinityAdditionalPodAntiAffinityPreferredDuringSchedulingIgnoredDuringExecution>>,
-    #[serde(default, skip_serializing_if = "Option::is_none", rename = "requiredDuringSchedulingIgnoredDuringExecution")]
-    pub required_during_scheduling_ignored_during_execution: Option<Vec<ClusterAffinityAdditionalPodAntiAffinityRequiredDuringSchedulingIgnoredDuringExecution>>,
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        rename = "preferredDuringSchedulingIgnoredDuringExecution"
+    )]
+    pub preferred_during_scheduling_ignored_during_execution:
+        Option<Vec<ClusterAffinityAdditionalPodAntiAffinityPreferredDuringSchedulingIgnoredDuringExecution>>,
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        rename = "requiredDuringSchedulingIgnoredDuringExecution"
+    )]
+    pub required_during_scheduling_ignored_during_execution:
+        Option<Vec<ClusterAffinityAdditionalPodAntiAffinityRequiredDuringSchedulingIgnoredDuringExecution>>,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, Default)]
@@ -253,7 +339,8 @@ pub struct ClusterAffinityAdditionalPodAntiAffinityPreferredDuringSchedulingIgno
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, Default)]
-pub struct ClusterAffinityAdditionalPodAntiAffinityPreferredDuringSchedulingIgnoredDuringExecutionPodAffinityTermLabelSelectorMatchExpressions {
+pub struct ClusterAffinityAdditionalPodAntiAffinityPreferredDuringSchedulingIgnoredDuringExecutionPodAffinityTermLabelSelectorMatchExpressions
+{
     pub key: String,
     pub operator: String,
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -269,7 +356,8 @@ pub struct ClusterAffinityAdditionalPodAntiAffinityPreferredDuringSchedulingIgno
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, Default)]
-pub struct ClusterAffinityAdditionalPodAntiAffinityPreferredDuringSchedulingIgnoredDuringExecutionPodAffinityTermNamespaceSelectorMatchExpressions {
+pub struct ClusterAffinityAdditionalPodAntiAffinityPreferredDuringSchedulingIgnoredDuringExecutionPodAffinityTermNamespaceSelectorMatchExpressions
+{
     pub key: String,
     pub operator: String,
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -297,7 +385,8 @@ pub struct ClusterAffinityAdditionalPodAntiAffinityRequiredDuringSchedulingIgnor
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, Default)]
-pub struct ClusterAffinityAdditionalPodAntiAffinityRequiredDuringSchedulingIgnoredDuringExecutionLabelSelectorMatchExpressions {
+pub struct ClusterAffinityAdditionalPodAntiAffinityRequiredDuringSchedulingIgnoredDuringExecutionLabelSelectorMatchExpressions
+{
     pub key: String,
     pub operator: String,
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -313,7 +402,8 @@ pub struct ClusterAffinityAdditionalPodAntiAffinityRequiredDuringSchedulingIgnor
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, Default)]
-pub struct ClusterAffinityAdditionalPodAntiAffinityRequiredDuringSchedulingIgnoredDuringExecutionNamespaceSelectorMatchExpressions {
+pub struct ClusterAffinityAdditionalPodAntiAffinityRequiredDuringSchedulingIgnoredDuringExecutionNamespaceSelectorMatchExpressions
+{
     pub key: String,
     pub operator: String,
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -322,10 +412,20 @@ pub struct ClusterAffinityAdditionalPodAntiAffinityRequiredDuringSchedulingIgnor
 
 #[derive(Serialize, Deserialize, Clone, Debug, Default)]
 pub struct ClusterAffinityNodeAffinity {
-    #[serde(default, skip_serializing_if = "Option::is_none", rename = "preferredDuringSchedulingIgnoredDuringExecution")]
-    pub preferred_during_scheduling_ignored_during_execution: Option<Vec<ClusterAffinityNodeAffinityPreferredDuringSchedulingIgnoredDuringExecution>>,
-    #[serde(default, skip_serializing_if = "Option::is_none", rename = "requiredDuringSchedulingIgnoredDuringExecution")]
-    pub required_during_scheduling_ignored_during_execution: Option<ClusterAffinityNodeAffinityRequiredDuringSchedulingIgnoredDuringExecution>,
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        rename = "preferredDuringSchedulingIgnoredDuringExecution"
+    )]
+    pub preferred_during_scheduling_ignored_during_execution:
+        Option<Vec<ClusterAffinityNodeAffinityPreferredDuringSchedulingIgnoredDuringExecution>>,
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        rename = "requiredDuringSchedulingIgnoredDuringExecution"
+    )]
+    pub required_during_scheduling_ignored_during_execution:
+        Option<ClusterAffinityNodeAffinityRequiredDuringSchedulingIgnoredDuringExecution>,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, Default)]
@@ -343,7 +443,8 @@ pub struct ClusterAffinityNodeAffinityPreferredDuringSchedulingIgnoredDuringExec
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, Default)]
-pub struct ClusterAffinityNodeAffinityPreferredDuringSchedulingIgnoredDuringExecutionPreferenceMatchExpressions {
+pub struct ClusterAffinityNodeAffinityPreferredDuringSchedulingIgnoredDuringExecutionPreferenceMatchExpressions
+{
     pub key: String,
     pub operator: String,
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -361,7 +462,8 @@ pub struct ClusterAffinityNodeAffinityPreferredDuringSchedulingIgnoredDuringExec
 #[derive(Serialize, Deserialize, Clone, Debug, Default)]
 pub struct ClusterAffinityNodeAffinityRequiredDuringSchedulingIgnoredDuringExecution {
     #[serde(rename = "nodeSelectorTerms")]
-    pub node_selector_terms: Vec<ClusterAffinityNodeAffinityRequiredDuringSchedulingIgnoredDuringExecutionNodeSelectorTerms>,
+    pub node_selector_terms:
+        Vec<ClusterAffinityNodeAffinityRequiredDuringSchedulingIgnoredDuringExecutionNodeSelectorTerms>,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, Default)]
@@ -373,7 +475,8 @@ pub struct ClusterAffinityNodeAffinityRequiredDuringSchedulingIgnoredDuringExecu
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, Default)]
-pub struct ClusterAffinityNodeAffinityRequiredDuringSchedulingIgnoredDuringExecutionNodeSelectorTermsMatchExpressions {
+pub struct ClusterAffinityNodeAffinityRequiredDuringSchedulingIgnoredDuringExecutionNodeSelectorTermsMatchExpressions
+{
     pub key: String,
     pub operator: String,
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -381,7 +484,8 @@ pub struct ClusterAffinityNodeAffinityRequiredDuringSchedulingIgnoredDuringExecu
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, Default)]
-pub struct ClusterAffinityNodeAffinityRequiredDuringSchedulingIgnoredDuringExecutionNodeSelectorTermsMatchFields {
+pub struct ClusterAffinityNodeAffinityRequiredDuringSchedulingIgnoredDuringExecutionNodeSelectorTermsMatchFields
+{
     pub key: String,
     pub operator: String,
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -396,7 +500,11 @@ pub struct ClusterAffinityTolerations {
     pub key: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub operator: Option<String>,
-    #[serde(default, skip_serializing_if = "Option::is_none", rename = "tolerationSeconds")]
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        rename = "tolerationSeconds"
+    )]
     pub toleration_seconds: Option<i64>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub value: Option<String>,
@@ -404,7 +512,11 @@ pub struct ClusterAffinityTolerations {
 
 #[derive(Serialize, Deserialize, Clone, Debug, Default)]
 pub struct ClusterBackup {
-    #[serde(default, skip_serializing_if = "Option::is_none", rename = "barmanObjectStore")]
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        rename = "barmanObjectStore"
+    )]
     pub barman_object_store: Option<ClusterBackupBarmanObjectStore>,
     #[serde(default, skip_serializing_if = "Option::is_none", rename = "retentionPolicy")]
     pub retention_policy: Option<String>,
@@ -424,7 +536,11 @@ pub struct ClusterBackupBarmanObjectStore {
     pub endpoint_ca: Option<ClusterBackupBarmanObjectStoreEndpointCa>,
     #[serde(default, skip_serializing_if = "Option::is_none", rename = "endpointURL")]
     pub endpoint_url: Option<String>,
-    #[serde(default, skip_serializing_if = "Option::is_none", rename = "googleCredentials")]
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        rename = "googleCredentials"
+    )]
     pub google_credentials: Option<ClusterBackupBarmanObjectStoreGoogleCredentials>,
     #[serde(default, skip_serializing_if = "Option::is_none", rename = "historyTags")]
     pub history_tags: Option<BTreeMap<String, String>>,
@@ -442,7 +558,11 @@ pub struct ClusterBackupBarmanObjectStore {
 pub struct ClusterBackupBarmanObjectStoreAzureCredentials {
     #[serde(default, skip_serializing_if = "Option::is_none", rename = "connectionString")]
     pub connection_string: Option<ClusterBackupBarmanObjectStoreAzureCredentialsConnectionString>,
-    #[serde(default, skip_serializing_if = "Option::is_none", rename = "inheritFromAzureAD")]
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        rename = "inheritFromAzureAD"
+    )]
     pub inherit_from_azure_ad: Option<bool>,
     #[serde(default, skip_serializing_if = "Option::is_none", rename = "storageAccount")]
     pub storage_account: Option<ClusterBackupBarmanObjectStoreAzureCredentialsStorageAccount>,
@@ -482,7 +602,11 @@ pub struct ClusterBackupBarmanObjectStoreData {
     pub compression: Option<ClusterBackupBarmanObjectStoreDataCompression>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub encryption: Option<ClusterBackupBarmanObjectStoreDataEncryption>,
-    #[serde(default, skip_serializing_if = "Option::is_none", rename = "immediateCheckpoint")]
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        rename = "immediateCheckpoint"
+    )]
     pub immediate_checkpoint: Option<bool>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub jobs: Option<i32>,
@@ -514,8 +638,13 @@ pub struct ClusterBackupBarmanObjectStoreEndpointCa {
 
 #[derive(Serialize, Deserialize, Clone, Debug, Default)]
 pub struct ClusterBackupBarmanObjectStoreGoogleCredentials {
-    #[serde(default, skip_serializing_if = "Option::is_none", rename = "applicationCredentials")]
-    pub application_credentials: Option<ClusterBackupBarmanObjectStoreGoogleCredentialsApplicationCredentials>,
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        rename = "applicationCredentials"
+    )]
+    pub application_credentials:
+        Option<ClusterBackupBarmanObjectStoreGoogleCredentialsApplicationCredentials>,
     #[serde(default, skip_serializing_if = "Option::is_none", rename = "gkeEnvironment")]
     pub gke_environment: Option<bool>,
 }
@@ -530,7 +659,11 @@ pub struct ClusterBackupBarmanObjectStoreGoogleCredentialsApplicationCredentials
 pub struct ClusterBackupBarmanObjectStoreS3Credentials {
     #[serde(default, skip_serializing_if = "Option::is_none", rename = "accessKeyId")]
     pub access_key_id: Option<ClusterBackupBarmanObjectStoreS3CredentialsAccessKeyId>,
-    #[serde(default, skip_serializing_if = "Option::is_none", rename = "inheritFromIAMRole")]
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        rename = "inheritFromIAMRole"
+    )]
     pub inherit_from_iam_role: Option<bool>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub region: Option<ClusterBackupBarmanObjectStoreS3CredentialsRegion>,
@@ -628,13 +761,25 @@ pub struct ClusterBootstrapInitdb {
     pub options: Option<Vec<String>>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub owner: Option<String>,
-    #[serde(default, skip_serializing_if = "Option::is_none", rename = "postInitApplicationSQL")]
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        rename = "postInitApplicationSQL"
+    )]
     pub post_init_application_sql: Option<Vec<String>>,
-    #[serde(default, skip_serializing_if = "Option::is_none", rename = "postInitApplicationSQLRefs")]
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        rename = "postInitApplicationSQLRefs"
+    )]
     pub post_init_application_sql_refs: Option<ClusterBootstrapInitdbPostInitApplicationSqlRefs>,
     #[serde(default, skip_serializing_if = "Option::is_none", rename = "postInitSQL")]
     pub post_init_sql: Option<Vec<String>>,
-    #[serde(default, skip_serializing_if = "Option::is_none", rename = "postInitTemplateSQL")]
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        rename = "postInitTemplateSQL"
+    )]
     pub post_init_template_sql: Option<Vec<String>>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub secret: Option<ClusterBootstrapInitdbSecret>,
@@ -645,7 +790,11 @@ pub struct ClusterBootstrapInitdb {
 #[derive(Serialize, Deserialize, Clone, Debug, Default)]
 pub struct ClusterBootstrapInitdbImport {
     pub databases: Vec<String>,
-    #[serde(default, skip_serializing_if = "Option::is_none", rename = "postImportApplicationSQL")]
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        rename = "postImportApplicationSQL"
+    )]
     pub post_import_application_sql: Option<Vec<String>>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub roles: Option<Vec<String>>,
@@ -794,9 +943,17 @@ pub struct ClusterBootstrapRecoveryVolumeSnapshotsWalStorage {
 pub struct ClusterCertificates {
     #[serde(default, skip_serializing_if = "Option::is_none", rename = "clientCASecret")]
     pub client_ca_secret: Option<String>,
-    #[serde(default, skip_serializing_if = "Option::is_none", rename = "replicationTLSSecret")]
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        rename = "replicationTLSSecret"
+    )]
     pub replication_tls_secret: Option<String>,
-    #[serde(default, skip_serializing_if = "Option::is_none", rename = "serverAltDNSNames")]
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        rename = "serverAltDNSNames"
+    )]
     pub server_alt_dns_names: Option<Vec<String>>,
     #[serde(default, skip_serializing_if = "Option::is_none", rename = "serverCASecret")]
     pub server_ca_secret: Option<String>,
@@ -888,9 +1045,17 @@ pub struct ClusterEnvFromSecretRef {
 
 #[derive(Serialize, Deserialize, Clone, Debug, Default)]
 pub struct ClusterExternalClusters {
-    #[serde(default, skip_serializing_if = "Option::is_none", rename = "barmanObjectStore")]
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        rename = "barmanObjectStore"
+    )]
     pub barman_object_store: Option<ClusterExternalClustersBarmanObjectStore>,
-    #[serde(default, skip_serializing_if = "Option::is_none", rename = "connectionParameters")]
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        rename = "connectionParameters"
+    )]
     pub connection_parameters: Option<BTreeMap<String, String>>,
     pub name: String,
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -915,7 +1080,11 @@ pub struct ClusterExternalClustersBarmanObjectStore {
     pub endpoint_ca: Option<ClusterExternalClustersBarmanObjectStoreEndpointCa>,
     #[serde(default, skip_serializing_if = "Option::is_none", rename = "endpointURL")]
     pub endpoint_url: Option<String>,
-    #[serde(default, skip_serializing_if = "Option::is_none", rename = "googleCredentials")]
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        rename = "googleCredentials"
+    )]
     pub google_credentials: Option<ClusterExternalClustersBarmanObjectStoreGoogleCredentials>,
     #[serde(default, skip_serializing_if = "Option::is_none", rename = "historyTags")]
     pub history_tags: Option<BTreeMap<String, String>>,
@@ -933,7 +1102,11 @@ pub struct ClusterExternalClustersBarmanObjectStore {
 pub struct ClusterExternalClustersBarmanObjectStoreAzureCredentials {
     #[serde(default, skip_serializing_if = "Option::is_none", rename = "connectionString")]
     pub connection_string: Option<ClusterExternalClustersBarmanObjectStoreAzureCredentialsConnectionString>,
-    #[serde(default, skip_serializing_if = "Option::is_none", rename = "inheritFromAzureAD")]
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        rename = "inheritFromAzureAD"
+    )]
     pub inherit_from_azure_ad: Option<bool>,
     #[serde(default, skip_serializing_if = "Option::is_none", rename = "storageAccount")]
     pub storage_account: Option<ClusterExternalClustersBarmanObjectStoreAzureCredentialsStorageAccount>,
@@ -973,7 +1146,11 @@ pub struct ClusterExternalClustersBarmanObjectStoreData {
     pub compression: Option<ClusterExternalClustersBarmanObjectStoreDataCompression>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub encryption: Option<ClusterExternalClustersBarmanObjectStoreDataEncryption>,
-    #[serde(default, skip_serializing_if = "Option::is_none", rename = "immediateCheckpoint")]
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        rename = "immediateCheckpoint"
+    )]
     pub immediate_checkpoint: Option<bool>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub jobs: Option<i32>,
@@ -1005,8 +1182,13 @@ pub struct ClusterExternalClustersBarmanObjectStoreEndpointCa {
 
 #[derive(Serialize, Deserialize, Clone, Debug, Default)]
 pub struct ClusterExternalClustersBarmanObjectStoreGoogleCredentials {
-    #[serde(default, skip_serializing_if = "Option::is_none", rename = "applicationCredentials")]
-    pub application_credentials: Option<ClusterExternalClustersBarmanObjectStoreGoogleCredentialsApplicationCredentials>,
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        rename = "applicationCredentials"
+    )]
+    pub application_credentials:
+        Option<ClusterExternalClustersBarmanObjectStoreGoogleCredentialsApplicationCredentials>,
     #[serde(default, skip_serializing_if = "Option::is_none", rename = "gkeEnvironment")]
     pub gke_environment: Option<bool>,
 }
@@ -1021,7 +1203,11 @@ pub struct ClusterExternalClustersBarmanObjectStoreGoogleCredentialsApplicationC
 pub struct ClusterExternalClustersBarmanObjectStoreS3Credentials {
     #[serde(default, skip_serializing_if = "Option::is_none", rename = "accessKeyId")]
     pub access_key_id: Option<ClusterExternalClustersBarmanObjectStoreS3CredentialsAccessKeyId>,
-    #[serde(default, skip_serializing_if = "Option::is_none", rename = "inheritFromIAMRole")]
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        rename = "inheritFromIAMRole"
+    )]
     pub inherit_from_iam_role: Option<bool>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub region: Option<ClusterExternalClustersBarmanObjectStoreS3CredentialsRegion>,
@@ -1200,11 +1386,23 @@ pub struct ClusterManagedRolesPasswordSecret {
 
 #[derive(Serialize, Deserialize, Clone, Debug, Default)]
 pub struct ClusterMonitoring {
-    #[serde(default, skip_serializing_if = "Option::is_none", rename = "customQueriesConfigMap")]
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        rename = "customQueriesConfigMap"
+    )]
     pub custom_queries_config_map: Option<Vec<ClusterMonitoringCustomQueriesConfigMap>>,
-    #[serde(default, skip_serializing_if = "Option::is_none", rename = "customQueriesSecret")]
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        rename = "customQueriesSecret"
+    )]
     pub custom_queries_secret: Option<Vec<ClusterMonitoringCustomQueriesSecret>>,
-    #[serde(default, skip_serializing_if = "Option::is_none", rename = "disableDefaultQueries")]
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        rename = "disableDefaultQueries"
+    )]
     pub disable_default_queries: Option<bool>,
     #[serde(default, skip_serializing_if = "Option::is_none", rename = "enablePodMonitor")]
     pub enable_pod_monitor: Option<bool>,
@@ -1242,7 +1440,11 @@ pub struct ClusterPostgresql {
     pub promotion_timeout: Option<i32>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub shared_preload_libraries: Option<Vec<String>>,
-    #[serde(default, skip_serializing_if = "Option::is_none", rename = "syncReplicaElectionConstraint")]
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        rename = "syncReplicaElectionConstraint"
+    )]
     pub sync_replica_election_constraint: Option<ClusterPostgresqlSyncReplicaElectionConstraint>,
 }
 
@@ -1304,7 +1506,11 @@ pub enum ClusterPostgresqlLdapScheme {
 #[derive(Serialize, Deserialize, Clone, Debug, Default)]
 pub struct ClusterPostgresqlSyncReplicaElectionConstraint {
     pub enabled: bool,
-    #[serde(default, skip_serializing_if = "Option::is_none", rename = "nodeLabelsAntiAffinity")]
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        rename = "nodeLabelsAntiAffinity"
+    )]
     pub node_labels_anti_affinity: Option<Vec<String>>,
 }
 
@@ -1340,7 +1546,11 @@ pub struct ClusterProjectedVolumeTemplateSources {
     pub downward_api: Option<ClusterProjectedVolumeTemplateSourcesDownwardApi>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub secret: Option<ClusterProjectedVolumeTemplateSourcesSecret>,
-    #[serde(default, skip_serializing_if = "Option::is_none", rename = "serviceAccountToken")]
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        rename = "serviceAccountToken"
+    )]
     pub service_account_token: Option<ClusterProjectedVolumeTemplateSourcesServiceAccountToken>,
 }
 
@@ -1418,7 +1628,11 @@ pub struct ClusterProjectedVolumeTemplateSourcesSecretItems {
 pub struct ClusterProjectedVolumeTemplateSourcesServiceAccountToken {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub audience: Option<String>,
-    #[serde(default, skip_serializing_if = "Option::is_none", rename = "expirationSeconds")]
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        rename = "expirationSeconds"
+    )]
     pub expiration_seconds: Option<i64>,
     pub path: String,
 }
@@ -1486,7 +1700,11 @@ pub struct ClusterServiceAccountTemplateMetadata {
 pub struct ClusterStorage {
     #[serde(default, skip_serializing_if = "Option::is_none", rename = "pvcTemplate")]
     pub pvc_template: Option<ClusterStoragePvcTemplate>,
-    #[serde(default, skip_serializing_if = "Option::is_none", rename = "resizeInUseVolumes")]
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        rename = "resizeInUseVolumes"
+    )]
     pub resize_in_use_volumes: Option<bool>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub size: Option<String>,
@@ -1578,7 +1796,11 @@ pub struct ClusterTopologySpreadConstraints {
     pub max_skew: i32,
     #[serde(default, skip_serializing_if = "Option::is_none", rename = "minDomains")]
     pub min_domains: Option<i32>,
-    #[serde(default, skip_serializing_if = "Option::is_none", rename = "nodeAffinityPolicy")]
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        rename = "nodeAffinityPolicy"
+    )]
     pub node_affinity_policy: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none", rename = "nodeTaintsPolicy")]
     pub node_taints_policy: Option<String>,
@@ -1608,7 +1830,11 @@ pub struct ClusterTopologySpreadConstraintsLabelSelectorMatchExpressions {
 pub struct ClusterWalStorage {
     #[serde(default, skip_serializing_if = "Option::is_none", rename = "pvcTemplate")]
     pub pvc_template: Option<ClusterWalStoragePvcTemplate>,
-    #[serde(default, skip_serializing_if = "Option::is_none", rename = "resizeInUseVolumes")]
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        rename = "resizeInUseVolumes"
+    )]
     pub resize_in_use_volumes: Option<bool>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub size: Option<String>,
@@ -1687,27 +1913,55 @@ pub struct ClusterWalStoragePvcTemplateSelectorMatchExpressions {
 
 #[derive(Serialize, Deserialize, Clone, Debug, Default)]
 pub struct ClusterStatus {
-    #[serde(default, skip_serializing_if = "Option::is_none", rename = "azurePVCUpdateEnabled")]
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        rename = "azurePVCUpdateEnabled"
+    )]
     pub azure_pvc_update_enabled: Option<bool>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub certificates: Option<ClusterStatusCertificates>,
-    #[serde(default, skip_serializing_if = "Option::is_none", rename = "cloudNativePGCommitHash")]
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        rename = "cloudNativePGCommitHash"
+    )]
     pub cloud_native_pg_commit_hash: Option<String>,
-    #[serde(default, skip_serializing_if = "Option::is_none", rename = "cloudNativePGOperatorHash")]
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        rename = "cloudNativePGOperatorHash"
+    )]
     pub cloud_native_pg_operator_hash: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub conditions: Option<Vec<ClusterStatusConditions>>,
-    #[serde(default, skip_serializing_if = "Option::is_none", rename = "configMapResourceVersion")]
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        rename = "configMapResourceVersion"
+    )]
     pub config_map_resource_version: Option<ClusterStatusConfigMapResourceVersion>,
     #[serde(default, skip_serializing_if = "Option::is_none", rename = "currentPrimary")]
     pub current_primary: Option<String>,
-    #[serde(default, skip_serializing_if = "Option::is_none", rename = "currentPrimaryFailingSinceTimestamp")]
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        rename = "currentPrimaryFailingSinceTimestamp"
+    )]
     pub current_primary_failing_since_timestamp: Option<String>,
-    #[serde(default, skip_serializing_if = "Option::is_none", rename = "currentPrimaryTimestamp")]
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        rename = "currentPrimaryTimestamp"
+    )]
     pub current_primary_timestamp: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none", rename = "danglingPVC")]
     pub dangling_pvc: Option<Vec<String>>,
-    #[serde(default, skip_serializing_if = "Option::is_none", rename = "firstRecoverabilityPoint")]
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        rename = "firstRecoverabilityPoint"
+    )]
     pub first_recoverability_point: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none", rename = "healthyPVC")]
     pub healthy_pvc: Option<Vec<String>>,
@@ -1717,7 +1971,11 @@ pub struct ClusterStatus {
     pub instance_names: Option<Vec<String>>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub instances: Option<i64>,
-    #[serde(default, skip_serializing_if = "Option::is_none", rename = "instancesReportedState")]
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        rename = "instancesReportedState"
+    )]
     pub instances_reported_state: Option<BTreeMap<String, ClusterStatusInstancesReportedState>>,
     #[serde(default, skip_serializing_if = "Option::is_none", rename = "instancesStatus")]
     pub instances_status: Option<BTreeMap<String, String>>,
@@ -1725,19 +1983,39 @@ pub struct ClusterStatus {
     pub job_count: Option<i32>,
     #[serde(default, skip_serializing_if = "Option::is_none", rename = "lastFailedBackup")]
     pub last_failed_backup: Option<String>,
-    #[serde(default, skip_serializing_if = "Option::is_none", rename = "lastSuccessfulBackup")]
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        rename = "lastSuccessfulBackup"
+    )]
     pub last_successful_backup: Option<String>,
-    #[serde(default, skip_serializing_if = "Option::is_none", rename = "latestGeneratedNode")]
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        rename = "latestGeneratedNode"
+    )]
     pub latest_generated_node: Option<i64>,
-    #[serde(default, skip_serializing_if = "Option::is_none", rename = "managedRolesStatus")]
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        rename = "managedRolesStatus"
+    )]
     pub managed_roles_status: Option<ClusterStatusManagedRolesStatus>,
-    #[serde(default, skip_serializing_if = "Option::is_none", rename = "onlineUpdateEnabled")]
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        rename = "onlineUpdateEnabled"
+    )]
     pub online_update_enabled: Option<bool>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub phase: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none", rename = "phaseReason")]
     pub phase_reason: Option<String>,
-    #[serde(default, skip_serializing_if = "Option::is_none", rename = "poolerIntegrations")]
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        rename = "poolerIntegrations"
+    )]
     pub pooler_integrations: Option<ClusterStatusPoolerIntegrations>,
     #[serde(default, skip_serializing_if = "Option::is_none", rename = "pvcCount")]
     pub pvc_count: Option<i32>,
@@ -1747,16 +2025,22 @@ pub struct ClusterStatus {
     pub ready_instances: Option<i64>,
     #[serde(default, skip_serializing_if = "Option::is_none", rename = "resizingPVC")]
     pub resizing_pvc: Option<Vec<String>>,
-    #[serde(default, skip_serializing_if = "Option::is_none", rename = "secretsResourceVersion")]
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        rename = "secretsResourceVersion"
+    )]
     pub secrets_resource_version: Option<ClusterStatusSecretsResourceVersion>,
     #[serde(default, skip_serializing_if = "Option::is_none", rename = "targetPrimary")]
     pub target_primary: Option<String>,
-    #[serde(default, skip_serializing_if = "Option::is_none", rename = "targetPrimaryTimestamp")]
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        rename = "targetPrimaryTimestamp"
+    )]
     pub target_primary_timestamp: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none", rename = "timelineID")]
     pub timeline_id: Option<i64>,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub topology: Option<ClusterStatusTopology>,
     #[serde(default, skip_serializing_if = "Option::is_none", rename = "unusablePVC")]
     pub unusable_pvc: Option<Vec<String>>,
     #[serde(default, skip_serializing_if = "Option::is_none", rename = "writeService")]
@@ -1769,9 +2053,17 @@ pub struct ClusterStatusCertificates {
     pub client_ca_secret: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub expirations: Option<BTreeMap<String, String>>,
-    #[serde(default, skip_serializing_if = "Option::is_none", rename = "replicationTLSSecret")]
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        rename = "replicationTLSSecret"
+    )]
     pub replication_tls_secret: Option<String>,
-    #[serde(default, skip_serializing_if = "Option::is_none", rename = "serverAltDNSNames")]
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        rename = "serverAltDNSNames"
+    )]
     pub server_alt_dns_names: Option<Vec<String>>,
     #[serde(default, skip_serializing_if = "Option::is_none", rename = "serverCASecret")]
     pub server_ca_secret: Option<String>,
@@ -1784,7 +2076,11 @@ pub struct ClusterStatusConditions {
     #[serde(rename = "lastTransitionTime")]
     pub last_transition_time: String,
     pub message: String,
-    #[serde(default, skip_serializing_if = "Option::is_none", rename = "observedGeneration")]
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        rename = "observedGeneration"
+    )]
     pub observed_generation: Option<i64>,
     pub reason: String,
     pub status: ClusterStatusConditionsStatus,
@@ -1833,7 +2129,11 @@ pub struct ClusterStatusManagedRolesStatusPasswordStatus {
 
 #[derive(Serialize, Deserialize, Clone, Debug, Default)]
 pub struct ClusterStatusPoolerIntegrations {
-    #[serde(default, skip_serializing_if = "Option::is_none", rename = "pgBouncerIntegration")]
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        rename = "pgBouncerIntegration"
+    )]
     pub pg_bouncer_integration: Option<ClusterStatusPoolerIntegrationsPgBouncerIntegration>,
 }
 
@@ -1845,33 +2145,52 @@ pub struct ClusterStatusPoolerIntegrationsPgBouncerIntegration {
 
 #[derive(Serialize, Deserialize, Clone, Debug, Default)]
 pub struct ClusterStatusSecretsResourceVersion {
-    #[serde(default, skip_serializing_if = "Option::is_none", rename = "applicationSecretVersion")]
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        rename = "applicationSecretVersion"
+    )]
     pub application_secret_version: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none", rename = "barmanEndpointCA")]
     pub barman_endpoint_ca: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none", rename = "caSecretVersion")]
     pub ca_secret_version: Option<String>,
-    #[serde(default, skip_serializing_if = "Option::is_none", rename = "clientCaSecretVersion")]
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        rename = "clientCaSecretVersion"
+    )]
     pub client_ca_secret_version: Option<String>,
-    #[serde(default, skip_serializing_if = "Option::is_none", rename = "managedRoleSecretVersion")]
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        rename = "managedRoleSecretVersion"
+    )]
     pub managed_role_secret_version: Option<BTreeMap<String, String>>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub metrics: Option<BTreeMap<String, String>>,
-    #[serde(default, skip_serializing_if = "Option::is_none", rename = "replicationSecretVersion")]
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        rename = "replicationSecretVersion"
+    )]
     pub replication_secret_version: Option<String>,
-    #[serde(default, skip_serializing_if = "Option::is_none", rename = "serverCaSecretVersion")]
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        rename = "serverCaSecretVersion"
+    )]
     pub server_ca_secret_version: Option<String>,
-    #[serde(default, skip_serializing_if = "Option::is_none", rename = "serverSecretVersion")]
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        rename = "serverSecretVersion"
+    )]
     pub server_secret_version: Option<String>,
-    #[serde(default, skip_serializing_if = "Option::is_none", rename = "superuserSecretVersion")]
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        rename = "superuserSecretVersion"
+    )]
     pub superuser_secret_version: Option<String>,
 }
-
-#[derive(Serialize, Deserialize, Clone, Debug, Default)]
-pub struct ClusterStatusTopology {
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub instances: Option<BTreeMap<String, ClusterStatusTopologyInstances>>,
-    #[serde(default, skip_serializing_if = "Option::is_none", rename = "successfullyExtracted")]
-    pub successfully_extracted: Option<bool>,
-}
-
