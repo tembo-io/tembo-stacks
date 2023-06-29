@@ -84,7 +84,7 @@ pub async fn reconcile_prometheus_exporter(cdb: &CoreDB, ctx: Arc<Context>) -> R
     let env_vars = vec![
         EnvVar {
             name: "DATA_SOURCE_NAME".to_string(),
-            value: Some("postgresql://postgres_exporter@localhost:5432/postgres".to_string()),
+            value: Some(format!("postgresql://postgres_exporter@{}:5432/postgres", cdb.name_any())),
             ..EnvVar::default()
         },
         EnvVar {
