@@ -6,12 +6,20 @@ use futures::{
 };
 
 use crate::{
+    apis::{
+        coredb_types::{CoreDB, CoreDBStatus},
+        postgres_parameters::reconcile_pg_parameters_configmap,
+    },
     config::Config,
     cronjob::reconcile_cronjob,
     deployment_postgres_exporter::reconcile_prometheus_exporter,
     exec::{ExecCommand, ExecOutput},
+    extensions::{reconcile_extensions, Extension},
+    ingress::reconcile_postgres_ing_route_tcp,
+    postgres_exporter::{create_postgres_exporter_role, reconcile_prom_configmap},
     psql::{PsqlCommand, PsqlOutput},
     rbac::reconcile_rbac,
+    secret::{reconcile_postgres_exporter_secret, reconcile_secret, PrometheusExporterSecretData},
     service::reconcile_svc,
     statefulset::{reconcile_sts, stateful_set_from_cdb},
 };
@@ -26,16 +34,6 @@ use kube::{
     Resource,
 };
 
-use crate::{
-    apis::{
-        coredb_types::{CoreDB, CoreDBStatus},
-        postgres_parameters::reconcile_pg_parameters_configmap,
-    },
-    extensions::{reconcile_extensions, Extension},
-    ingress::reconcile_postgres_ing_route_tcp,
-    postgres_exporter::{create_postgres_exporter_role, reconcile_prom_configmap},
-    secret::reconcile_secret,
-};
 use k8s_openapi::{
     api::{
         core::v1::{Namespace, Pod},
@@ -198,7 +196,6 @@ impl CoreDB {
                 })?;
         }
 
-
         // reconcile service account, role, and role binding
         reconcile_rbac(self, ctx.clone(), None, create_policy_rules(self).await)
             .await
@@ -212,6 +209,26 @@ impl CoreDB {
             error!("Error reconciling secret: {:?}", e);
             Action::requeue(Duration::from_secs(300))
         })?;
+
+        // reconcile postgres exporter secret
+        let secret_data: Option<PrometheusExporterSecretData> = if self.spec.postgresExporterEnabled {
+            let result = reconcile_postgres_exporter_secret(self, ctx.clone())
+                .await
+                .map_err(|e| {
+                    error!("Error reconciling postgres exporter secret: {:?}", e);
+                    Action::requeue(Duration::from_secs(300))
+                })?;
+
+            match result {
+                Some(data) => Some(data),
+                None => {
+                    warn!("Secret already exists, no new password is generated");
+                    None
+                }
+            }
+        } else {
+            None
+        };
 
         // reconcile cronjob for backups
         reconcile_cronjob(self, ctx.clone()).await.map_err(|e| {
@@ -270,16 +287,18 @@ impl CoreDB {
                 }
 
                 // creating exporter role is pre-requisite to the postgres pod becoming "ready"
-                create_postgres_exporter_role(self, ctx.clone())
-                    .await
-                    .map_err(|e| {
-                        error!(
-                            "Error creating postgres_exporter on CoreDB {}, {}",
-                            self.metadata.name.clone().unwrap(),
-                            e
-                        );
-                        Action::requeue(Duration::from_secs(300))
-                    })?;
+                if self.spec.postgresExporterEnabled {
+                    create_postgres_exporter_role(self, ctx.clone(), secret_data)
+                        .await
+                        .map_err(|e| {
+                            error!(
+                                "Error creating postgres_exporter on CoreDB {}, {}",
+                                self.metadata.name.clone().unwrap(),
+                                e
+                            );
+                            Action::requeue(Duration::from_secs(300))
+                        })?;
+                }
 
                 if !is_pod_ready().matches_object(Some(&primary_pod)) {
                     info!("Did not pod ready {}, waiting a short period", self.name_any());

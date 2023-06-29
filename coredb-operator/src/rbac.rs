@@ -112,7 +112,6 @@ async fn reconcile_role(
     labels.insert("app".to_owned(), "coredb".to_string());
     labels.insert("coredb.io/name".to_owned(), cdb.name_any());
 
-
     let role = Role {
         metadata: ObjectMeta {
             name: Some(name.to_owned()),

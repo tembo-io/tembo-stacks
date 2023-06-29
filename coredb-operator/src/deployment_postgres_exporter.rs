@@ -9,8 +9,8 @@ use k8s_openapi::{
     api::{
         apps::v1::{Deployment, DeploymentSpec},
         core::v1::{
-            ConfigMapVolumeSource, Container, ContainerPort, EnvVar, HTTPGetAction, PodSpec, PodTemplateSpec,
-            Probe, SecurityContext, Volume, VolumeMount,
+            ConfigMapVolumeSource, Container, ContainerPort, EnvVar, EnvVarSource, HTTPGetAction, PodSpec,
+            PodTemplateSpec, Probe, SecretKeySelector, SecurityContext, Volume, VolumeMount,
         },
         rbac::v1::PolicyRule,
     },
@@ -23,7 +23,6 @@ use kube::{
 use std::{collections::BTreeMap, sync::Arc};
 
 const PROM_CFG_DIR: &str = "/prometheus";
-
 
 pub async fn reconcile_prometheus_exporter(cdb: &CoreDB, ctx: Arc<Context>) -> Result<(), Error> {
     let client = ctx.client.clone();
@@ -83,11 +82,30 @@ pub async fn reconcile_prometheus_exporter(cdb: &CoreDB, ctx: Arc<Context>) -> R
     // Generate EnvVar for the Container
     let env_vars = vec![
         EnvVar {
-            name: "DATA_SOURCE_NAME".to_string(),
+            name: "DATA_SOURCE_URI".to_string(),
             value: Some(format!(
-                "postgresql://postgres_exporter@{}:5432/postgres",
-                cdb.name_any()
+                "{}.{}.svc.cluster.local:5432/postgres",
+                cdb.name_any(),
+                ns
             )),
+            ..EnvVar::default()
+        },
+        EnvVar {
+            name: "DATA_SOURCE_USER".to_string(),
+            value: Some("postgres_exporter".to_string()),
+            ..EnvVar::default()
+        },
+        // Set EnvVar from a secret
+        EnvVar {
+            name: "DATA_SOURCE_PASS".to_string(),
+            value_from: Some(EnvVarSource {
+                secret_key_ref: Some(SecretKeySelector {
+                    key: "password".to_string(),
+                    name: Some("postgres-exporter".to_string()),
+                    optional: Some(false),
+                }),
+                ..EnvVarSource::default()
+            }),
             ..EnvVar::default()
         },
         EnvVar {

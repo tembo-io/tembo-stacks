@@ -49,6 +49,9 @@ pub enum Error {
 
     #[error("Pod Error: {0}")]
     PodError(String),
+
+    #[error("Missing Secret Error: {0}")]
+    MissingSecretError(String),
 }
 pub type Result<T, E = Error> = std::result::Result<T, E>;
 
