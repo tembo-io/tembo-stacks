@@ -23,7 +23,7 @@ pub async fn reconcile_cronjob(cdb: &CoreDB, ctx: Arc<Context>) -> Result<(), Er
     labels.insert("app".to_owned(), "coredb".to_string());
     labels.insert("coredb.io/name".to_owned(), cdb.name_any());
 
-    let rbac = reconcile_rbac(cdb, ctx.clone(), Some("backup"), create_policy_rules()).await?;
+    let rbac = reconcile_rbac(cdb, ctx.clone(), Some("backup"), create_policy_rules().await).await?;
 
     // reconcile cronjob
     let cronjob_metadata = ObjectMeta {
@@ -87,7 +87,7 @@ pub async fn reconcile_cronjob(cdb: &CoreDB, ctx: Arc<Context>) -> Result<(), Er
 }
 
 // Create role policy rulesets
-fn create_policy_rules() -> Vec<PolicyRule> {
+async fn create_policy_rules() -> Vec<PolicyRule> {
     vec![
         // This policy allows create, get, list for pods & pods/exec
         PolicyRule {

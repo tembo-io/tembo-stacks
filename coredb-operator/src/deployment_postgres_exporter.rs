@@ -36,7 +36,7 @@ pub async fn reconcile_prometheus_exporter(cdb: &CoreDB, ctx: Arc<Context>) -> R
     labels.insert("coredb.io/name".to_owned(), cdb.name_any());
 
     // reconcile rbac(service account, role, role binding) for the postgres-exporter
-    let rbac = reconcile_rbac(cdb, ctx.clone(), Some("metrics"), create_policy_rules(cdb)).await?;
+    let rbac = reconcile_rbac(cdb, ctx.clone(), Some("metrics"), create_policy_rules(cdb).await).await?;
 
     // Generate the ObjectMeta for the Deployment
     let deployment_metadata = ObjectMeta {
@@ -164,7 +164,7 @@ pub async fn reconcile_prometheus_exporter(cdb: &CoreDB, ctx: Arc<Context>) -> R
 }
 
 // Generate the PolicyRules for the Role
-fn create_policy_rules(cdb: &CoreDB) -> Vec<PolicyRule> {
+async fn create_policy_rules(cdb: &CoreDB) -> Vec<PolicyRule> {
     vec![
         // This policy allows create, get, list for pods & pods/exec
         PolicyRule {
