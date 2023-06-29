@@ -14,103 +14,18 @@ use crate::{
 use k8s_openapi::apimachinery::pkg::apis::meta::v1::{ObjectMeta, OwnerReference};
 use kube::{Resource, ResourceExt};
 use std::collections::BTreeMap;
-use crate::cnpg::clusters::{ClusterMonitoringCustomQueriesConfigMap, ClusterPostgresql};
-// apiVersion: postgresql.cnpg.io/v1
-// kind: Cluster
-// metadata:
-//   annotations:
-//     tembo-pod-init.tembo.io/inject: "true"
-//   name: org-coredb-inst-test-1205
-//   namespace: org-coredb-inst-test-1205
-// spec:
-//   affinity:
-//     podAntiAffinityType: preferred
-//     topologyKey: ""
-//   backup:
-//     barmanObjectStore:
-//       data:
-//         compression: bzip2
-//         encryption: AES256
-//         immediateCheckpoint: true
-//       destinationPath: s3://cdb-plat-use1-dev-instance-backups/coredb/coredb/org-coredb-inst-test-1205/cnpg-backups-v1
-//       s3Credentials:
-//         inheritFromIAMRole: true
-//       wal:
-//         compression: bzip2
-//         encryption: AES256
-//         maxParallel: 5
-//     target: prefer-standby
-//   externalClusters:
-//   - name: coredb
-//     connectionParameters:
-//       host: org-coredb-inst-test-1205
-//       user: postgres
-//     password:
-//       name: org-coredb-inst-test-1205-connection
-//       key: password
-//   bootstrap:
-//     pg_basebackup:
-//       source: coredb
-//   superuserSecret:
-//     name: org-coredb-inst-test-1205-connection
-//   enableSuperuserAccess: true
-//   failoverDelay: 0
-//   imageName: quay.io/tembo/tembo-pg-cnpg:15.3.0-1-3953e4e
-//   instances: 1
-//   logLevel: info
-//   maxSyncReplicas: 0
-//   minSyncReplicas: 0
-//   monitoring:
-//     customQueriesConfigMap:
-//     - key: queries
-//       name: cnpg-default-monitoring
-//     disableDefaultQueries: false
-//     enablePodMonitor: true
-//   postgresGID: 26
-//   postgresUID: 26
-//   postgresql:
-//     parameters:
-//       archive_mode: "on"
-//       archive_timeout: 5min
-//       dynamic_shared_memory_type: posix
-//       log_destination: csvlog
-//       log_directory: /controller/log
-//       log_filename: postgres
-//       log_rotation_age: "0"
-//       log_rotation_size: "0"
-//       log_truncate_on_rotation: "false"
-//       logging_collector: "on"
-//       max_parallel_workers: "32"
-//       max_replication_slots: "32"
-//       max_worker_processes: "32"
-//       shared_memory_type: mmap
-//       shared_preload_libraries: ""
-//       wal_keep_size: 512MB
-//       wal_receiver_timeout: 5s
-//       wal_sender_timeout: 5s
-//     syncReplicaElectionConstraint:
-//       enabled: false
-//   primaryUpdateMethod: restart
-//   primaryUpdateStrategy: unsupervised
-//   resources: {}
-//   serviceAccountTemplate:
-//     metadata:
-//       annotations:
-//         eks.amazonaws.com/role-arn: arn:aws:iam::484221059514:role/org-coredb-inst-test-1205-iam
-//   startDelay: 30
-//   stopDelay: 30
-//   storage:
-//     resizeInUseVolumes: true
-//     size: 5Gi
-//     storageClass: gp3-enc
-//   switchoverDelay: 40000000
+use tracing::log::warn;
+use crate::cnpg::clusters::{ClusterMonitoringCustomQueriesConfigMap, ClusterPostgresql, ClusterPostgresqlSyncReplicaElectionConstraint, ClusterPrimaryUpdateMethod, ClusterPrimaryUpdateStrategy, ClusterServiceAccountTemplate, ClusterServiceAccountTemplateMetadata, ClusterStorage};
 
-pub fn cnpg_cluster_backup_from_cdb(cdb: &CoreDB) -> Option<ClusterBackup> {
+
+pub fn cnpg_backup_configuration(cdb: &CoreDB) -> (Option<ClusterBackup>, Option<ClusterServiceAccountTemplate>) {
     let backup_path = cdb.spec.backup.destinationPath.clone();
-    if backup_path.is_empty() {
-        return None;
+    let role_arn = cdb.spec.serviceAccountTemplate.metadata.annotations.get("eks.amazonaws.com/role-arn");
+    if backup_path.is_empty() || role_arn.is_none() {
+        warn!("Backups are disabled because we don't have an S3 backup path and IAM role");
+        return (None, None);
     }
-    Some(ClusterBackup {
+    let cluster_backup = Some(ClusterBackup {
         barman_object_store: Some(ClusterBackupBarmanObjectStore {
             data: Some(ClusterBackupBarmanObjectStoreData {
                 compression: Some(ClusterBackupBarmanObjectStoreDataCompression::Bzip2),
@@ -131,7 +46,18 @@ pub fn cnpg_cluster_backup_from_cdb(cdb: &CoreDB) -> Option<ClusterBackup> {
             ..ClusterBackupBarmanObjectStore::default()
         }),
         ..ClusterBackup::default()
-    })
+    });
+
+    let service_account_template = Some(ClusterServiceAccountTemplate{
+        metadata: ClusterServiceAccountTemplateMetadata {
+            annotations: Some(BTreeMap::from([
+                ("eks.amazonaws.com/role-arn".to_string(), role_arn.expect("Expected to find IAM role in annotation")),
+            ])),
+            ..ClusterServiceAccountTemplateMetadata::default()
+        },
+    });
+
+    return (cluster_backup, service_account_template)
 }
 
 pub fn cnpg_cluster_bootstrap_from_cdb(
@@ -181,7 +107,7 @@ pub fn cnpg_cluster_bootstrap_from_cdb(
     );
 }
 
-fn cnpg_cluster_parameters_from_cdb(cdb: &CoreDB) -> Option<BTreeMap<String, String>> {
+fn cnpg_postgres_config(cdb: &CoreDB) -> (Option<BTreeMap<String, String>>, Option<Vec<String>>) {
     let mut postgres_parameters = BTreeMap::new();
     postgres_parameters.insert("archive_mode".to_string(), "on".to_string());
     postgres_parameters.insert("archive_timeout".to_string(), "5min".to_string());
@@ -201,7 +127,18 @@ fn cnpg_cluster_parameters_from_cdb(cdb: &CoreDB) -> Option<BTreeMap<String, Str
     postgres_parameters.insert("wal_receiver_timeout".to_string(), "5s".to_string());
     postgres_parameters.insert("wal_sender_timeout".to_string(), "5s".to_string());
     // TODO: right here, overlay other postgres configs
-    Some(postgres_parameters)
+    let shared_preload_libraries = None;;
+    return (Some(postgres_parameters), shared_preload_libraries);
+}
+
+fn cnpg_cluster_storage(cdb: &CoreDB) -> Option<ClusterStorage> {
+    let storage = cdb.spec.storage.clone().0;
+    Some(ClusterStorage {
+        resize_in_use_volumes: Some(true),
+        size: Some(storage),
+        storage_class: Some("gp3-enc".to_string()),
+        ..ClusterStorage::default()
+    })
 }
 
 pub fn cnpg_cluster_from_cdb(cdb: &CoreDB) -> Cluster {
@@ -214,7 +151,11 @@ pub fn cnpg_cluster_from_cdb(cdb: &CoreDB) -> Cluster {
 
     let (bootstrap, external_clusters, superuser_secret) = cnpg_cluster_bootstrap_from_cdb(cdb);
 
-    let postgres_parameters = cnpg_cluster_parameters_from_cdb(cdb);
+    let (postgres_parameters, shared_preload_libraries) = cnpg_postgres_config(cdb);
+
+    let (backup, service_account_template) = cnpg_backup_configuration(cdb);
+
+    let storage = cnpg_cluster_storage(cdb);
 
     Cluster {
         metadata: ObjectMeta {
@@ -230,7 +171,8 @@ pub fn cnpg_cluster_from_cdb(cdb: &CoreDB) -> Cluster {
                 topology_key: Some("topology.kubernetes.io/zone".to_string()),
                 ..ClusterAffinity::default()
             }),
-            backup: cnpg_cluster_backup_from_cdb(cdb),
+            backup,
+            service_account_template,
             bootstrap,
             superuser_secret,
             external_clusters,
@@ -255,33 +197,31 @@ pub fn cnpg_cluster_from_cdb(cdb: &CoreDB) -> Cluster {
             postgres_gid: Some(26),
             postgres_uid: Some(26),
             postgresql: Some(ClusterPostgresql {
+                ldap: None,
                 parameters: postgres_parameters,
+                sync_replica_election_constraint: Some(ClusterPostgresqlSyncReplicaElectionConstraint {
+                    enabled: false,
+                    ..ClusterPostgresqlSyncReplicaElectionConstraint::default()
+                }),
+                shared_preload_libraries,
+                pg_hba: None,
                 ..ClusterPostgresql::default()
             }),
-            certificates: None,
-            description: None,
-            env: None,
-            env_from: None,
-            image_pull_policy: None,
-            image_pull_secrets: None,
-            inherited_metadata: None,
-            managed: None,
-            node_maintenance_window: None,
-            primary_update_method: None,
-            primary_update_strategy: None,
-            projected_volume_template: None,
-            replica: None,
-            replication_slots: None,
+            primary_update_method: Some(ClusterPrimaryUpdateMethod::Restart),
+            primary_update_strategy: Some(ClusterPrimaryUpdateStrategy::Unsupervised),
+            // TODO: before merge
             resources: None,
-            scheduler_name: None,
-            seccomp_profile: None,
-            service_account_template: None,
-            start_delay: None,
-            stop_delay: None,
-            storage: None,
-            switchover_delay: None,
-            topology_spread_constraints: None,
-            wal_storage: None,
+            // The time in seconds that is allowed for a PostgreSQL instance to successfully start up
+            start_delay: Some(30),
+            // The time in seconds that is allowed for a PostgreSQL instance to gracefully shutdown
+            stop_delay: Some(30),
+            storage,
+            // The time in seconds that is allowed for a primary PostgreSQL instance
+            // to gracefully shutdown during a switchover
+            switchover_delay: Some(60),
+            // Set this to match when the cluster consolidation happens
+            node_maintenance_window: None,
+            ..ClusterSpec::default()
         },
         status: None,
     }
