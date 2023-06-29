@@ -787,7 +787,7 @@ pub struct ClusterBootstrapInitdb {
     pub wal_segment_size: Option<i64>,
 }
 
-#[derive(Serialize, Deserialize, Clone, Debug, Default)]
+#[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct ClusterBootstrapInitdbImport {
     pub databases: Vec<String>,
     #[serde(
@@ -2071,7 +2071,7 @@ pub struct ClusterStatusCertificates {
     pub server_tls_secret: Option<String>,
 }
 
-#[derive(Serialize, Deserialize, Clone, Debug, Default)]
+#[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct ClusterStatusConditions {
     #[serde(rename = "lastTransitionTime")]
     pub last_transition_time: String,

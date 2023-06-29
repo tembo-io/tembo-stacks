@@ -7,7 +7,7 @@ use serde::{Serialize, Deserialize};
 use std::collections::BTreeMap;
 use k8s_openapi::apimachinery::pkg::util::intstr::IntOrString;
 
-#[derive(CustomResource, Serialize, Deserialize, Clone, Debug, Default)]
+#[derive(CustomResource, Serialize, Deserialize, Clone, Debug)]
 #[kube(group = "postgresql.cnpg.io", version = "v1", kind = "Pooler", plural = "poolers")]
 #[kube(namespaced)]
 #[kube(status = "PoolerStatus")]
@@ -53,7 +53,7 @@ pub struct PoolerMonitoring {
     pub enable_pod_monitor: Option<bool>,
 }
 
-#[derive(Serialize, Deserialize, Clone, Debug, Default)]
+#[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct PoolerPgbouncer {
     #[serde(default, skip_serializing_if = "Option::is_none", rename = "authQuery")]
     pub auth_query: Option<String>,
