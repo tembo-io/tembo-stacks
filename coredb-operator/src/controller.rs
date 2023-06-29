@@ -119,11 +119,15 @@ impl CoreDB {
 
         // We will migrate databases by applying this label manually to the namespace
         let cnpg_enabled_label = "tembo-pod-init.tembo.io/watch";
+
         // Get labels of the current namespace
         let ns_labels = ns_api
             .get(&ns)
             .await
-            .map_err(|e| Error::KubeError(e.into()))?
+            .map_err(|e| {
+                error!("Could not get namespace: {:?}", e);
+                Action::requeue(Duration::from_secs(300))
+            })?
             .metadata
             .labels
             .unwrap_or_default();
@@ -133,9 +137,9 @@ impl CoreDB {
             Ok(basedomain) => {
                 let service_name_read_write = match cnpg_enabled {
                     // When CNPG is enabled, we use the CNPG service name
-                    true => format!("{}-rw", self.name_any().as_str()).as_str(),
-                    false => self.name_any().as_str(),
-                };
+                    true => format!("{}-rw", self.name_any().as_str()),
+                    false => format!("{}", self.name_any().as_str()),
+                }.as_str();
                 reconcile_postgres_ing_route_tcp(
                     self,
                     ctx.clone(),

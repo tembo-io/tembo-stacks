@@ -1,3 +1,8 @@
+use crate::cnpg::clusters::{
+    ClusterMonitoringCustomQueriesConfigMap, ClusterPostgresql,
+    ClusterPostgresqlSyncReplicaElectionConstraint, ClusterPrimaryUpdateMethod, ClusterPrimaryUpdateStrategy,
+    ClusterServiceAccountTemplate, ClusterServiceAccountTemplateMetadata, ClusterStorage,
+};
 use crate::{
     apis::coredb_types::CoreDB,
     cnpg::clusters::{
@@ -15,16 +20,39 @@ use k8s_openapi::apimachinery::pkg::apis::meta::v1::{ObjectMeta, OwnerReference}
 use kube::{Resource, ResourceExt};
 use std::collections::BTreeMap;
 use tracing::log::warn;
-use crate::cnpg::clusters::{ClusterMonitoringCustomQueriesConfigMap, ClusterPostgresql, ClusterPostgresqlSyncReplicaElectionConstraint, ClusterPrimaryUpdateMethod, ClusterPrimaryUpdateStrategy, ClusterServiceAccountTemplate, ClusterServiceAccountTemplateMetadata, ClusterStorage};
 
-
-pub fn cnpg_backup_configuration(cdb: &CoreDB) -> (Option<ClusterBackup>, Option<ClusterServiceAccountTemplate>) {
+pub fn cnpg_backup_configuration(
+    cdb: &CoreDB,
+) -> (Option<ClusterBackup>, Option<ClusterServiceAccountTemplate>) {
     let backup_path = cdb.spec.backup.destinationPath.clone();
-    let role_arn = cdb.spec.serviceAccountTemplate.metadata.annotations.get("eks.amazonaws.com/role-arn");
-    if backup_path.is_empty() || role_arn.is_none() {
-        warn!("Backups are disabled because we don't have an S3 backup path and IAM role");
+    if backup_path.is_some() {
+        warn!("Backups are disabled because we don't have an S3 backup path");
         return (None, None);
     }
+    let service_account_metadata = cdb.spec.serviceAccountTemplate.metadata.clone();
+    if service_account_metadata.is_some() {
+        warn!("Backups are disabled because we don't have a service account template");
+        return (None, None);
+    }
+    let service_account_annotations = service_account_metadata
+        .expect("Expected service account template metadata")
+        .annotations;
+    if service_account_annotations.is_some() {
+        warn!("Backups are disabled because we don't have a service account template with annotations");
+        return (None, None);
+    }
+    let service_account_annotations = service_account_annotations
+        .expect("Expected service account template annotations");
+    let service_account_role_arn = service_account_annotations
+        .get("eks.amazonaws.com/role-arn");
+    if service_account_role_arn.is_none() {
+        warn!("Backups are disabled because we don't have a service account template with an EKS role ARN");
+        return (None, None);
+    }
+    let role_arn = service_account_role_arn
+        .expect("Expected service account template annotations to contain an EKS role ARN")
+        .clone();
+
     let cluster_backup = Some(ClusterBackup {
         barman_object_store: Some(ClusterBackupBarmanObjectStore {
             data: Some(ClusterBackupBarmanObjectStoreData {
@@ -48,16 +76,17 @@ pub fn cnpg_backup_configuration(cdb: &CoreDB) -> (Option<ClusterBackup>, Option
         ..ClusterBackup::default()
     });
 
-    let service_account_template = Some(ClusterServiceAccountTemplate{
+    let service_account_template = Some(ClusterServiceAccountTemplate {
         metadata: ClusterServiceAccountTemplateMetadata {
-            annotations: Some(BTreeMap::from([
-                ("eks.amazonaws.com/role-arn".to_string(), role_arn.expect("Expected to find IAM role in annotation")),
-            ])),
+            annotations: Some(BTreeMap::from([(
+                "eks.amazonaws.com/role-arn".to_string(),
+                role_arn,
+            )])),
             ..ClusterServiceAccountTemplateMetadata::default()
         },
     });
 
-    return (cluster_backup, service_account_template)
+    return (cluster_backup, service_account_template);
 }
 
 pub fn cnpg_cluster_bootstrap_from_cdb(
@@ -76,7 +105,7 @@ pub fn cnpg_cluster_bootstrap_from_cdb(
     };
     let cluster_name = cdb.name_any();
 
-    let mut coredb_connection_parameters = BtreeMap::new();
+    let mut coredb_connection_parameters = BTreeMap::new();
     coredb_connection_parameters.insert("user".to_string(), "postgres".to_string());
     // The CoreDB operator rw service name is the CoreDB cluster name
     coredb_connection_parameters.insert("host".to_string(), cluster_name.clone());
@@ -127,7 +156,7 @@ fn cnpg_postgres_config(cdb: &CoreDB) -> (Option<BTreeMap<String, String>>, Opti
     postgres_parameters.insert("wal_receiver_timeout".to_string(), "5s".to_string());
     postgres_parameters.insert("wal_sender_timeout".to_string(), "5s".to_string());
     // TODO: right here, overlay other postgres configs
-    let shared_preload_libraries = None;;
+    let shared_preload_libraries = None;
     return (Some(postgres_parameters), shared_preload_libraries);
 }
 
@@ -184,12 +213,10 @@ pub fn cnpg_cluster_from_cdb(cdb: &CoreDB) -> Cluster {
             max_sync_replicas: Some(0),
             min_sync_replicas: Some(0),
             monitoring: Some(ClusterMonitoring {
-                custom_queries_config_map: Some(vec![
-                   ClusterMonitoringCustomQueriesConfigMap{
-                       key: "queries".to_string(),
-                       name: "cnpg-default-monitoring".to_string(),
-                   }
-                ]),
+                custom_queries_config_map: Some(vec![ClusterMonitoringCustomQueriesConfigMap {
+                    key: "queries".to_string(),
+                    name: "cnpg-default-monitoring".to_string(),
+                }]),
                 disable_default_queries: Some(false),
                 enable_pod_monitor: Some(true),
                 ..ClusterMonitoring::default()
