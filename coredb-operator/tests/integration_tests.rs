@@ -958,7 +958,7 @@ mod test {
         let coredb_resource = coredbs.patch(name, &params, &patch).await.unwrap();
 
         // give it time to stop
-        thread::sleep(Duration::from_millis(8000));
+        thread::sleep(Duration::from_millis(10000));
 
         // pod must not be ready
         let res = coredb_resource.primary_pod_coredb(client.clone()).await;
