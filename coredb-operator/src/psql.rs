@@ -26,7 +26,6 @@ pub struct PsqlCommand {
     pod_name: String,
     database: String,
     command: String,
-    context: Arc<Context>,
 }
 
 impl PsqlCommand {
@@ -43,7 +42,6 @@ impl PsqlCommand {
             pods_api,
             database,
             command,
-            context,
         }
     }
 
