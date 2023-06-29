@@ -12,7 +12,12 @@
 #[cfg(test)]
 mod test {
     use chrono::{DateTime, SecondsFormat, Utc};
-    use controller::{apis::coredb_types::CoreDB, Context, defaults::{default_resources, default_storage}, ingress_route_tcp_crd::IngressRouteTCP, is_pod_ready, Metrics, State};
+    use controller::{
+        apis::coredb_types::CoreDB,
+        defaults::{default_resources, default_storage},
+        ingress_route_tcp_crd::IngressRouteTCP,
+        is_pod_ready, State,
+    };
     use k8s_openapi::{
         api::{
             apps::v1::StatefulSet,
@@ -33,7 +38,7 @@ mod test {
     };
     use rand::Rng;
     use std::{collections::BTreeMap, str, thread, time::Duration};
-    use std::sync::Arc;
+
     use tokio::io::AsyncReadExt;
 
     const API_VERSION: &str = "coredb.io/v1alpha1";
@@ -642,7 +647,7 @@ mod test {
         // Initialize the Kubernetes client
         let client = kube_client().await;
         let state = State::default();
-        let context = state.create_context(client.clone());
+        let _context = state.create_context(client.clone());
 
         // Configurations
         let mut rng = rand::thread_rng();

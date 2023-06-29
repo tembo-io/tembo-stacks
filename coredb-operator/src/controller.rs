@@ -153,14 +153,14 @@ impl CoreDB {
                     service_name_read_write.as_str(),
                     IntOrString::Int(5432),
                 )
-                    .await
-                    .map_err(|e| {
-                        error!("Error reconciling postgres ingress route: {:?}", e);
-                        // For unexpected errors, we should requeue for several minutes at least,
-                        // for expected, "waiting" type of requeuing, those should be shorter, just a few seconds.
-                        // IngressRouteTCP does not have expected errors during reconciliation.
-                        Action::requeue(Duration::from_secs(300))
-                    })?;
+                .await
+                .map_err(|e| {
+                    error!("Error reconciling postgres ingress route: {:?}", e);
+                    // For unexpected errors, we should requeue for several minutes at least,
+                    // for expected, "waiting" type of requeuing, those should be shorter, just a few seconds.
+                    // IngressRouteTCP does not have expected errors during reconciliation.
+                    Action::requeue(Duration::from_secs(300))
+                })?;
             }
             Err(_e) => {
                 warn!("DATA_PLANE_BASEDOMAIN is not set, skipping reconciliation of IngressRouteTCP");
@@ -235,7 +235,7 @@ impl CoreDB {
                     return Ok(Action::requeue(Duration::from_secs(1)));
                 }
 
-               if cnpg_enabled {
+                if cnpg_enabled {
                     reconcile_cnpg(self, ctx.clone()).await.map_err(|e| {
                         error!("Error reconciling CNPG: {:?}", e);
                         Action::requeue(Duration::from_secs(300))
