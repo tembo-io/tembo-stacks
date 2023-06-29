@@ -1,5 +1,5 @@
 mod backups;
 mod clusters;
-mod cnpg;
+pub(crate) mod cnpg;
 mod poolers;
 mod scheduledbackups;

@@ -45,6 +45,7 @@ use serde_json::json;
 use std::sync::Arc;
 use tokio::{sync::RwLock, time::Duration};
 use tracing::*;
+use crate::cnpg::cnpg::cnpg_cluster_from_cdb;
 
 pub static COREDB_FINALIZER: &str = "coredbs.coredb.io";
 pub static COREDB_ANNOTATION: &str = "coredbs.coredb.io/watch";
@@ -387,14 +388,14 @@ impl CoreDB {
         Ok(primary)
     }
 
-    // TODO implement for CNPG
     pub async fn primary_pod_cnpg(&self, client: Client) -> Result<Pod, Error> {
-        let sts = stateful_set_from_cdb(self);
-        let sts_name = sts.metadata.name.unwrap();
-        let sts_namespace = sts.metadata.namespace.unwrap();
-        let label_selector = format!("statefulset={sts_name}");
-        let list_params = ListParams::default().labels(&label_selector);
-        let pods: Api<Pod> = Api::namespaced(client, &sts_namespace);
+        let cluster = cnpg_cluster_from_cdb(self);
+        let cluster_name = cluster.metadata.name.expect("CNPG Cluster should always have a name");
+        let namespace = self.metadata.namespace.clone().expect("Operator should always be namespaced");
+        let cluster_selector = format!("cnpg.io/cluster={cluster_name}");
+        let role_selector = format!("role=primary");
+        let list_params = ListParams::default().labels(&cluster_selector).labels(&role_selector);
+        let pods: Api<Pod> = Api::namespaced(client, &namespace);
         let pods = pods.list(&list_params);
         // Return an error if the query fails
         let pod_list = pods.await.map_err(Error::KubeError)?;
@@ -402,8 +403,8 @@ impl CoreDB {
         if pod_list.items.is_empty() {
             return Err(Error::KubeError(kube::Error::Api(kube::error::ErrorResponse {
                 status: "404".to_string(),
-                message: "No pods found".to_string(),
-                reason: "Not Found".to_string(),
+                message: "Did not find CNPG primary".to_string(),
+                reason: "Selecting by cluster name and role did not find any pods".to_string(),
                 code: 404,
             })));
         }

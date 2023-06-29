@@ -1,4 +1,5 @@
 use crate::{apis::coredb_types::CoreDB, controller::patch_cdb_status_merge, defaults, Context, Error};
+use crate::cnpg::cnpg::cnpg_cluster_from_cdb;
 use kube::api::Api;
 use lazy_static::lazy_static;
 use regex::Regex;
