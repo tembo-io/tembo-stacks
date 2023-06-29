@@ -94,7 +94,6 @@ pub async fn create_postgres_exporter_role(
     if !(cdb.spec.postgresExporterEnabled) {
         return Ok(());
     }
-    debug!("Password: {:?}", secret);
     debug!(
         "Creating postgres_exporter role for database {} in namespace {}",
         cdb.metadata.name.clone().unwrap(),
