@@ -133,35 +133,7 @@ impl CoreDB {
             .unwrap_or_default();
         let cnpg_enabled = ns_labels.contains_key(cnpg_enabled_label);
 
-        match std::env::var("DATA_PLANE_BASEDOMAIN") {
-            Ok(basedomain) => {
-                let service_name_read_write = match cnpg_enabled {
-                    // When CNPG is enabled, we use the CNPG service name
-                    true => format!("{}-rw", self.name_any().as_str()),
-                    false => format!("{}", self.name_any().as_str()),
-                }.as_str();
-                reconcile_postgres_ing_route_tcp(
-                    self,
-                    ctx.clone(),
-                    self.name_any().as_str(),
-                    basedomain.as_str(),
-                    ns.as_str(),
-                    self.name_any().as_str(),
-                    IntOrString::Int(5432),
-                )
-                .await
-                .map_err(|e| {
-                    error!("Error reconciling postgres ingress route: {:?}", e);
-                    // For unexpected errors, we should requeue for several minutes at least,
-                    // for expected, "waiting" type of requeuing, those should be shorter, just a few seconds.
-                    // IngressRouteTCP does not have expected errors during reconciliation.
-                    Action::requeue(Duration::from_secs(300))
-                })?;
-            }
-            Err(_e) => {
-                warn!("DATA_PLANE_BASEDOMAIN is not set, skipping reconciliation of IngressRouteTCP");
-            }
-        };
+
 
         // create/update configmap when postgres exporter enabled
         if self.spec.postgresExporterEnabled {
@@ -211,6 +183,7 @@ impl CoreDB {
             error!("Error reconciling service: {:?}", e);
             Action::requeue(Duration::from_secs(300))
         })?;
+
 
         let new_status = match self.spec.stop {
             false => {
@@ -276,6 +249,36 @@ impl CoreDB {
                             Action::requeue(Duration::from_secs(300))
                         })?;
                 }
+
+                match std::env::var("DATA_PLANE_BASEDOMAIN") {
+                    Ok(basedomain) => {
+                        let service_name_read_write = match cnpg_enabled {
+                            // When CNPG is enabled, we use the CNPG service name
+                            true => format!("{}-rw", self.name_any().as_str()),
+                            false => format!("{}", self.name_any().as_str()),
+                        };
+                        reconcile_postgres_ing_route_tcp(
+                            self,
+                            ctx.clone(),
+                            self.name_any().as_str(),
+                            basedomain.as_str(),
+                            ns.as_str(),
+                            service_name_read_write.as_str(),
+                            IntOrString::Int(5432),
+                        )
+                            .await
+                            .map_err(|e| {
+                                error!("Error reconciling postgres ingress route: {:?}", e);
+                                // For unexpected errors, we should requeue for several minutes at least,
+                                // for expected, "waiting" type of requeuing, those should be shorter, just a few seconds.
+                                // IngressRouteTCP does not have expected errors during reconciliation.
+                                Action::requeue(Duration::from_secs(300))
+                            })?;
+                    }
+                    Err(_e) => {
+                        warn!("DATA_PLANE_BASEDOMAIN is not set, skipping reconciliation of IngressRouteTCP");
+                    }
+                };
 
                 CoreDBStatus {
                     running: true,
