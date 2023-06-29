@@ -12,12 +12,7 @@
 #[cfg(test)]
 mod test {
     use chrono::{DateTime, SecondsFormat, Utc};
-    use controller::{
-        apis::coredb_types::CoreDB,
-        defaults::{default_resources, default_storage},
-        ingress_route_tcp_crd::IngressRouteTCP,
-        is_pod_ready,
-    };
+    use controller::{apis::coredb_types::CoreDB, Context, defaults::{default_resources, default_storage}, ingress_route_tcp_crd::IngressRouteTCP, is_pod_ready, Metrics, State};
     use k8s_openapi::{
         api::{
             apps::v1::StatefulSet,
@@ -38,6 +33,7 @@ mod test {
     };
     use rand::Rng;
     use std::{collections::BTreeMap, str, thread, time::Duration};
+    use std::sync::Arc;
     use tokio::io::AsyncReadExt;
 
     const API_VERSION: &str = "coredb.io/v1alpha1";
@@ -115,6 +111,8 @@ mod test {
     async fn functional_test_basic_create() {
         // Initialize the Kubernetes client
         let client = kube_client().await;
+        let state = State::default();
+        let context = state.create_context(client.clone());
 
         // Configurations
         let mut rng = rand::thread_rng();
@@ -256,7 +254,7 @@ mod test {
 
         // Assert no tables found
         let result = coredb_resource
-            .psql("\\dt".to_string(), "postgres".to_string(), client.clone())
+            .psql("\\dt".to_string(), "postgres".to_string(), context.clone())
             .await
             .unwrap();
         println!("psql out: {}", result.stdout.clone().unwrap());
@@ -275,7 +273,7 @@ mod test {
                 "
                 .to_string(),
                 "postgres".to_string(),
-                client.clone(),
+                context.clone(),
             )
             .await
             .unwrap();
@@ -284,7 +282,7 @@ mod test {
 
         // Assert table 'customers' exists
         let result = coredb_resource
-            .psql("\\dt".to_string(), "postgres".to_string(), client.clone())
+            .psql("\\dt".to_string(), "postgres".to_string(), context.clone())
             .await
             .unwrap();
         println!("{}", result.stdout.clone().unwrap());
@@ -298,7 +296,7 @@ mod test {
             .psql(
                 "select extname from pg_catalog.pg_extension;".to_string(),
                 "postgres".to_string(),
-                client.clone(),
+                context.clone(),
             )
             .await
             .unwrap();
@@ -311,7 +309,7 @@ mod test {
             .psql(
                 "SELECT rolname FROM pg_roles;".to_string(),
                 "postgres".to_string(),
-                client.clone(),
+                context.clone(),
             )
             .await
             .unwrap();
@@ -369,7 +367,7 @@ mod test {
             .psql(
                 "select extname from pg_catalog.pg_extension;".to_string(),
                 "postgres".to_string(),
-                client.clone(),
+                context.clone(),
             )
             .await
             .unwrap();
@@ -643,6 +641,8 @@ mod test {
     async fn function_test_skip_reconciliation() {
         // Initialize the Kubernetes client
         let client = kube_client().await;
+        let state = State::default();
+        let context = state.create_context(client.clone());
 
         // Configurations
         let mut rng = rand::thread_rng();
@@ -815,6 +815,8 @@ mod test {
     async fn test_stop_instance() {
         // Initialize the Kubernetes client
         let client = kube_client().await;
+        let state = State::default();
+        let context = state.create_context(client.clone());
 
         // Configurations
         let mut rng = rand::thread_rng();
@@ -895,7 +897,7 @@ mod test {
 
         // Assert no tables found
         let result = coredb_resource
-            .psql("\\dt".to_string(), "postgres".to_string(), client.clone())
+            .psql("\\dt".to_string(), "postgres".to_string(), context.clone())
             .await
             .unwrap();
         println!("{}", result.stderr.clone().unwrap());
@@ -916,7 +918,7 @@ mod test {
                 "
                 .to_string(),
                 "postgres".to_string(),
-                client.clone(),
+                context.clone(),
             )
             .await
             .unwrap();
@@ -925,7 +927,7 @@ mod test {
 
         // Assert table exists
         let result = coredb_resource
-            .psql("\\dt".to_string(), "postgres".to_string(), client.clone())
+            .psql("\\dt".to_string(), "postgres".to_string(), context.clone())
             .await
             .unwrap();
         println!("{}", result.stdout.clone().unwrap());
@@ -982,7 +984,7 @@ mod test {
         assert!(check_for_pod.await.is_ok());
         // assert table still exist
         let result = coredb_resource
-            .psql("\\dt".to_string(), "postgres".to_string(), client.clone())
+            .psql("\\dt".to_string(), "postgres".to_string(), context.clone())
             .await
             .unwrap();
         println!("{}", result.stdout.clone().unwrap());

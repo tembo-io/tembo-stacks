@@ -109,8 +109,6 @@ fn error_policy(cdb: Arc<CoreDB>, error: &Error, ctx: Arc<Context>) -> Action {
 }
 
 impl CoreDB {
-    // How to not query this every time we want to check?
-    // TODO: Answer - add something to context
     async fn cnpg_enabled(&self, ctx: Arc<Context>) -> bool {
         // We will migrate databases by applying this label manually to the namespace
         let cnpg_enabled_label = "tembo-pod-init.tembo.io/watch";
@@ -137,6 +135,37 @@ impl CoreDB {
         let ns = self.namespace().unwrap();
         let name = self.name_any();
         let coredbs: Api<CoreDB> = Api::namespaced(client.clone(), &ns);
+
+        let cnpg_enabled = self.cnpg_enabled(ctx.clone()).await;
+        match std::env::var("DATA_PLANE_BASEDOMAIN") {
+            Ok(basedomain) => {
+                let service_name_read_write = match cnpg_enabled {
+                    // When CNPG is enabled, we use the CNPG service name
+                    true => format!("{}-rw", self.name_any().as_str()),
+                    false => self.name_any().as_str().to_string(),
+                };
+                reconcile_postgres_ing_route_tcp(
+                    self,
+                    ctx.clone(),
+                    self.name_any().as_str(),
+                    basedomain.as_str(),
+                    ns.as_str(),
+                    service_name_read_write.as_str(),
+                    IntOrString::Int(5432),
+                )
+                    .await
+                    .map_err(|e| {
+                        error!("Error reconciling postgres ingress route: {:?}", e);
+                        // For unexpected errors, we should requeue for several minutes at least,
+                        // for expected, "waiting" type of requeuing, those should be shorter, just a few seconds.
+                        // IngressRouteTCP does not have expected errors during reconciliation.
+                        Action::requeue(Duration::from_secs(300))
+                    })?;
+            }
+            Err(_e) => {
+                warn!("DATA_PLANE_BASEDOMAIN is not set, skipping reconciliation of IngressRouteTCP");
+            }
+        };
 
         // create/update configmap when postgres exporter enabled
         if self.spec.postgresExporterEnabled {
@@ -206,38 +235,7 @@ impl CoreDB {
                     return Ok(Action::requeue(Duration::from_secs(1)));
                 }
 
-                let cnpg_enabled = self.cnpg_enabled(ctx.clone()).await;
-                match std::env::var("DATA_PLANE_BASEDOMAIN") {
-                    Ok(basedomain) => {
-                        let service_name_read_write = match cnpg_enabled {
-                            // When CNPG is enabled, we use the CNPG service name
-                            true => format!("{}-rw", self.name_any().as_str()),
-                            false => self.name_any().as_str().to_string(),
-                        };
-                        reconcile_postgres_ing_route_tcp(
-                            self,
-                            ctx.clone(),
-                            self.name_any().as_str(),
-                            basedomain.as_str(),
-                            ns.as_str(),
-                            service_name_read_write.as_str(),
-                            IntOrString::Int(5432),
-                        )
-                        .await
-                        .map_err(|e| {
-                            error!("Error reconciling postgres ingress route: {:?}", e);
-                            // For unexpected errors, we should requeue for several minutes at least,
-                            // for expected, "waiting" type of requeuing, those should be shorter, just a few seconds.
-                            // IngressRouteTCP does not have expected errors during reconciliation.
-                            Action::requeue(Duration::from_secs(300))
-                        })?;
-                    }
-                    Err(_e) => {
-                        warn!("DATA_PLANE_BASEDOMAIN is not set, skipping reconciliation of IngressRouteTCP");
-                    }
-                };
-
-                if cnpg_enabled {
+               if cnpg_enabled {
                     reconcile_cnpg(self, ctx.clone()).await.map_err(|e| {
                         error!("Error reconciling CNPG: {:?}", e);
                         Action::requeue(Duration::from_secs(300))
