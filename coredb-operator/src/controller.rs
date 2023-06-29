@@ -108,6 +108,28 @@ fn error_policy(cdb: Arc<CoreDB>, error: &Error, ctx: Arc<Context>) -> Action {
 }
 
 impl CoreDB {
+
+    // How to not query this every time we want to check?
+    // TODO: Answer - add something to context
+    async fn cnpg_enabled(&self, ctx: Arc<Context>) -> bool {
+        // We will migrate databases by applying this label manually to the namespace
+        let cnpg_enabled_label = "tembo-pod-init.tembo.io/watch";
+
+        let client = ctx.client.clone();
+        // Get labels of the current namespace
+        let ns_api: Api<Namespace> = Api::all(client.clone());
+        let ns = self.namespace().unwrap();
+        let ns_labels = ns_api
+            .get(&ns)
+            .await
+            .unwrap_or_default()
+            .metadata
+            .labels
+            .unwrap_or_default();
+
+        return ns_labels.contains_key(cnpg_enabled_label);
+    }
+
     // Reconcile (for non-finalizer related changes)
     async fn reconcile(&self, ctx: Arc<Context>, cfg: &Config) -> Result<Action, Action> {
         let client = ctx.client.clone();
@@ -115,25 +137,6 @@ impl CoreDB {
         let ns = self.namespace().unwrap();
         let name = self.name_any();
         let coredbs: Api<CoreDB> = Api::namespaced(client.clone(), &ns);
-        let ns_api: Api<Namespace> = Api::all(client.clone());
-
-        // We will migrate databases by applying this label manually to the namespace
-        let cnpg_enabled_label = "tembo-pod-init.tembo.io/watch";
-
-        // Get labels of the current namespace
-        let ns_labels = ns_api
-            .get(&ns)
-            .await
-            .map_err(|e| {
-                error!("Could not get namespace: {:?}", e);
-                Action::requeue(Duration::from_secs(300))
-            })?
-            .metadata
-            .labels
-            .unwrap_or_default();
-        let cnpg_enabled = ns_labels.contains_key(cnpg_enabled_label);
-
-
 
         // create/update configmap when postgres exporter enabled
         if self.spec.postgresExporterEnabled {
@@ -144,7 +147,6 @@ impl CoreDB {
                     Action::requeue(Duration::from_secs(300))
                 })?;
         }
-
 
         // reconcile service account, role, and role binding
         reconcile_rbac(self, ctx.clone()).await.map_err(|e| {
@@ -184,20 +186,19 @@ impl CoreDB {
             Action::requeue(Duration::from_secs(300))
         })?;
 
-
         let new_status = match self.spec.stop {
             false => {
-                let primary_pod = self.primary_pod_coredb(ctx.client.clone()).await;
-                if primary_pod.is_err() {
+                let primary_pod_coredb = self.primary_pod_coredb(ctx.client.clone()).await;
+                if primary_pod_coredb.is_err() {
                     info!(
                         "Did not find primary pod of {}, waiting a short period",
                         self.name_any()
                     );
                     return Ok(Action::requeue(Duration::from_secs(1)));
                 }
-                let primary_pod = primary_pod.unwrap();
+                let primary_pod_coredb = primary_pod_coredb.unwrap();
 
-                if !is_postgres_ready().matches_object(Some(&primary_pod)) {
+                if !is_postgres_ready().matches_object(Some(&primary_pod_coredb)) {
                     info!(
                         "Did not find postgres ready {}, waiting a short period",
                         self.name_any()
@@ -205,51 +206,7 @@ impl CoreDB {
                     return Ok(Action::requeue(Duration::from_secs(1)));
                 }
 
-                // creating exporter role is pre-requisite to the postgres pod becoming "ready"
-                create_postgres_exporter_role(self, ctx.clone())
-                    .await
-                    .map_err(|e| {
-                        error!(
-                            "Error creating postgres_exporter on CoreDB {}, {}",
-                            self.metadata.name.clone().unwrap(),
-                            e
-                        );
-                        Action::requeue(Duration::from_secs(300))
-                    })?;
-
-                if !is_pod_ready().matches_object(Some(&primary_pod)) {
-                    info!(
-                        "Did not find pod ready {}, waiting a short period",
-                        self.name_any()
-                    );
-                    return Ok(Action::requeue(Duration::from_secs(1)));
-                }
-
-                let extensions: Vec<Extension> = reconcile_extensions(self, ctx.clone(), &coredbs, &name)
-                    .await
-                    .map_err(|e| {
-                        error!("Error reconciling extensions: {:?}", e);
-                        Action::requeue(Duration::from_secs(300))
-                    })?;
-
-                // Check cfg.enable_initial_backup to make sure we should run the initial backup
-                // if it's true, run the backup
-                if cfg.enable_initial_backup {
-                    let backup_command = vec![
-                        "/bin/sh".to_string(),
-                        "-c".to_string(),
-                        "/usr/bin/wal-g backup-push /var/lib/postgresql/data --full --verify".to_string(),
-                    ];
-
-                    let _backup_result = self
-                        .exec(primary_pod.name_any(), client, &backup_command)
-                        .await
-                        .map_err(|e| {
-                            error!("Error running backup: {:?}", e);
-                            Action::requeue(Duration::from_secs(300))
-                        })?;
-                }
-
+                let cnpg_enabled = self.cnpg_enabled(ctx.clone()).await;
                 match std::env::var("DATA_PLANE_BASEDOMAIN") {
                     Ok(basedomain) => {
                         let service_name_read_write = match cnpg_enabled {
@@ -279,6 +236,73 @@ impl CoreDB {
                         warn!("DATA_PLANE_BASEDOMAIN is not set, skipping reconciliation of IngressRouteTCP");
                     }
                 };
+
+                if cnpg_enabled {
+                    let primary_pod_cnpg = self.primary_pod_cnpg(ctx.client.clone()).await;
+                    if primary_pod_cnpg.is_err() {
+                        info!(
+                        "Did not find primary pod of CNPG for {}, waiting a short period",
+                        self.name_any()
+                    );
+                        return Ok(Action::requeue(Duration::from_secs(1)));
+                    }
+                    let primary_pod_cnpg = primary_pod_cnpg.unwrap();
+
+                    if !is_postgres_ready().matches_object(Some(&primary_pod_cnpg)) {
+                        info!(
+                        "Did not find postgres ready {}, waiting a short period",
+                        self.name_any()
+                    );
+                        return Ok(Action::requeue(Duration::from_secs(1)));
+                    }
+                }
+
+                // creating exporter role is pre-requisite to the postgres pod becoming "ready"
+                create_postgres_exporter_role(self, ctx.clone())
+                    .await
+                    .map_err(|e| {
+                        error!(
+                            "Error creating postgres_exporter on CoreDB {}, {}",
+                            self.metadata.name.clone().unwrap(),
+                            e
+                        );
+                        Action::requeue(Duration::from_secs(300))
+                    })?;
+
+                // This step is applicable to coredb but not cnpg
+                if !is_pod_ready().matches_object(Some(&primary_pod_coredb)) {
+                    info!(
+                        "Did not find pod ready {}, waiting a short period",
+                        self.name_any()
+                    );
+                    return Ok(Action::requeue(Duration::from_secs(1)));
+                }
+
+                let extensions: Vec<Extension> = reconcile_extensions(self, ctx.clone(), &coredbs, &name)
+                    .await
+                    .map_err(|e| {
+                        error!("Error reconciling extensions: {:?}", e);
+                        Action::requeue(Duration::from_secs(300))
+                    })?;
+
+                // Check cfg.enable_initial_backup to make sure we should run the initial backup
+                // if it's true, run the backup
+                if cfg.enable_initial_backup {
+                    let backup_command = vec![
+                        "/bin/sh".to_string(),
+                        "-c".to_string(),
+                        "/usr/bin/wal-g backup-push /var/lib/postgresql/data --full --verify".to_string(),
+                    ];
+
+                    let _backup_result = self
+                        .exec(primary_pod_coredb.name_any(), client, &backup_command)
+                        .await
+                        .map_err(|e| {
+                            error!("Error running backup: {:?}", e);
+                            Action::requeue(Duration::from_secs(300))
+                        })?;
+                }
+
 
                 CoreDBStatus {
                     running: true,
@@ -363,29 +387,79 @@ impl CoreDB {
         Ok(primary)
     }
 
+    // TODO implement for CNPG
+    pub async fn primary_pod_cnpg(&self, client: Client) -> Result<Pod, Error> {
+        let sts = stateful_set_from_cdb(self);
+        let sts_name = sts.metadata.name.unwrap();
+        let sts_namespace = sts.metadata.namespace.unwrap();
+        let label_selector = format!("statefulset={sts_name}");
+        let list_params = ListParams::default().labels(&label_selector);
+        let pods: Api<Pod> = Api::namespaced(client, &sts_namespace);
+        let pods = pods.list(&list_params);
+        // Return an error if the query fails
+        let pod_list = pods.await.map_err(Error::KubeError)?;
+        // Return an error if the list is empty
+        if pod_list.items.is_empty() {
+            return Err(Error::KubeError(kube::Error::Api(kube::error::ErrorResponse {
+                status: "404".to_string(),
+                message: "No pods found".to_string(),
+                reason: "Not Found".to_string(),
+                code: 404,
+            })));
+        }
+        let primary = pod_list.items[0].clone();
+        Ok(primary)
+    }
+
     pub async fn psql(
         &self,
         command: String,
         database: String,
-        client: Client,
+        context: Arc<Context>,
     ) -> Result<PsqlOutput, kube::Error> {
-        let pod_name = self
+
+        let client = context.client.clone();
+
+        let pod_name_coredb = self
             .primary_pod_coredb(client.clone())
             .await
             .unwrap()
             .metadata
             .name
-            .unwrap();
+            .expect("All pods should have a name");
 
-        PsqlCommand::new(
-            pod_name,
+        let coredb_psql_command = PsqlCommand::new(
+            pod_name_coredb,
             self.metadata.namespace.clone().unwrap(),
-            command,
-            database,
-            client,
-        )
-        .execute()
-        .await
+            command.clone(),
+            database.clone(),
+            context.clone(),
+        );
+        let coredb_exec = coredb_psql_command.execute();
+
+        if self.cnpg_enabled(context.clone()).await {
+            let pod_name_cnpg = self
+                .primary_pod_cnpg(client.clone())
+                .await
+                .unwrap()
+                .metadata
+                .name
+                .expect("All pods should have a name");
+
+            let cnpg_psql_command = PsqlCommand::new(
+                pod_name_cnpg,
+                self.metadata.namespace.clone().unwrap(),
+                command,
+                database,
+                context,
+            );
+            let cnpg_exec = cnpg_psql_command.execute();
+
+            let _coredb_output = coredb_exec.await?;
+            return cnpg_exec.await;
+        }
+
+        return coredb_exec.await;
     }
 
     pub async fn exec(

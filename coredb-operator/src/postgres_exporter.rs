@@ -84,7 +84,6 @@ impl FromStr for Usage {
 }
 
 pub async fn create_postgres_exporter_role(cdb: &CoreDB, ctx: Arc<Context>) -> Result<(), Error> {
-    let client = ctx.client.clone();
     if !(cdb.spec.postgresExporterEnabled) {
         return Ok(());
     }
@@ -118,7 +117,7 @@ pub async fn create_postgres_exporter_role(cdb: &CoreDB, ctx: Arc<Context>) -> R
             "
             .to_string(),
             "postgres".to_owned(),
-            client.clone(),
+            ctx,
         )
         .await?;
     Ok(())

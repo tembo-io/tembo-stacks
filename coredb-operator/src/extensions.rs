@@ -184,8 +184,6 @@ pub async fn toggle_extensions(
     extensions: &[Extension],
     ctx: Arc<Context>,
 ) -> Result<(), Error> {
-    let client = ctx.client.clone();
-
     // iterate through list of extensions and run CREATE EXTENSION <extension-name> for each
     for ext in extensions {
         let ext_name = ext.name.as_str();
@@ -226,7 +224,7 @@ pub async fn toggle_extensions(
                 };
 
                 let result = cdb
-                    .psql(command.clone(), database_name.clone(), client.clone())
+                    .psql(command.clone(), database_name.clone(), ctx.clone())
                     .await;
 
                 match result {
@@ -255,7 +253,7 @@ pub async fn list_databases(cdb: &CoreDB, ctx: Arc<Context>) -> Result<Vec<Strin
         .psql(
             LIST_DATABASES_QUERY.to_owned(),
             "postgres".to_owned(),
-            client.clone(),
+            ctx,
         )
         .await?;
     let result_string = psql_out.stdout.unwrap();
@@ -283,12 +281,11 @@ fn parse_databases(psql_str: &str) -> Vec<String> {
 
 /// lists all extensions in a single database
 pub async fn list_extensions(cdb: &CoreDB, ctx: Arc<Context>, database: &str) -> Result<Vec<ExtRow>, Error> {
-    let client = ctx.client.clone();
     let psql_out = cdb
         .psql(
             LIST_EXTENSIONS_QUERY.to_owned(),
             database.to_owned(),
-            client.clone(),
+            ctx,
         )
         .await
         .unwrap();
@@ -418,7 +415,7 @@ pub async fn reconcile_extensions(
     coredb: &CoreDB,
     ctx: Arc<Context>,
     cdb_api: &Api<CoreDB>,
-    name: &str,
+    name: &str
 ) -> Result<Vec<Extension>, Error> {
     // always get the current state of extensions in the database
     // this is due to out of band changes - manual create/drop extension
