@@ -224,11 +224,11 @@ mod test {
         println!("Found pod ready: {}", pod_name);
 
         let pods: Api<Pod> = Api::namespaced(client.clone(), namespace);
-        let lp = ListParams::default()
-            .labels("app=postgres-exporter".to_string().as_str())
-            .labels(format!("coredb.io/name={}", name).as_str());
+        let lp =
+            ListParams::default().labels(format!("app=postgres-exporter,coredb.io/name={}", name).as_str());
         let exporter_pods = pods.list(&lp).await.expect("could not get pods");
         let exporter_pod_name = exporter_pods.items[0].metadata.name.as_ref().unwrap();
+        println!("Exporter pod name: {}", &exporter_pod_name);
 
         let _check_for_pod_ready = tokio::time::timeout(
             Duration::from_secs(TIMEOUT_SECONDS_POD_READY),
