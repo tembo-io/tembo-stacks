@@ -240,7 +240,11 @@ mod test {
         // assert that the postgres-exporter deployment was created
         let deploy_api: Api<Deployment> = Api::namespaced(client.clone(), namespace);
         let exporter_deployment = deploy_api.get("postgres-exporter").await;
-        assert!(exporter_deployment.is_ok(), "postgres-exporter Deployment does not exist: {:?}", exporter_deployment.err());
+        assert!(
+            exporter_deployment.is_ok(),
+            "postgres-exporter Deployment does not exist: {:?}",
+            exporter_deployment.err()
+        );
 
         // assert custom queries made it to metric server
         let pods: Api<Pod> = Api::namespaced(client.clone(), namespace);
