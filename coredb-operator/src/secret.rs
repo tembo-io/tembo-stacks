@@ -102,7 +102,7 @@ pub async fn reconcile_postgres_exporter_secret(
     let mut labels: BTreeMap<String, String> = BTreeMap::new();
     let secret_api: Api<Secret> = Api::namespaced(client.clone(), &ns);
     let oref = cdb.controller_owner_ref(&()).unwrap();
-    labels.insert("app".to_owned(), name.to_string());
+    labels.insert("app".to_owned(), "postgres-exporter".to_string());
     labels.insert("component".to_owned(), "metrics".to_string());
     labels.insert("coredb.io/name".to_owned(), cdb.name_any());
 
