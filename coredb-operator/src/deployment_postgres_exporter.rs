@@ -32,6 +32,7 @@ pub async fn reconcile_prometheus_exporter(cdb: &CoreDB, ctx: Arc<Context>) -> R
     let deployment_api: Api<Deployment> = Api::namespaced(client, &ns);
     let oref = cdb.controller_owner_ref(&()).unwrap();
     labels.insert("app".to_owned(), name.to_string());
+    labels.insert("component".to_owned(), "metrics".to_string());
     labels.insert("coredb.io/name".to_owned(), cdb.name_any());
 
     // reconcile rbac(service account, role, role binding) for the postgres-exporter

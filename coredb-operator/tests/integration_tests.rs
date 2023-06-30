@@ -225,6 +225,9 @@ mod test {
 
         // assert custom queries made it to metric server
         let pods: Api<Pod> = Api::namespaced(client.clone(), namespace);
+        let lp = ListParams::default().labels(&format!("app={}", "postgres-exporter"));
+        let exporter_pods = pods.list(&lp).await.expect("could not get pods");
+        let exporter_pod_name = exporter_pods.items[0].metadata.name.as_ref();
         let c = vec![
             "wget".to_owned(),
             "-qO-".to_owned(),
@@ -233,7 +236,7 @@ mod test {
         thread::sleep(Duration::from_millis(10000));
         let result_stdout = run_command_in_container(
             pods.clone(),
-            pod_name.clone(),
+            exporter_pod_name.unwrap().to_string(),
             c,
             Some("postgres-exporter".to_string()),
         )
