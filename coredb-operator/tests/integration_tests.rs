@@ -194,21 +194,6 @@ mod test {
             });
         println!("Found secret: {}", secret_name);
 
-        // assert for postgres-exporter secret to be created
-        let exporter_name = format!("{}-metrics", name);
-        let exporter_secret_name = exporter_name.clone();
-        let exporter_secret = secret_api.get(&exporter_secret_name).await;
-        match exporter_secret {
-            Ok(secret) => {
-                // assert for non-empty data in the secret
-                assert!(
-                    secret.data.map_or(false, |data| !data.is_empty()),
-                    "postgres-exporter secret is empty!"
-                );
-            }
-            Err(e) => panic!("Error getting postgres-exporter secret: {}", e),
-        }
-
         // Wait for Pod to be created
         let pod_name = format!("{}-0", name);
 
@@ -237,6 +222,21 @@ mod test {
             )
         });
         println!("Found pod ready: {}", pod_name);
+
+        // assert for postgres-exporter secret to be created
+        let exporter_name = format!("{}-metrics", name);
+        let exporter_secret_name = exporter_name.clone();
+        let exporter_secret = secret_api.get(&exporter_secret_name).await;
+        match exporter_secret {
+            Ok(secret) => {
+                // assert for non-empty data in the secret
+                assert!(
+                    secret.data.map_or(false, |data| !data.is_empty()),
+                    "postgres-exporter secret is empty!"
+                );
+            }
+            Err(e) => panic!("Error getting postgres-exporter secret: {}", e),
+        }
 
         // assert that the postgres-exporter deployment was created
         let deploy_api: Api<Deployment> = Api::namespaced(client.clone(), namespace);
