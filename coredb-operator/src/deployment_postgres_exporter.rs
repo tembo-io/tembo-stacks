@@ -145,7 +145,7 @@ pub async fn reconcile_prometheus_exporter(cdb: &CoreDB, ctx: Arc<Context>) -> R
             args: Some(vec!["--auto-discover-databases".to_string()]),
             env: Some(env_vars),
             image: Some(default_postgres_exporter_image()),
-            name: format!("{}", "postgres-exporter"),
+            name: "postgres-exporter".to_string(),
             ports: Some(container_port),
             readiness_probe: Some(readiness_probe),
             security_context: Some(security_context),

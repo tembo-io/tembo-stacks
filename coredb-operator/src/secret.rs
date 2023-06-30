@@ -107,7 +107,9 @@ pub async fn reconcile_postgres_exporter_secret(
     labels.insert("coredb.io/name".to_owned(), cdb.name_any());
 
     // check for existing secret
-    let lp = ListParams::default().labels(format!("coredb.io/name={}", &cdb.name_any()).as_str()).labels(format!("app=postgres-exporter").as_str());
+    let lp = ListParams::default()
+        .labels(format!("coredb.io/name={}", &cdb.name_any()).as_str())
+        .labels("app=postgres-exporter".to_string().as_str());
     let secrets = secret_api.list(&lp).await.expect("could not get Secrets");
 
     // if the secret has already been created, return (avoids overwriting password value)
@@ -164,7 +166,7 @@ async fn fetch_secret_data(
     ns: &str,
 ) -> Result<PrometheusExporterSecretData, Error> {
     let secret_api: Api<Secret> = Api::namespaced(client, ns);
-    let secret_name = format!("{}", name);
+    let secret_name = name.to_string();
 
     match secret_api.get(&secret_name).await {
         Ok(secret) => {
