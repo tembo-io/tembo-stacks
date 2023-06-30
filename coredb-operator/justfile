@@ -14,7 +14,7 @@ generate-crd:
 
 install-traefik:
 	kubectl create namespace traefik || true
-	helm upgrade --install --namespace=traefik --values=./testdata/traefik-values.yaml traefik traefik/traefik &
+	helm upgrade --install --namespace=traefik --values=./testdata/traefik-values.yaml traefik traefik/traefik
 
 install-tembo-pod-init:
 	kubectl create namespace tembo-pod-init || true
@@ -23,14 +23,17 @@ install-tembo-pod-init:
 	  --namespace cert-manager \
 	  --create-namespace \
 	  --set installCRDs=true && \
-	helm upgrade --install --namespace=tembo-pod-init --set logLevel=debug --set image.tag=latest tembo-pod-init ../charts/tembo-pod-init &
+	helm upgrade --install --namespace=tembo-pod-init --set logLevel=debug --set image.tag=latest tembo-pod-init ../charts/tembo-pod-init
 
 install-cnpg:
 	helm upgrade --install cnpg \
 	  --namespace cnpg-system \
 	  --create-namespace \
 	  --set config.data.INHERITED_ANNOTATIONS="tembo-pod-init.tembo.io/*"  \
-	  cnpg/cloudnative-pg &
+	  cnpg/cloudnative-pg
+
+enable-cnpg-default-namespace:
+	kubectl label namespace default "tembo-pod-init.tembo.io/watch"="true"
 
 update-helm-repos:
 	helm repo add cnpg https://cloudnative-pg.github.io/charts
@@ -64,7 +67,7 @@ run-telemetry:
 
 # run without opentelemetry
 run:
-  RUST_LOG=debug,kube=debug,controller=debug cargo run
+  DATA_PLANE_DOMAIN=localhost ENABLE_INITIAL_BACKUP=false RUST_LOG=debug,kube=debug,controller=debug cargo run
 
 # annotate namespace to allow for tests
 annotate:
