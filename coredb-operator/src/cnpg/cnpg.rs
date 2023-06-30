@@ -21,7 +21,7 @@ use kube::{
     Api, Resource, ResourceExt,
 };
 use std::{collections::BTreeMap, sync::Arc};
-use tracing::log::warn;
+use tracing::log::{debug, warn};
 
 pub fn cnpg_backup_configuration(
     cdb: &CoreDB,
@@ -166,7 +166,9 @@ fn cnpg_cluster_storage(cdb: &CoreDB) -> Option<ClusterStorage> {
     Some(ClusterStorage {
         resize_in_use_volumes: Some(true),
         size: Some(storage),
-        storage_class: Some("gp3-enc".to_string()),
+        // TODO: pass storage class from cdb
+        // storage_class: Some("gp3-enc".to_string()),
+        storage_class: None,
         ..ClusterStorage::default()
     })
 }
@@ -197,7 +199,7 @@ pub fn cnpg_cluster_from_cdb(cdb: &CoreDB) -> Cluster {
         },
         spec: ClusterSpec {
             affinity: Some(ClusterAffinity {
-                pod_anti_affinity_type: Some("required".to_string()),
+                pod_anti_affinity_type: Some("preferred".to_string()),
                 topology_key: Some("topology.kubernetes.io/zone".to_string()),
                 ..ClusterAffinity::default()
             }),
@@ -256,22 +258,27 @@ pub fn cnpg_cluster_from_cdb(cdb: &CoreDB) -> Cluster {
 }
 
 pub async fn reconcile_cnpg(cdb: &CoreDB, ctx: Arc<Context>) -> Result<(), Error> {
+    debug!("Generating CNPG spec");
     let cluster = cnpg_cluster_from_cdb(cdb);
+    debug!("Getting namespace of cluster");
     let namespace = cluster
         .metadata
         .namespace
         .clone()
         .expect("CNPG Cluster should always have a namespace");
+    debug!("Getting name of cluster");
     let name = cluster
         .metadata
         .name
         .clone()
         .expect("CNPG Cluster should always have a name");
+    debug!("Patching cluster");
     let cluster_api: Api<Cluster> = Api::namespaced(ctx.client.clone(), namespace.as_str());
     let ps = PatchParams::apply("cntrlr");
     let _o = cluster_api
         .patch(&name, &ps, &Patch::Apply(&cluster))
         .await
         .map_err(Error::KubeError)?;
+    debug!("Applied");
     Ok(())
 }

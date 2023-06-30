@@ -124,8 +124,34 @@ impl CoreDB {
             .metadata
             .labels
             .unwrap_or_default();
+        dbg!(ns_labels.clone());
 
-        ns_labels.contains_key(cnpg_enabled_label)
+        let enabled_value = ns_labels.get(&String::from(cnpg_enabled_label));
+        dbg!(enabled_value.clone());
+        if enabled_value.is_some() {
+            dbg!("yes contains key");
+            let enabled = enabled_value.expect("We already checked this is_some") == "true";
+            if enabled {
+                warn!(
+                    "CNPG is enabled for CoreDB \"{}\" in {}",
+                    self.name_any(),
+                    ns
+                );
+            } else {
+                error!(
+                    "CNPG is not enabled for CoreDB \"{}\" in {}",
+                    self.name_any(),
+                    ns
+                );
+            }
+            return enabled;
+        }
+        error!(
+                    "CNPG is not enabled for CoreDB \"{}\" in {}",
+                    self.name_any(),
+                    ns
+                );
+        return false;
     }
 
     // Reconcile (for non-finalizer related changes)
@@ -139,6 +165,7 @@ impl CoreDB {
         let cnpg_enabled = self.cnpg_enabled(ctx.clone()).await;
         match std::env::var("DATA_PLANE_BASEDOMAIN") {
             Ok(basedomain) => {
+                debug!("DATA_PLANE_BASEDOMAIN is set to {}, reconciling ingress route tcp", basedomain);
                 let service_name_read_write = match cnpg_enabled {
                     // When CNPG is enabled, we use the CNPG service name
                     true => format!("{}-rw", self.name_any().as_str()),
@@ -169,6 +196,7 @@ impl CoreDB {
 
         // create/update configmap when postgres exporter enabled
         if self.spec.postgresExporterEnabled {
+            debug!("Reconciling prometheus configmap");
             reconcile_prom_configmap(self, client.clone(), &ns)
                 .await
                 .map_err(|e| {
@@ -178,24 +206,28 @@ impl CoreDB {
         }
 
         // reconcile service account, role, and role binding
+        debug!("Reconciling service account, role, and role binding");
         reconcile_rbac(self, ctx.clone()).await.map_err(|e| {
             error!("Error reconciling service account: {:?}", e);
             Action::requeue(Duration::from_secs(300))
         })?;
 
         // reconcile secret
+        debug!("Reconciling secret");
         reconcile_secret(self, ctx.clone()).await.map_err(|e| {
             error!("Error reconciling secret: {:?}", e);
             Action::requeue(Duration::from_secs(300))
         })?;
 
         // reconcile cronjob for backups
+        debug!("Reconciling cronjob");
         reconcile_cronjob(self, ctx.clone()).await.map_err(|e| {
             error!("Error reconciling cronjob: {:?}", e);
             Action::requeue(Duration::from_secs(300))
         })?;
 
         // handle postgres configs
+        debug!("Reconciling postgres configmap");
         reconcile_pg_parameters_configmap(self, client.clone(), &ns)
             .await
             .map_err(|e| {
@@ -204,12 +236,14 @@ impl CoreDB {
             })?;
 
         // reconcile statefulset
+        debug!("Reconciling statefulset");
         reconcile_sts(self, ctx.clone()).await.map_err(|e| {
             error!("Error reconciling statefulset: {:?}", e);
             Action::requeue(Duration::from_secs(300))
         })?;
 
         // reconcile service
+        debug!("Reconciling service");
         reconcile_svc(self, ctx.clone()).await.map_err(|e| {
             error!("Error reconciling service: {:?}", e);
             Action::requeue(Duration::from_secs(300))
@@ -260,6 +294,8 @@ impl CoreDB {
                     }
                 }
 
+                // TODO: before merge (bug) on fresh DB, this cannot run because postgres not ready on CNPG
+                // and primary of coredb also not ready
                 // creating exporter role is pre-requisite to the postgres pod becoming "ready"
                 create_postgres_exporter_role(self, ctx.clone())
                     .await
