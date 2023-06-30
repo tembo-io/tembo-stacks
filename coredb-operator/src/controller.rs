@@ -127,30 +127,10 @@ impl CoreDB {
         dbg!(ns_labels.clone());
 
         let enabled_value = ns_labels.get(&String::from(cnpg_enabled_label));
-        dbg!(enabled_value.clone());
         if enabled_value.is_some() {
-            dbg!("yes contains key");
             let enabled = enabled_value.expect("We already checked this is_some") == "true";
-            if enabled {
-                warn!(
-                    "CNPG is enabled for CoreDB \"{}\" in {}",
-                    self.name_any(),
-                    ns
-                );
-            } else {
-                error!(
-                    "CNPG is not enabled for CoreDB \"{}\" in {}",
-                    self.name_any(),
-                    ns
-                );
-            }
             return enabled;
         }
-        error!(
-                    "CNPG is not enabled for CoreDB \"{}\" in {}",
-                    self.name_any(),
-                    ns
-                );
         return false;
     }
 
