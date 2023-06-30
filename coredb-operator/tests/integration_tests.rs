@@ -249,7 +249,9 @@ mod test {
 
         // assert custom queries made it to metric server
         let pods: Api<Pod> = Api::namespaced(client.clone(), namespace);
-        let lp = ListParams::default().labels(format!("app=postgres-exporter").as_str()).labels(format!("name={}", name).as_str());
+        let lp = ListParams::default()
+            .labels("app=postgres-exporter".to_string().as_str())
+            .labels(format!("name={}", name).as_str());
         let exporter_pods = pods.list(&lp).await.expect("could not get pods");
         let exporter_pod_name = exporter_pods.items[0].metadata.name.as_ref();
         let c = vec![
