@@ -36,7 +36,7 @@ pub async fn reconcile_prometheus_exporter(cdb: &CoreDB, ctx: Arc<Context>) -> R
     labels.insert("coredb.io/name".to_owned(), cdb.name_any());
 
     // reconcile rbac(service account, role, role binding) for the postgres-exporter
-    let rbac = reconcile_rbac(cdb, ctx.clone(), Some("metrics"), create_policy_rules(cdb).await).await?;
+    let rbac = reconcile_rbac(cdb, ctx.clone(), Some("metrics"), create_policy_rules().await).await?;
 
     // Generate the ObjectMeta for the Deployment
     let deployment_metadata = ObjectMeta {
@@ -186,28 +186,13 @@ pub async fn reconcile_prometheus_exporter(cdb: &CoreDB, ctx: Arc<Context>) -> R
 }
 
 // Generate the PolicyRules for the Role
-async fn create_policy_rules(cdb: &CoreDB) -> Vec<PolicyRule> {
+async fn create_policy_rules() -> Vec<PolicyRule> {
     vec![
-        // This policy allows create, get, list for pods & pods/exec
-        PolicyRule {
-            api_groups: Some(vec!["".to_owned()]),
-            resources: Some(vec!["pods".to_owned()]),
-            verbs: vec!["create".to_string(), "get".to_string(), "watch".to_string()],
-            ..PolicyRule::default()
-        },
         // This policy allows get, watch access to a secret in the namespace
         PolicyRule {
             api_groups: Some(vec!["".to_owned()]),
-            resource_names: Some(vec![format!("{}-connection", cdb.name_any())]),
+            resource_names: Some(vec![format!("{}", "postgres-exporter")]),
             resources: Some(vec!["secrets".to_owned()]),
-            verbs: vec!["get".to_string(), "watch".to_string()],
-            ..PolicyRule::default()
-        },
-        // This policy for now is specifically open for all configmaps in the namespace
-        // We currently do not have any configmaps
-        PolicyRule {
-            api_groups: Some(vec!["".to_owned()]),
-            resources: Some(vec!["configmaps".to_owned()]),
             verbs: vec!["get".to_string(), "watch".to_string()],
             ..PolicyRule::default()
         },
