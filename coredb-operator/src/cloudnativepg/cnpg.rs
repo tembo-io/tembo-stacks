@@ -1,8 +1,7 @@
 use crate::{
     apis::coredb_types::CoreDB,
-    cnpg::clusters::{
-        Cluster, ClusterAffinity, ClusterAffinityAdditionalPodAffinity,
-        ClusterAffinityAdditionalPodAntiAffinity, ClusterBackup, ClusterBackupBarmanObjectStore,
+    cloudnativepg::clusters::{
+        Cluster, ClusterAffinity, ClusterBackup, ClusterBackupBarmanObjectStore,
         ClusterBackupBarmanObjectStoreData, ClusterBackupBarmanObjectStoreDataCompression,
         ClusterBackupBarmanObjectStoreDataEncryption, ClusterBackupBarmanObjectStoreS3Credentials,
         ClusterBackupBarmanObjectStoreWal, ClusterBackupBarmanObjectStoreWalCompression,
@@ -15,7 +14,7 @@ use crate::{
     },
     Context, Error,
 };
-use k8s_openapi::apimachinery::pkg::apis::meta::v1::{ObjectMeta, OwnerReference};
+use k8s_openapi::apimachinery::pkg::apis::meta::v1::ObjectMeta;
 use kube::{
     api::{Patch, PatchParams},
     Api, Resource, ResourceExt,
