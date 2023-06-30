@@ -98,15 +98,16 @@ pub async fn reconcile_postgres_exporter_secret(
 ) -> Result<Option<PrometheusExporterSecretData>, Error> {
     let client = ctx.client.clone();
     let ns = cdb.namespace().unwrap();
-    let name = "postgres-exporter".to_owned();
+    let name = format!("{}-metrics", cdb.name_any());
     let mut labels: BTreeMap<String, String> = BTreeMap::new();
     let secret_api: Api<Secret> = Api::namespaced(client.clone(), &ns);
     let oref = cdb.controller_owner_ref(&()).unwrap();
-    labels.insert("app".to_owned(), "postgres-exporter".to_string());
+    labels.insert("app".to_owned(), name.to_string());
+    labels.insert("component".to_owned(), "metrics".to_string());
     labels.insert("coredb.io/name".to_owned(), cdb.name_any());
 
     // check for existing secret
-    let lp = ListParams::default().labels("app=postgres-exporter");
+    let lp = ListParams::default().labels(format!("app={}", &name).as_str());
     let secrets = secret_api.list(&lp).await.expect("could not get Secrets");
 
     // if the secret has already been created, return (avoids overwriting password value)
@@ -114,7 +115,7 @@ pub async fn reconcile_postgres_exporter_secret(
         for s in &secrets.items {
             if s.name_any() == name {
                 debug!("skipping secret creation: secret {} exists", &name);
-                let secret_data = fetch_secret_data(client.clone(), &ns).await?;
+                let secret_data = fetch_secret_data(client.clone(), name, &ns).await?;
                 return Ok(Some(secret_data));
             }
         }
@@ -157,9 +158,13 @@ fn postgres_exporter_secret_data() -> (BTreeMap<String, ByteString>, PrometheusE
 }
 
 // Lookup secret data for postgres-exporter
-async fn fetch_secret_data(client: Client, ns: &str) -> Result<PrometheusExporterSecretData, Error> {
+async fn fetch_secret_data(
+    client: Client,
+    name: String,
+    ns: &str,
+) -> Result<PrometheusExporterSecretData, Error> {
     let secret_api: Api<Secret> = Api::namespaced(client, ns);
-    let secret_name = "postgres-exporter".to_owned();
+    let secret_name = format!("{}", name);
 
     match secret_api.get(&secret_name).await {
         Ok(secret) => {

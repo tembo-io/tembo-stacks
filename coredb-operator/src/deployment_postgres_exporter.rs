@@ -27,7 +27,7 @@ const PROM_CFG_DIR: &str = "/prometheus";
 pub async fn reconcile_prometheus_exporter(cdb: &CoreDB, ctx: Arc<Context>) -> Result<(), Error> {
     let client = ctx.client.clone();
     let ns = cdb.namespace().unwrap();
-    let name = "postgres-exporter";
+    let name = format!("{}-metrics", cdb.name_any());
     let mut labels: BTreeMap<String, String> = BTreeMap::new();
     let deployment_api: Api<Deployment> = Api::namespaced(client, &ns);
     let oref = cdb.controller_owner_ref(&()).unwrap();
@@ -36,7 +36,13 @@ pub async fn reconcile_prometheus_exporter(cdb: &CoreDB, ctx: Arc<Context>) -> R
     labels.insert("coredb.io/name".to_owned(), cdb.name_any());
 
     // reconcile rbac(service account, role, role binding) for the postgres-exporter
-    let rbac = reconcile_rbac(cdb, ctx.clone(), Some("metrics"), create_policy_rules().await).await?;
+    let rbac = reconcile_rbac(
+        cdb,
+        ctx.clone(),
+        Some("metrics"),
+        create_policy_rules(name.clone()).await,
+    )
+    .await?;
 
     // Generate the ObjectMeta for the Deployment
     let deployment_metadata = ObjectMeta {
@@ -102,7 +108,7 @@ pub async fn reconcile_prometheus_exporter(cdb: &CoreDB, ctx: Arc<Context>) -> R
             value_from: Some(EnvVarSource {
                 secret_key_ref: Some(SecretKeySelector {
                     key: "password".to_string(),
-                    name: Some("postgres-exporter".to_string()),
+                    name: Some(name.to_owned()),
                     optional: Some(false),
                 }),
                 ..EnvVarSource::default()
@@ -139,7 +145,7 @@ pub async fn reconcile_prometheus_exporter(cdb: &CoreDB, ctx: Arc<Context>) -> R
             args: Some(vec!["--auto-discover-databases".to_string()]),
             env: Some(env_vars),
             image: Some(default_postgres_exporter_image()),
-            name: name.to_string(),
+            name: format!("{}", "postgres-exporter"),
             ports: Some(container_port),
             readiness_probe: Some(readiness_probe),
             security_context: Some(security_context),
@@ -178,7 +184,7 @@ pub async fn reconcile_prometheus_exporter(cdb: &CoreDB, ctx: Arc<Context>) -> R
 
     let ps = PatchParams::apply("cntrlr").force();
     let _o = deployment_api
-        .patch(name, &ps, &Patch::Apply(&deployment))
+        .patch(&name, &ps, &Patch::Apply(&deployment))
         .await
         .map_err(Error::KubeError)?;
 
@@ -186,12 +192,12 @@ pub async fn reconcile_prometheus_exporter(cdb: &CoreDB, ctx: Arc<Context>) -> R
 }
 
 // Generate the PolicyRules for the Role
-async fn create_policy_rules() -> Vec<PolicyRule> {
+async fn create_policy_rules(name: String) -> Vec<PolicyRule> {
     vec![
         // This policy allows get, watch access to a secret in the namespace
         PolicyRule {
             api_groups: Some(vec!["".to_owned()]),
-            resource_names: Some(vec![format!("{}", "postgres-exporter")]),
+            resource_names: Some(vec![format!("{}", name)]),
             resources: Some(vec!["secrets".to_owned()]),
             verbs: vec!["get".to_string(), "watch".to_string()],
             ..PolicyRule::default()

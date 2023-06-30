@@ -195,7 +195,8 @@ mod test {
         println!("Found secret: {}", secret_name);
 
         // assert for postgres-exporter secret to be created
-        let exporter_secret_name = format!("{}", "postgres-exporter");
+        let exporter_name = format!("{}-metrics", name);
+        let exporter_secret_name = exporter_name.clone();
         let exporter_secret = secret_api.get(&exporter_secret_name).await;
         match exporter_secret {
             Ok(secret) => {
@@ -239,7 +240,7 @@ mod test {
 
         // assert that the postgres-exporter deployment was created
         let deploy_api: Api<Deployment> = Api::namespaced(client.clone(), namespace);
-        let exporter_deployment = deploy_api.get("postgres-exporter").await;
+        let exporter_deployment = deploy_api.get(exporter_name.clone().as_str()).await;
         assert!(
             exporter_deployment.is_ok(),
             "postgres-exporter Deployment does not exist: {:?}",
@@ -248,7 +249,7 @@ mod test {
 
         // assert custom queries made it to metric server
         let pods: Api<Pod> = Api::namespaced(client.clone(), namespace);
-        let lp = ListParams::default().labels(&format!("app={}", "postgres-exporter"));
+        let lp = ListParams::default().labels(format!("app={}", exporter_name.clone()).as_str());
         let exporter_pods = pods.list(&lp).await.expect("could not get pods");
         let exporter_pod_name = exporter_pods.items[0].metadata.name.as_ref();
         let c = vec![
