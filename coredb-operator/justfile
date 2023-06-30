@@ -35,6 +35,12 @@ install-cnpg:
 enable-cnpg-default-namespace:
 	kubectl label namespace default "tembo-pod-init.tembo.io/watch"="true"
 
+connect-test-db:
+	echo "Please include a line in your /etc/hosts file: "
+	echo "127.0.0.1 test-coredb.localhost"
+	psql "postgres://postgres:$(kubectl get secrets -o json test-coredb-connection | jq -r '.data.password' | base64 --decode)@test-coredb.localhost:5432"
+
+
 update-helm-repos:
 	helm repo add cnpg https://cloudnative-pg.github.io/charts
 	helm repo add jetstack https://charts.jetstack.io
