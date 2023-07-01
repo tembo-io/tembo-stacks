@@ -9,7 +9,7 @@ spec:
   pkglibdirStorage: 1Gi
   port: 5432
   postgresExporterEnabled: true
-  postgresExporterImage: quay.io/prometheuscommunity/postgres-exporter:v0.12.0
+  postgresExporterImage: quay.io/prometheuscommunity/postgres-exporter:v0.12.1
   replicas: 1
   sharedirStorage: 1Gi
   storage: 1Gi

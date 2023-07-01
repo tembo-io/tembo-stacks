@@ -289,7 +289,8 @@ impl CoreDB {
 
         // reconcile prometheus exporter deployment if enabled
         if self.spec.postgresExporterEnabled {
-            reconcile_prometheus_exporter(self, ctx.clone())
+            debug!("Reconciling prometheus exporter deployment");
+            reconcile_prometheus_exporter(self, ctx.clone(), cnpg_enabled)
                 .await
                 .map_err(|e| {
                     error!("Error reconciling prometheus exporter deployment: {:?}", e);
