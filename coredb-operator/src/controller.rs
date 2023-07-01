@@ -24,16 +24,6 @@ use crate::{
     service::reconcile_svc,
     statefulset::{reconcile_sts, stateful_set_from_cdb},
 };
-use kube::{
-    api::{Api, ListParams, Patch, PatchParams, ResourceExt},
-    client::Client,
-    runtime::{
-        controller::{Action, Controller},
-        events::{Event, EventType, Recorder, Reporter},
-        finalizer::{finalizer, Event as Finalizer},
-    },
-    Resource,
-};
 use k8s_openapi::{
     api::{
         core::v1::{Namespace, Pod},
@@ -41,7 +31,17 @@ use k8s_openapi::{
     },
     apimachinery::pkg::util::intstr::IntOrString,
 };
-use kube::runtime::wait::Condition;
+use kube::{
+    api::{Api, ListParams, Patch, PatchParams, ResourceExt},
+    client::Client,
+    runtime::{
+        controller::{Action, Controller},
+        events::{Event, EventType, Recorder, Reporter},
+        finalizer::{finalizer, Event as Finalizer},
+        wait::Condition,
+    },
+    Resource,
+};
 use serde::Serialize;
 use serde_json::json;
 use std::sync::Arc;
@@ -189,7 +189,10 @@ impl CoreDB {
         let cnpg_enabled = self.cnpg_enabled(ctx.clone()).await;
         match std::env::var("DATA_PLANE_BASEDOMAIN") {
             Ok(basedomain) => {
-                debug!("DATA_PLANE_BASEDOMAIN is set to {}, reconciling ingress route tcp", basedomain);
+                debug!(
+                    "DATA_PLANE_BASEDOMAIN is set to {}, reconciling ingress route tcp",
+                    basedomain
+                );
                 let service_name_read_write = match cnpg_enabled {
                     // When CNPG is enabled, we use the CNPG service name
                     true => format!("{}-rw", self.name_any().as_str()),
@@ -399,7 +402,6 @@ impl CoreDB {
                             Action::requeue(Duration::from_secs(300))
                         })?;
                 }
-
 
                 CoreDBStatus {
                     running: true,

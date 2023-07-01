@@ -24,7 +24,11 @@ use std::{collections::BTreeMap, sync::Arc};
 
 const PROM_CFG_DIR: &str = "/prometheus";
 
-pub async fn reconcile_prometheus_exporter(cdb: &CoreDB, ctx: Arc<Context>, cnpg_enabled: bool) -> Result<(), Error> {
+pub async fn reconcile_prometheus_exporter(
+    cdb: &CoreDB,
+    ctx: Arc<Context>,
+    cnpg_enabled: bool,
+) -> Result<(), Error> {
     let client = ctx.client.clone();
     let ns = cdb.namespace().unwrap();
     let name = format!("{}-metrics", cdb.name_any());
@@ -212,7 +216,7 @@ async fn create_policy_rules(name: String) -> Vec<PolicyRule> {
 
 fn get_exporter_image(cdb: &CoreDB) -> String {
     // Check if cdb.spec.postgresExporterImage is set
-    // If so, use that image; otherwise, use the default 
+    // If so, use that image; otherwise, use the default
     // image from default_postgres_exporter_image() function
     if cdb.spec.postgresExporterImage.is_empty() {
         default_postgres_exporter_image()
