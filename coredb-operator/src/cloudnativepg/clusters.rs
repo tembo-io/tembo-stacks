@@ -2204,3 +2204,6 @@ pub struct ClusterStatusTopology {
     #[serde(default, skip_serializing_if = "Option::is_none", rename = "successfullyExtracted")]
     pub successfully_extracted: Option<bool>,
 }
+
+#[derive(Serialize, Deserialize, Clone, Debug, Default)]
+pub struct ClusterStatusTopologyInstances {}
