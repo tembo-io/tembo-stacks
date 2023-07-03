@@ -285,7 +285,7 @@ pub async fn reconcile_cnpg(cdb: &CoreDB, ctx: Arc<Context>) -> Result<(), Error
 #[cfg(test)]
 mod tests {
     use super::*;
-    use serde_json::json;
+
 
     #[test]
     fn test_deserialize_cluster() {
@@ -633,6 +633,6 @@ mod tests {
 
         "#;
 
-        let result: Cluster = serde_json::from_str(json_str).expect("Should be able to deserialize");
+        let _result: Cluster = serde_json::from_str(json_str).expect("Should be able to deserialize");
     }
 }

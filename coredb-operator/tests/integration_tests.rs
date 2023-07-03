@@ -235,7 +235,7 @@ mod test {
 
         let _check_for_pod_ready = tokio::time::timeout(
             Duration::from_secs(TIMEOUT_SECONDS_POD_READY),
-            await_condition(pods.clone(), &exporter_pod_name, is_pod_ready()),
+            await_condition(pods.clone(), exporter_pod_name, is_pod_ready()),
         )
         .await
         .unwrap_or_else(|_| {
