@@ -2041,6 +2041,8 @@ pub struct ClusterStatus {
     pub target_primary_timestamp: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none", rename = "timelineID")]
     pub timeline_id: Option<i64>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub topology: Option<ClusterStatusTopology>,
     #[serde(default, skip_serializing_if = "Option::is_none", rename = "unusablePVC")]
     pub unusable_pvc: Option<Vec<String>>,
     #[serde(default, skip_serializing_if = "Option::is_none", rename = "writeService")]
@@ -2193,4 +2195,12 @@ pub struct ClusterStatusSecretsResourceVersion {
         rename = "superuserSecretVersion"
     )]
     pub superuser_secret_version: Option<String>,
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug)]
+pub struct ClusterStatusTopology {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub instances: Option<BTreeMap<String, ClusterStatusTopologyInstances>>,
+    #[serde(default, skip_serializing_if = "Option::is_none", rename = "successfullyExtracted")]
+    pub successfully_extracted: Option<bool>,
 }
