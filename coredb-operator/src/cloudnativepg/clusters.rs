@@ -1870,6 +1870,7 @@ pub struct ClusterWalStoragePvcTemplateDataSource {
     pub name: String,
 }
 
+
 #[derive(Serialize, Deserialize, Clone, Debug, Default)]
 pub struct ClusterWalStoragePvcTemplateDataSourceRef {
     #[serde(default, skip_serializing_if = "Option::is_none", rename = "apiGroup")]
@@ -1978,7 +1979,7 @@ pub struct ClusterStatus {
     )]
     pub instances_reported_state: Option<BTreeMap<String, ClusterStatusInstancesReportedState>>,
     #[serde(default, skip_serializing_if = "Option::is_none", rename = "instancesStatus")]
-    pub instances_status: Option<BTreeMap<String, String>>,
+    pub instances_status: Option<BTreeMap<String, Vec<String>>>,
     #[serde(default, skip_serializing_if = "Option::is_none", rename = "jobCount")]
     pub job_count: Option<i32>,
     #[serde(default, skip_serializing_if = "Option::is_none", rename = "lastFailedBackup")]
@@ -2041,6 +2042,8 @@ pub struct ClusterStatus {
     pub target_primary_timestamp: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none", rename = "timelineID")]
     pub timeline_id: Option<i64>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub topology: Option<ClusterStatusTopology>,
     #[serde(default, skip_serializing_if = "Option::is_none", rename = "unusablePVC")]
     pub unusable_pvc: Option<Vec<String>>,
     #[serde(default, skip_serializing_if = "Option::is_none", rename = "writeService")]
@@ -2194,3 +2197,18 @@ pub struct ClusterStatusSecretsResourceVersion {
     )]
     pub superuser_secret_version: Option<String>,
 }
+
+#[derive(Serialize, Deserialize, Clone, Debug, Default)]
+pub struct ClusterStatusTopology {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub instances: Option<BTreeMap<String, ClusterStatusTopologyInstances>>,
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        rename = "successfullyExtracted"
+    )]
+    pub successfully_extracted: Option<bool>,
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug, Default)]
+pub struct ClusterStatusTopologyInstances {}

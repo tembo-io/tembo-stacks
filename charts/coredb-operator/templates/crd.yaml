@@ -49,6 +49,9 @@ spec:
                     nullable: true
                     type: string
                 type: object
+              cnpgImage:
+                default: quay.io/tembo/tembo-pg-cnpg:15.3.0-1-21a43bb
+                type: string
               extensions:
                 default: []
                 items:

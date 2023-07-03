@@ -68,6 +68,9 @@ pub struct CoreDBSpec {
     #[serde(default = "defaults::default_postgres_exporter_image")]
     pub postgresExporterImage: String,
 
+    #[serde(default = "defaults::default_cnpg_image")]
+    pub cnpgImage: String,
+
     #[serde(default = "defaults::default_port")]
     pub port: i32,
 

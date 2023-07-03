@@ -41,6 +41,10 @@ pub fn default_image() -> String {
     "quay.io/coredb/coredb-pg-slim:f57e860".to_owned()
 }
 
+pub fn default_cnpg_image() -> String {
+    "quay.io/tembo/tembo-pg-cnpg:15.3.0-1-21a43bb".to_owned()
+}
+
 pub fn default_storage() -> Quantity {
     Quantity("8Gi".to_string())
 }

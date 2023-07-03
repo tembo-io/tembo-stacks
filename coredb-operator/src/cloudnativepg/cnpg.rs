@@ -10,8 +10,9 @@ use crate::{
         ClusterMonitoringCustomQueriesConfigMap, ClusterPostgresql,
         ClusterPostgresqlSyncReplicaElectionConstraint, ClusterPrimaryUpdateMethod,
         ClusterPrimaryUpdateStrategy, ClusterServiceAccountTemplate, ClusterServiceAccountTemplateMetadata,
-        ClusterSpec, ClusterStorage, ClusterSuperuserSecret,
+        ClusterSpec, ClusterStatus, ClusterStorage, ClusterSuperuserSecret,
     },
+    defaults::default_cnpg_image,
     Context, Error,
 };
 use k8s_openapi::apimachinery::pkg::apis::meta::v1::ObjectMeta;
@@ -20,7 +21,7 @@ use kube::{
     Api, Resource, ResourceExt,
 };
 use std::{collections::BTreeMap, sync::Arc};
-use tracing::log::{debug, warn};
+use tracing::{debug, warn};
 
 pub fn cnpg_backup_configuration(
     cdb: &CoreDB,
@@ -136,6 +137,7 @@ pub fn cnpg_cluster_bootstrap_from_cdb(
     )
 }
 
+// (todo): These paramaters need to be set from a configuration set in the CoreDB CRD
 fn cnpg_postgres_config(_cdb: &CoreDB) -> (Option<BTreeMap<String, String>>, Option<Vec<String>>) {
     let mut postgres_parameters = BTreeMap::new();
     postgres_parameters.insert("archive_mode".to_string(), "on".to_string());
@@ -172,7 +174,7 @@ fn cnpg_cluster_storage(cdb: &CoreDB) -> Option<ClusterStorage> {
     })
 }
 
-pub fn cnpg_cluster_from_cdb(cdb: &CoreDB) -> Cluster {
+pub async fn cnpg_cluster_from_cdb(cdb: &CoreDB) -> Cluster {
     let name = cdb.name_any();
     let namespace = cdb.namespace().unwrap();
     let owner_reference = cdb.controller_owner_ref(&()).unwrap();
@@ -181,6 +183,8 @@ pub fn cnpg_cluster_from_cdb(cdb: &CoreDB) -> Cluster {
     annotations.insert("tembo-pod-init.tembo.io/inject".to_string(), "true".to_string());
 
     let (bootstrap, external_clusters, superuser_secret) = cnpg_cluster_bootstrap_from_cdb(cdb);
+
+    let cnpg_image = get_cnpg_image(cdb).await;
 
     let (postgres_parameters, shared_preload_libraries) = cnpg_postgres_config(cdb);
 
@@ -209,7 +213,7 @@ pub fn cnpg_cluster_from_cdb(cdb: &CoreDB) -> Cluster {
             external_clusters,
             enable_superuser_access: Some(true),
             failover_delay: Some(0),
-            image_name: Some("quay.io/tembo/tembo-pg-cnpg:15.3.0-1-3953e4e".to_string()),
+            image_name: Some(cnpg_image),
             instances: 1,
             log_level: Some(ClusterLogLevel::Info),
             max_sync_replicas: Some(0),
@@ -252,13 +256,15 @@ pub fn cnpg_cluster_from_cdb(cdb: &CoreDB) -> Cluster {
             node_maintenance_window: None,
             ..ClusterSpec::default()
         },
-        status: None,
+        status: Some(ClusterStatus {
+            ..ClusterStatus::default()
+        }),
     }
 }
 
 pub async fn reconcile_cnpg(cdb: &CoreDB, ctx: Arc<Context>) -> Result<(), Error> {
     debug!("Generating CNPG spec");
-    let cluster = cnpg_cluster_from_cdb(cdb);
+    let cluster = cnpg_cluster_from_cdb(cdb).await;
     debug!("Getting namespace of cluster");
     let namespace = cluster
         .metadata
@@ -277,7 +283,21 @@ pub async fn reconcile_cnpg(cdb: &CoreDB, ctx: Arc<Context>) -> Result<(), Error
     let _o = cluster_api
         .patch(&name, &ps, &Patch::Apply(&cluster))
         .await
-        .map_err(Error::KubeError)?;
+        .map_err(|err| {
+            debug!("Error patching cluster: {}", err);
+            Error::KubeError(err)
+        })?;
     debug!("Applied");
     Ok(())
+}
+
+async fn get_cnpg_image(cdb: &CoreDB) -> String {
+    // Check if cdb.spec.postgresExporterImage is set
+    // If so, use that image; otherwise, use the default
+    // image from default_postgres_exporter_image() function
+    if cdb.spec.cnpgImage.is_empty() {
+        default_cnpg_image()
+    } else {
+        cdb.spec.cnpgImage.clone()
+    }
 }

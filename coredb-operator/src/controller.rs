@@ -1,9 +1,6 @@
 use crate::{telemetry, Error, Metrics, Result};
 use chrono::{DateTime, Utc};
-use futures::{
-    future::{BoxFuture, FutureExt},
-    stream::StreamExt,
-};
+use futures::StreamExt;
 
 use crate::{
     apis::{
@@ -39,6 +36,7 @@ use kube::{
         events::{Event, EventType, Recorder, Reporter},
         finalizer::{finalizer, Event as Finalizer},
         wait::Condition,
+        watcher::Config as WatcherConfig,
     },
     Resource,
 };
@@ -320,6 +318,7 @@ impl CoreDB {
                 }
                 let primary_pod_coredb = primary_pod_coredb.unwrap();
 
+                debug!("Checking if postgres is ready");
                 if !is_postgres_ready().matches_object(Some(&primary_pod_coredb)) {
                     info!(
                         "Did not find postgres ready {}, waiting a short period",
@@ -329,6 +328,7 @@ impl CoreDB {
                 }
 
                 if cnpg_enabled {
+                    debug!("Reconciling CNPG");
                     reconcile_cnpg(self, ctx.clone()).await.map_err(|e| {
                         error!("Error reconciling CNPG: {:?}", e);
                         Action::requeue(Duration::from_secs(300))
@@ -487,7 +487,7 @@ impl CoreDB {
     }
 
     pub async fn primary_pod_cnpg(&self, client: Client) -> Result<Pod, Error> {
-        let cluster = cnpg_cluster_from_cdb(self);
+        let cluster = cnpg_cluster_from_cdb(self).await;
         let cluster_name = cluster
             .metadata
             .name
@@ -502,7 +502,7 @@ impl CoreDB {
         let list_params = ListParams::default()
             .labels(&cluster_selector)
             .labels(&role_selector);
-        let pods: Api<Pod> = Api::namespaced(client, &namespace);
+        let pods: Api<Pod> = Api::namespaced(client.clone(), &namespace);
         let pods = pods.list(&list_params);
         // Return an error if the query fails
         let pod_list = pods.await.map_err(Error::KubeError)?;
@@ -685,7 +685,7 @@ impl State {
     }
 
     // Create a Controller Context that can update State
-    pub fn create_context(&self, client: Client) -> Arc<Context> {
+    pub fn to_context(&self, client: Client) -> Arc<Context> {
         Arc::new(Context {
             client,
             metrics: Metrics::default().register(&self.registry).unwrap(),
@@ -695,21 +695,20 @@ impl State {
 }
 
 /// Initialize the controller and shared state (given the crd is installed)
-pub async fn init(client: Client) -> (BoxFuture<'static, ()>, State) {
-    let state = State::default();
+pub async fn run(state: State) {
+    let client = Client::try_default().await.expect("failed to create kube Client");
     let cdb = Api::<CoreDB>::all(client.clone());
     if let Err(e) = cdb.list(&ListParams::default().limit(1)).await {
         error!("CRD is not queryable; {e:?}. Is the CRD installed?");
         info!("Installation: cargo run --bin crdgen | kubectl apply -f -");
         std::process::exit(1);
     }
-    let controller = Controller::new(cdb, ListParams::default())
+    Controller::new(cdb, WatcherConfig::default().any_semantic())
         .shutdown_on_signal()
-        .run(reconcile, error_policy, state.create_context(client))
+        .run(reconcile, error_policy, state.to_context(client))
         .filter_map(|x| async move { Result::ok(x) })
         .for_each(|_| futures::future::ready(()))
-        .boxed();
-    (controller, state)
+        .await
 }
 
 // Tests rely on fixtures.rs

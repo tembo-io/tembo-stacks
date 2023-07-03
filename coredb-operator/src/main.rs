@@ -46,12 +46,8 @@ async fn main() -> Result<()> {
 
     // Initialize the Kubernetes client
     let client_future = kube::Client::try_default();
-    let client = match client_future.await {
-        Ok(wrapped_client) => wrapped_client,
-        Err(error) => panic!("Please configure your Kubernetes Context"),
-    };
-    // Prepare shared state for the kubernetes controller and web server
-    let (controller, state) = controller::init(client).await;
+    let state = State::default();
+    let controller = controller::run(state.clone());
 
     // Start web server
     let server = HttpServer::new(move || {
@@ -66,10 +62,7 @@ async fn main() -> Result<()> {
     .expect("Can not bind to 0.0.0.0:8080")
     .shutdown_timeout(5);
 
-    // Keep the app alive while both the controller and the server is alive
-    tokio::select! {
-        _ = controller => warn!("controller exited"),
-        _ = server.run() => info!("actix exited"),
-    }
+    // Ensure both the webserver and the controller gracefully shutdown
+    let _ = tokio::join!(controller, server.run());
     Ok(())
 }
