@@ -184,7 +184,7 @@ pub async fn cnpg_cluster_from_cdb(cdb: &CoreDB) -> Cluster {
 
     let (bootstrap, external_clusters, superuser_secret) = cnpg_cluster_bootstrap_from_cdb(cdb);
 
-    let cnpg_image = get_cnpg_image(cdb).await;
+    let cnpg_image = default_cnpg_image();
 
     let (postgres_parameters, shared_preload_libraries) = cnpg_postgres_config(cdb);
 
@@ -289,17 +289,6 @@ pub async fn reconcile_cnpg(cdb: &CoreDB, ctx: Arc<Context>) -> Result<(), Error
         })?;
     debug!("Applied");
     Ok(())
-}
-
-async fn get_cnpg_image(cdb: &CoreDB) -> String {
-    // Check if cdb.spec.postgresExporterImage is set
-    // If so, use that image; otherwise, use the default
-    // image from default_postgres_exporter_image() function
-    if cdb.spec.cnpgImage.is_empty() {
-        default_cnpg_image()
-    } else {
-        cdb.spec.cnpgImage.clone()
-    }
 }
 
 #[cfg(test)]
