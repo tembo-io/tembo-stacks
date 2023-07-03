@@ -1978,7 +1978,7 @@ pub struct ClusterStatus {
     )]
     pub instances_reported_state: Option<BTreeMap<String, ClusterStatusInstancesReportedState>>,
     #[serde(default, skip_serializing_if = "Option::is_none", rename = "instancesStatus")]
-    pub instances_status: Option<BTreeMap<String, String>>,
+    pub instances_status: Option<BTreeMap<String, Vec<String>>>,
     #[serde(default, skip_serializing_if = "Option::is_none", rename = "jobCount")]
     pub job_count: Option<i32>,
     #[serde(default, skip_serializing_if = "Option::is_none", rename = "lastFailedBackup")]
