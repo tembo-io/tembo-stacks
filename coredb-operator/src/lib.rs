@@ -20,7 +20,8 @@ mod errors;
 
 mod cloudnativepg;
 mod deployment_postgres_exporter;
-#[cfg(test)] pub mod fixtures;
+#[cfg(test)]
+pub mod fixtures;
 mod ingress;
 pub mod ingress_route_tcp_crd;
 mod psql;

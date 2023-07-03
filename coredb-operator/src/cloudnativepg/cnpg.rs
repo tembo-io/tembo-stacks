@@ -281,3 +281,358 @@ pub async fn reconcile_cnpg(cdb: &CoreDB, ctx: Arc<Context>) -> Result<(), Error
     debug!("Applied");
     Ok(())
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use serde_json::json;
+
+    #[test]
+    fn test_deserialize_cluster() {
+        let json_str = r#"
+        {
+          "apiVersion": "postgresql.cnpg.io/v1",
+          "kind": "Cluster",
+          "metadata": {
+            "annotations": {
+              "tembo-pod-init.tembo.io/inject": "true"
+            },
+            "creationTimestamp": "2023-07-03T18:15:32Z",
+            "generation": 1,
+            "managedFields": [
+              {
+                "apiVersion": "postgresql.cnpg.io/v1",
+                "fieldsType": "FieldsV1",
+                "fieldsV1": {
+                  "f:metadata": {
+                    "f:annotations": {
+                      "f:tembo-pod-init.tembo.io/inject": {}
+                    },
+                    "f:ownerReferences": {
+                      "k:{\"uid\":\"d8efe1ff-b09a-43ca-a568-def96235e754\"}": {}
+                    }
+                  },
+                  "f:spec": {
+                    "f:affinity": {
+                      "f:podAntiAffinityType": {},
+                      "f:topologyKey": {}
+                    },
+                    "f:bootstrap": {
+                      "f:pg_basebackup": {
+                        "f:source": {}
+                      }
+                    },
+                    "f:enableSuperuserAccess": {},
+                    "f:externalClusters": {},
+                    "f:failoverDelay": {},
+                    "f:imageName": {},
+                    "f:instances": {},
+                    "f:logLevel": {},
+                    "f:maxSyncReplicas": {},
+                    "f:minSyncReplicas": {},
+                    "f:monitoring": {
+                      "f:customQueriesConfigMap": {},
+                      "f:disableDefaultQueries": {},
+                      "f:enablePodMonitor": {}
+                    },
+                    "f:postgresGID": {},
+                    "f:postgresUID": {},
+                    "f:postgresql": {
+                      "f:parameters": {
+                        "f:archive_mode": {},
+                        "f:archive_timeout": {},
+                        "f:dynamic_shared_memory_type": {},
+                        "f:log_destination": {},
+                        "f:log_directory": {},
+                        "f:log_filename": {},
+                        "f:log_rotation_age": {},
+                        "f:log_rotation_size": {},
+                        "f:log_truncate_on_rotation": {},
+                        "f:logging_collector": {},
+                        "f:max_parallel_workers": {},
+                        "f:max_replication_slots": {},
+                        "f:max_worker_processes": {},
+                        "f:shared_memory_type": {},
+                        "f:wal_keep_size": {},
+                        "f:wal_receiver_timeout": {},
+                        "f:wal_sender_timeout": {}
+                      },
+                      "f:syncReplicaElectionConstraint": {
+                        "f:enabled": {}
+                      }
+                    },
+                    "f:primaryUpdateMethod": {},
+                    "f:primaryUpdateStrategy": {},
+                    "f:startDelay": {},
+                    "f:stopDelay": {},
+                    "f:storage": {
+                      "f:resizeInUseVolumes": {},
+                      "f:size": {}
+                    },
+                    "f:superuserSecret": {
+                      "f:name": {}
+                    },
+                    "f:switchoverDelay": {}
+                  }
+                },
+                "manager": "cntrlr",
+                "operation": "Apply",
+                "time": "2023-07-03T18:15:32Z"
+              },
+              {
+                "apiVersion": "postgresql.cnpg.io/v1",
+                "fieldsType": "FieldsV1",
+                "fieldsV1": {
+                  "f:status": {
+                    ".": {},
+                    "f:certificates": {
+                      ".": {},
+                      "f:clientCASecret": {},
+                      "f:expirations": {
+                        ".": {},
+                        "f:test-coredb-ca": {},
+                        "f:test-coredb-replication": {},
+                        "f:test-coredb-server": {}
+                      },
+                      "f:replicationTLSSecret": {},
+                      "f:serverAltDNSNames": {},
+                      "f:serverCASecret": {},
+                      "f:serverTLSSecret": {}
+                    },
+                    "f:cloudNativePGCommitHash": {},
+                    "f:cloudNativePGOperatorHash": {},
+                    "f:conditions": {},
+                    "f:configMapResourceVersion": {
+                      ".": {},
+                      "f:metrics": {
+                        ".": {},
+                        "f:cnpg-default-monitoring": {}
+                      }
+                    },
+                    "f:healthyPVC": {},
+                    "f:instanceNames": {},
+                    "f:instances": {},
+                    "f:instancesStatus": {
+                      ".": {},
+                      "f:failed": {}
+                    },
+                    "f:jobCount": {},
+                    "f:latestGeneratedNode": {},
+                    "f:managedRolesStatus": {},
+                    "f:phase": {},
+                    "f:phaseReason": {},
+                    "f:poolerIntegrations": {
+                      ".": {},
+                      "f:pgBouncerIntegration": {}
+                    },
+                    "f:pvcCount": {},
+                    "f:readService": {},
+                    "f:secretsResourceVersion": {
+                      ".": {},
+                      "f:clientCaSecretVersion": {},
+                      "f:replicationSecretVersion": {},
+                      "f:serverCaSecretVersion": {},
+                      "f:serverSecretVersion": {},
+                      "f:superuserSecretVersion": {}
+                    },
+                    "f:targetPrimary": {},
+                    "f:targetPrimaryTimestamp": {},
+                    "f:topology": {
+                      ".": {},
+                      "f:instances": {
+                        ".": {},
+                        "f:test-coredb-1": {}
+                      },
+                      "f:successfullyExtracted": {}
+                    },
+                    "f:writeService": {}
+                  }
+                },
+                "manager": "Go-http-client",
+                "operation": "Update",
+                "subresource": "status",
+                "time": "2023-07-03T18:16:49Z"
+              }
+            ],
+            "name": "test-coredb",
+            "namespace": "default",
+            "ownerReferences": [
+              {
+                "apiVersion": "coredb.io/v1alpha1",
+                "controller": true,
+                "kind": "CoreDB",
+                "name": "test-coredb",
+                "uid": "d8efe1ff-b09a-43ca-a568-def96235e754"
+              }
+            ],
+            "resourceVersion": "7675",
+            "uid": "7bfae8f4-bc86-481b-8f7c-7a7a659da265"
+          },
+          "spec": {
+            "affinity": {
+              "podAntiAffinityType": "preferred",
+              "topologyKey": "topology.kubernetes.io/zone"
+            },
+            "bootstrap": {
+              "pg_basebackup": {
+                "database": "",
+                "owner": "",
+                "source": "coredb"
+              }
+            },
+            "enableSuperuserAccess": true,
+            "externalClusters": [
+              {
+                "connectionParameters": {
+                  "host": "test-coredb",
+                  "user": "postgres"
+                },
+                "name": "coredb",
+                "password": {
+                  "key": "password",
+                  "name": "test-coredb-connection"
+                }
+              }
+            ],
+            "failoverDelay": 0,
+            "imageName": "quay.io/tembo/tembo-pg-cnpg:15.3.0-1-3953e4e",
+            "instances": 1,
+            "logLevel": "info",
+            "maxSyncReplicas": 0,
+            "minSyncReplicas": 0,
+            "monitoring": {
+              "customQueriesConfigMap": [
+                {
+                  "key": "queries",
+                  "name": "cnpg-default-monitoring"
+                }
+              ],
+              "disableDefaultQueries": false,
+              "enablePodMonitor": true
+            },
+            "postgresGID": 26,
+            "postgresUID": 26,
+            "postgresql": {
+              "parameters": {
+                "archive_mode": "on",
+                "archive_timeout": "5min",
+                "dynamic_shared_memory_type": "posix",
+                "log_destination": "csvlog",
+                "log_directory": "/controller/log",
+                "log_filename": "postgres",
+                "log_rotation_age": "0",
+                "log_rotation_size": "0",
+                "log_truncate_on_rotation": "false",
+                "logging_collector": "on",
+                "max_parallel_workers": "32",
+                "max_replication_slots": "32",
+                "max_worker_processes": "32",
+                "shared_memory_type": "mmap",
+                "shared_preload_libraries": "",
+                "wal_keep_size": "512MB",
+                "wal_receiver_timeout": "5s",
+                "wal_sender_timeout": "5s"
+              },
+              "syncReplicaElectionConstraint": {
+                "enabled": false
+              }
+            },
+            "primaryUpdateMethod": "restart",
+            "primaryUpdateStrategy": "unsupervised",
+            "resources": {},
+            "startDelay": 30,
+            "stopDelay": 30,
+            "storage": {
+              "resizeInUseVolumes": true,
+              "size": "1Gi"
+            },
+            "superuserSecret": {
+              "name": "test-coredb-connection"
+            },
+            "switchoverDelay": 60
+          },
+          "status": {
+            "certificates": {
+              "clientCASecret": "test-coredb-ca",
+              "expirations": {
+                "test-coredb-ca": "2023-10-01 18:10:32 +0000 UTC",
+                "test-coredb-replication": "2023-10-01 18:10:32 +0000 UTC",
+                "test-coredb-server": "2023-10-01 18:10:32 +0000 UTC"
+              },
+              "replicationTLSSecret": "test-coredb-replication",
+              "serverAltDNSNames": [
+                "test-coredb-rw",
+                "test-coredb-rw.default",
+                "test-coredb-rw.default.svc",
+                "test-coredb-r",
+                "test-coredb-r.default",
+                "test-coredb-r.default.svc",
+                "test-coredb-ro",
+                "test-coredb-ro.default",
+                "test-coredb-ro.default.svc"
+              ],
+              "serverCASecret": "test-coredb-ca",
+              "serverTLSSecret": "test-coredb-server"
+            },
+            "cloudNativePGCommitHash": "9bf74c9e",
+            "cloudNativePGOperatorHash": "5d5f339b30506db0996606d61237dcf639c1e0d3009c0399e87e99cc7bc2caf0",
+            "conditions": [
+              {
+                "lastTransitionTime": "2023-07-03T18:15:32Z",
+                "message": "Cluster Is Not Ready",
+                "reason": "ClusterIsNotReady",
+                "status": "False",
+                "type": "Ready"
+              }
+            ],
+            "configMapResourceVersion": {
+              "metrics": {
+                "cnpg-default-monitoring": "7435"
+              }
+            },
+            "healthyPVC": [
+              "test-coredb-1"
+            ],
+            "instanceNames": [
+              "test-coredb-1"
+            ],
+            "instances": 1,
+            "instancesStatus": {
+              "failed": [
+                "test-coredb-1"
+              ]
+            },
+            "jobCount": 1,
+            "latestGeneratedNode": 1,
+            "managedRolesStatus": {},
+            "phase": "Setting up primary",
+            "phaseReason": "Creating primary instance test-coredb-1",
+            "poolerIntegrations": {
+              "pgBouncerIntegration": {}
+            },
+            "pvcCount": 1,
+            "readService": "test-coredb-r",
+            "secretsResourceVersion": {
+              "clientCaSecretVersion": "7409",
+              "replicationSecretVersion": "7411",
+              "serverCaSecretVersion": "7409",
+              "serverSecretVersion": "7410",
+              "superuserSecretVersion": "7107"
+            },
+            "targetPrimary": "test-coredb-1",
+            "targetPrimaryTimestamp": "2023-07-03T18:15:32.464538Z",
+            "topology": {
+              "instances": {
+                "test-coredb-1": {}
+              },
+              "successfullyExtracted": true
+            },
+            "writeService": "test-coredb-rw"
+          }
+        }
+
+        "#;
+
+        let result: Cluster = serde_json::from_str(json_str).expect("Should be able to deserialize");
+    }
+}

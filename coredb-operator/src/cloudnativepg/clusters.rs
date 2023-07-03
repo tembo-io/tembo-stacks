@@ -2201,7 +2201,11 @@ pub struct ClusterStatusSecretsResourceVersion {
 pub struct ClusterStatusTopology {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub instances: Option<BTreeMap<String, ClusterStatusTopologyInstances>>,
-    #[serde(default, skip_serializing_if = "Option::is_none", rename = "successfullyExtracted")]
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        rename = "successfullyExtracted"
+    )]
     pub successfully_extracted: Option<bool>,
 }
 
