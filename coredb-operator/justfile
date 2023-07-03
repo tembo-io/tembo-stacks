@@ -34,6 +34,7 @@ install-cnpg:
 
 enable-cnpg-default-namespace:
 	kubectl label namespace default "tembo-pod-init.tembo.io/watch"="true"
+	kubectl delete pods -n tembo-pod-init --all
 
 connect-test-db:
 	echo "Please include a line in your /etc/hosts file: "
