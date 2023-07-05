@@ -65,7 +65,7 @@ pub async fn reconcile_secret(cdb: &CoreDB, ctx: Arc<Context>) -> Result<(), Err
         ..Secret::default()
     };
 
-    let ps = PatchParams::apply("cntrlr");
+    let ps = PatchParams::apply("cntrlr").force();
     let _o = secret_api
         .patch(&name, &ps, &Patch::Apply(&secret))
         .await
