@@ -1,4 +1,10 @@
 use crate::{apis::coredb_types::CoreDB, Context, Error};
+use base64::decode;
+use base64::{
+    alphabet,
+    engine::{self, general_purpose},
+    Engine as _,
+};
 use k8s_openapi::{api::core::v1::Secret, apimachinery::pkg::apis::meta::v1::ObjectMeta, ByteString};
 use kube::{
     api::{ListParams, Patch, PatchParams},
@@ -27,18 +33,29 @@ pub async fn reconcile_secret(cdb: &CoreDB, ctx: Arc<Context>) -> Result<(), Err
     let lp = ListParams::default().labels(format!("app=coredb,coredb.io/name={}", cdb.name_any()).as_str());
     let secrets = secret_api.list(&lp).await.expect("could not get Secrets");
 
-    // if the secret has already been created, return (avoids overwriting password value)
-    if !secrets.items.is_empty() {
-        for s in &secrets.items {
-            if s.name_any() == name {
-                debug!("skipping secret creation: secret {} exists", &name);
-                return Ok(());
-            }
+    // If the secret is already created, re-use the password
+    let password = match secrets.items.is_empty() {
+        true => generate_password(),
+        false => {
+            let secret_data = secrets.items[0]
+                .data
+                .clone()
+                .expect("Expect to always have 'data' block in a kubernetes secret");
+            let password_bytes = secret_data.get("password").expect("could not find password");
+            let password_encoded = serde_json::to_string(password_bytes)
+                .expect("Expected to be able decode from byte string to base64-encoded string");
+            let password_encoded = password_encoded.as_str();
+            let password_encoded = password_encoded.trim_matches('"');
+            let bytes = general_purpose::STANDARD
+                .decode(password_encoded)
+                .expect("Expect to always be able to base64 decode a kubernetes secret value");
+            let password = String::from_utf8(bytes)
+                .expect("Expect to always be able to convert a kubernetes secret value to a string");
+            password
         }
-    }
+    };
 
-    // generate secret data
-    let data = secret_data(cdb, &name, &ns);
+    let data = secret_data(cdb, &name, &ns, password);
 
     let secret: Secret = Secret {
         metadata: ObjectMeta {
@@ -52,7 +69,7 @@ pub async fn reconcile_secret(cdb: &CoreDB, ctx: Arc<Context>) -> Result<(), Err
         ..Secret::default()
     };
 
-    let ps = PatchParams::apply("cntrlr").force();
+    let ps = PatchParams::apply("cntrlr");
     let _o = secret_api
         .patch(&name, &ps, &Patch::Apply(&secret))
         .await
@@ -60,16 +77,17 @@ pub async fn reconcile_secret(cdb: &CoreDB, ctx: Arc<Context>) -> Result<(), Err
     Ok(())
 }
 
-fn secret_data(cdb: &CoreDB, name: &str, ns: &str) -> BTreeMap<String, ByteString> {
+fn secret_data(cdb: &CoreDB, name: &str, ns: &str, password: String) -> BTreeMap<String, ByteString> {
     let mut data = BTreeMap::new();
 
     // encode and insert user into secret data
     let user = "postgres".to_owned();
     let b64_user = b64_encode(&user);
-    data.insert("user".to_owned(), b64_user);
+    // Add as both 'user' and 'username'
+    data.insert("user".to_owned(), b64_user.clone());
+    data.insert("username".to_owned(), b64_user);
 
     // encode and insert password into secret data
-    let password = generate_password();
     let b64_password = b64_encode(&password);
     data.insert("password".to_owned(), b64_password);
 
