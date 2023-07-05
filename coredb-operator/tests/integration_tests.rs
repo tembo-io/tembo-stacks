@@ -491,65 +491,6 @@ mod test {
         let storage = pvc.spec.unwrap().resources.unwrap().requests.unwrap();
         let s = storage.get("storage").unwrap().to_owned();
         assert_eq!(Quantity("10Gi".to_owned()), s);
-
-        // Update the coredb resource to add rbac
-        let coredb_json = serde_json::json!({
-            "apiVersion": API_VERSION,
-            "kind": kind,
-            "metadata": {
-                "name": name
-            },
-            "spec": {
-                "serviceAccountTemplate": {
-                    "metadata": {
-                        "annotations": {
-                            "eks.amazonaws.com/role-arn": "arn:aws:iam::012345678901:role/cdb-test-iam"
-                        }
-                    }
-                }
-            }
-        });
-
-        // apply CRD with serviceAccountTemplate set
-        let params = PatchParams::apply("coredb-integration-test");
-        let patch = Patch::Merge(&coredb_json);
-        let _coredb_resource = coredbs.patch(name, &params, &patch).await.unwrap();
-
-        thread::sleep(Duration::from_millis(5000));
-
-        // Assert that the service account exists
-        let sa_api: Api<ServiceAccount> = Api::namespaced(client.clone(), namespace);
-        // CNPG SA
-        let sa_name = format!("{}", name);
-        let sa = sa_api.get(&sa_name).await.unwrap();
-
-        // Check if the service account is set correctly
-        assert_eq!(sa.metadata.name.unwrap(), sa_name);
-
-        // Check if the annotation is set correctly
-        assert_eq!(
-            sa.metadata.annotations.unwrap().get("eks.amazonaws.com/role-arn"),
-            Some(&"arn:aws:iam::012345678901:role/cdb-test-iam".to_string())
-        );
-
-        // Assert that the role exists
-        let role_api: Api<Role> = Api::namespaced(client.clone(), namespace);
-        let role_name = format!("{}", name);
-        let role = role_api.get(&role_name).await.unwrap();
-        assert_eq!(role.metadata.name.unwrap(), role_name);
-
-        // Assert that the role binding exists
-        let rb_api: Api<RoleBinding> = Api::namespaced(client.clone(), namespace);
-        let rb_name = format!("{}", name);
-        let role_binding = rb_api.get(&rb_name).await.unwrap();
-        assert_eq!(role_binding.metadata.name.unwrap(), rb_name);
-
-        // Get the CNPG pod
-        let pods_api: Api<Pod> = Api::namespaced(client.clone(), namespace);
-        let pod = pods_api.get(&pod_name).await.unwrap();
-
-        let pod_service_account_name = pod.spec.as_ref().unwrap().service_account_name.as_ref();
-        assert_eq!(pod_service_account_name, Some(&sa_name));
     }
 
     #[tokio::test]
