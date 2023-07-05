@@ -1,5 +1,5 @@
 use crate::{
-    apis::coredb_types::CoreDB,
+    apis::{coredb_types::CoreDB, postgres_parameters::PgConfig},
     cloudnativepg::clusters::{
         Cluster, ClusterAffinity, ClusterBackup, ClusterBackupBarmanObjectStore,
         ClusterBackupBarmanObjectStoreData, ClusterBackupBarmanObjectStoreDataCompression,
@@ -160,6 +160,18 @@ fn cnpg_postgres_config(_cdb: &CoreDB) -> (Option<BTreeMap<String, String>>, Opt
     (Some(postgres_parameters), shared_preload_libraries)
 }
 
+fn cnpg_gen_postgres_config(cdb: &CoreDB) {
+    let cnpg_pg_config = cdb.spec.get_pg_configs();
+    let cnpg_pg_config = match cnpg_pg_config {
+        Ok(Some(cnpg_pg_config)) => cnpg_pg_config,
+        Ok(None) => return,
+        Err(e) => Err(e).unwrap(),
+    };
+
+    println!("cnpg_pg_config: {:?}", cnpg_pg_config);
+}
+
+
 fn cnpg_cluster_storage(cdb: &CoreDB) -> Option<ClusterStorage> {
     let storage = cdb.spec.storage.clone().0;
     Some(ClusterStorage {
@@ -187,6 +199,8 @@ pub fn cnpg_cluster_from_cdb(cdb: &CoreDB) -> Cluster {
     let (backup, service_account_template) = cnpg_backup_configuration(cdb);
 
     let storage = cnpg_cluster_storage(cdb);
+
+    cnpg_gen_postgres_config(cdb);
 
     Cluster {
         metadata: ObjectMeta {
@@ -284,7 +298,6 @@ pub async fn reconcile_cnpg(cdb: &CoreDB, ctx: Arc<Context>) -> Result<(), Error
     debug!("Applied");
     Ok(())
 }
-<<<<<<< HEAD
 
 #[cfg(test)]
 mod tests {
@@ -640,5 +653,3 @@ mod tests {
         let _result: Cluster = serde_json::from_str(json_str).expect("Should be able to deserialize");
     }
 }
-=======
->>>>>>> 858384a (fix clippy warnings)
