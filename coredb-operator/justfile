@@ -79,7 +79,12 @@ run:
 # annotate namespace to allow for tests
 annotate:
 	kubectl label namespace {{NAMESPACE}} safe-to-run-coredb-tests=true
+	kubectl create namespace cnpg-test || true
+	kubectl label namespace cnpg-test safe-to-run-coredb-tests=true
+	kubectl label namespace cnpg-test "tembo-pod-init.tembo.io/watch"="true"
+	kubectl delete pods -n tembo-pod-init --all
 	kubectl patch storageclass standard -p '{"allowVolumeExpansion": true}'
+
 
 # run tests
 test:
