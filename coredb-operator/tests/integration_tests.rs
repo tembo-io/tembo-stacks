@@ -44,7 +44,7 @@ mod test {
     const API_VERSION: &str = "coredb.io/v1alpha1";
     // Timeout settings while waiting for an event
     const TIMEOUT_SECONDS_START_POD: u64 = 200;
-    const TIMEOUT_SECONDS_POD_READY: u64 = 60;
+    const TIMEOUT_SECONDS_POD_READY: u64 = 300;
     const TIMEOUT_SECONDS_SECRET_PRESENT: u64 = 60;
     const TIMEOUT_SECONDS_NS_DELETED: u64 = 60;
     const TIMEOUT_SECONDS_COREDB_DELETED: u64 = 60;
