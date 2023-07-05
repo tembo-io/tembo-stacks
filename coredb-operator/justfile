@@ -16,6 +16,10 @@ install-traefik:
 	kubectl create namespace traefik || true
 	helm upgrade --install --namespace=traefik --values=./testdata/traefik-values.yaml traefik traefik/traefik
 
+install-kube-prometheus-stack:
+	kubectl create namespace monitoring || true
+	helm upgrade --install --namespace=monitoring monitoring prometheus-community/kube-prometheus-stack
+
 install-tembo-pod-init:
 	kubectl create namespace tembo-pod-init || true
 	helm upgrade --install \
@@ -46,6 +50,7 @@ update-helm-repos:
 	helm repo add cnpg https://cloudnative-pg.github.io/charts
 	helm repo add jetstack https://charts.jetstack.io
 	helm repo add traefik https://traefik.github.io/charts
+	helm repo add prometheus-community https://prometheus-community.github.io/helm-charts
 	helm repo update
 
 # generate and install crd into the cluster
@@ -61,6 +66,7 @@ start-kind:
 	kind delete cluster || true
 	kind create cluster --image=kindest/node:v{{KUBE_VERSION}} --config testdata/kind-config.yaml
 	just update-helm-repos
+	just install-kube-prometheus-stack
 	just install-traefik
 	just install-crd
 	just install-cnpg
