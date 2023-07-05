@@ -21,6 +21,7 @@ use kube::{
 };
 use std::{collections::BTreeMap, sync::Arc};
 use tracing::log::{debug, warn};
+use crate::cloudnativepg::clusters::ClusterResources;
 
 pub fn cnpg_backup_configuration(
     cdb: &CoreDB,
@@ -238,8 +239,11 @@ pub fn cnpg_cluster_from_cdb(cdb: &CoreDB) -> Cluster {
             }),
             primary_update_method: Some(ClusterPrimaryUpdateMethod::Restart),
             primary_update_strategy: Some(ClusterPrimaryUpdateStrategy::Unsupervised),
-            // TODO: before merge
-            resources: None,
+            resources: Some(ClusterResources {
+                claims: None,
+                limits: cdb.spec.resources.clone().limits,
+                requests: cdb.spec.resources.clone().requests,
+            }),
             // The time in seconds that is allowed for a PostgreSQL instance to successfully start up
             start_delay: Some(30),
             // The time in seconds that is allowed for a PostgreSQL instance to gracefully shutdown
