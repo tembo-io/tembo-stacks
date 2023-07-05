@@ -1,5 +1,5 @@
 use crate::{
-    apis::{coredb_types::CoreDB, postgres_parameters::PgConfig},
+    apis::{coredb_types::CoreDB, postgres_parameters::MergeError},
     cloudnativepg::clusters::{
         Cluster, ClusterAffinity, ClusterBackup, ClusterBackupBarmanObjectStore,
         ClusterBackupBarmanObjectStoreData, ClusterBackupBarmanObjectStoreDataCompression,
@@ -20,7 +20,7 @@ use kube::{
     Api, Resource, ResourceExt,
 };
 use std::{collections::BTreeMap, sync::Arc};
-use tracing::log::{debug, warn};
+use tracing::{debug, error, warn};
 
 pub fn cnpg_backup_configuration(
     cdb: &CoreDB,
@@ -136,39 +136,46 @@ pub fn cnpg_cluster_bootstrap_from_cdb(
     )
 }
 
-fn cnpg_postgres_config(_cdb: &CoreDB) -> (Option<BTreeMap<String, String>>, Option<Vec<String>>) {
-    let mut postgres_parameters = BTreeMap::new();
-    postgres_parameters.insert("archive_mode".to_string(), "on".to_string());
-    postgres_parameters.insert("archive_timeout".to_string(), "5min".to_string());
-    postgres_parameters.insert("dynamic_shared_memory_type".to_string(), "posix".to_string());
-    postgres_parameters.insert("log_destination".to_string(), "csvlog".to_string());
-    postgres_parameters.insert("log_directory".to_string(), "/controller/log".to_string());
-    postgres_parameters.insert("log_filename".to_string(), "postgres".to_string());
-    postgres_parameters.insert("log_rotation_age".to_string(), "0".to_string());
-    postgres_parameters.insert("log_rotation_size".to_string(), "0".to_string());
-    postgres_parameters.insert("log_truncate_on_rotation".to_string(), "false".to_string());
-    postgres_parameters.insert("logging_collector".to_string(), "on".to_string());
-    postgres_parameters.insert("max_parallel_workers".to_string(), "32".to_string());
-    postgres_parameters.insert("max_replication_slots".to_string(), "32".to_string());
-    postgres_parameters.insert("max_worker_processes".to_string(), "32".to_string());
-    postgres_parameters.insert("shared_memory_type".to_string(), "mmap".to_string());
-    postgres_parameters.insert("wal_keep_size".to_string(), "512MB".to_string());
-    postgres_parameters.insert("wal_receiver_timeout".to_string(), "5s".to_string());
-    postgres_parameters.insert("wal_sender_timeout".to_string(), "5s".to_string());
-    // TODO: right here, overlay other postgres configs
-    let shared_preload_libraries = None;
-    (Some(postgres_parameters), shared_preload_libraries)
-}
+// Get PGConfig from CoreDB and convert it to a postgres_parameters and shared_preload_libraries
+fn cnpg_postgres_config(
+    cdb: &CoreDB,
+) -> Result<(Option<BTreeMap<String, String>>, Option<Vec<String>>), MergeError> {
+    match cdb.spec.get_pg_configs() {
+        Ok(Some(pg_configs)) => {
+            let mut postgres_parameters: BTreeMap<String, String> = BTreeMap::new();
+            let mut shared_preload_libraries: Vec<String> = Vec::new();
 
-fn cnpg_gen_postgres_config(cdb: &CoreDB) {
-    let cnpg_pg_config = cdb.spec.get_pg_configs();
-    let cnpg_pg_config = match cnpg_pg_config {
-        Ok(Some(cnpg_pg_config)) => cnpg_pg_config,
-        Ok(None) => return,
-        Err(e) => Err(e).unwrap(),
-    };
+            for pg_config in pg_configs {
+                match &pg_config.name[..] {
+                    "shared_preload_libraries" => {
+                        shared_preload_libraries.push(pg_config.value.to_string());
+                    }
+                    _ => {
+                        postgres_parameters.insert(pg_config.name.clone(), pg_config.value.to_string());
+                    }
+                }
+            }
 
-    println!("cnpg_pg_config: {:?}", cnpg_pg_config);
+            let params = if postgres_parameters.is_empty() {
+                None
+            } else {
+                Some(postgres_parameters)
+            };
+
+            let libs = if shared_preload_libraries.is_empty() {
+                None
+            } else {
+                Some(shared_preload_libraries)
+            };
+
+            Ok((params, libs))
+        }
+        Ok(None) => {
+            // Return None, None
+            Ok((None, None))
+        }
+        Err(e) => Err(e),
+    }
 }
 
 
@@ -194,13 +201,19 @@ pub fn cnpg_cluster_from_cdb(cdb: &CoreDB) -> Cluster {
 
     let (bootstrap, external_clusters, superuser_secret) = cnpg_cluster_bootstrap_from_cdb(cdb);
 
-    let (postgres_parameters, shared_preload_libraries) = cnpg_postgres_config(cdb);
-
     let (backup, service_account_template) = cnpg_backup_configuration(cdb);
 
     let storage = cnpg_cluster_storage(cdb);
 
-    cnpg_gen_postgres_config(cdb);
+    let (postgres_parameters, shared_preload_libraries) = match cnpg_postgres_config(cdb) {
+        Ok((postgres_parameters, shared_preload_libraries)) => {
+            (postgres_parameters, shared_preload_libraries)
+        }
+        Err(e) => {
+            error!("Error generating postgres parameters: {}", e);
+            (None, None)
+        }
+    };
 
     Cluster {
         metadata: ObjectMeta {
