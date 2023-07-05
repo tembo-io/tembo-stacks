@@ -139,13 +139,28 @@ pub async fn install_extension(
     debug!("extensions to install: {:?}", extensions);
     let client = ctx.client.clone();
 
-    let pod_name = cdb
+    let cnpg_enabled = cdb.cnpg_enabled(ctx.clone()).await;
+
+    let pod_name_coredb = cdb
         .primary_pod_coredb(client.clone())
         .await
         .unwrap()
         .metadata
         .name
         .unwrap();
+
+    let pod_name_cnpg: Option<String> = match cnpg_enabled {
+        true => {
+            let name = cdb
+                .primary_pod_cnpg(client.clone())
+                .await?
+                .metadata
+                .name
+                .expect("Pod should always have a name");
+            Some(name)
+        }
+        false => None,
+    };
 
     let mut errors: Vec<Error> = Vec::new();
     let num_to_install = extensions.len();
@@ -159,7 +174,16 @@ pub async fn install_extension(
             "--version".to_owned(),
             version,
         ];
-        let result = cdb.exec(pod_name.clone(), client.clone(), &cmd).await;
+
+        let coredb_exec = cdb.exec(pod_name_coredb.clone(), client.clone(), &cmd);
+        let result = match pod_name_cnpg.is_some() {
+            true => {
+                let cnpg_exec = cdb.exec(pod_name_cnpg.clone().unwrap().clone(), client.clone(), &cmd);
+                let _ = coredb_exec.await;
+                cnpg_exec.await
+            }
+            false => coredb_exec.await,
+        };
 
         match result {
             Ok(result) => {

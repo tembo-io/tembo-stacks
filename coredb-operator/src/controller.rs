@@ -153,7 +153,7 @@ async fn create_policy_rules(cdb: &CoreDB) -> Vec<PolicyRule> {
 }
 
 impl CoreDB {
-    async fn cnpg_enabled(&self, ctx: Arc<Context>) -> bool {
+    pub(crate) async fn cnpg_enabled(&self, ctx: Arc<Context>) -> bool {
         // We will migrate databases by applying this label manually to the namespace
         let cnpg_enabled_label = "tembo-pod-init.tembo.io/watch";
 
@@ -536,12 +536,13 @@ impl CoreDB {
             .expect("All pods should have a name");
 
         let coredb_psql_command = PsqlCommand::new(
-            pod_name_coredb,
+            pod_name_coredb.clone(),
             self.metadata.namespace.clone().unwrap(),
             command.clone(),
             database.clone(),
             context.clone(),
         );
+        debug!("Running exec command in {}", pod_name_coredb);
         let coredb_exec = coredb_psql_command.execute();
 
         if self.cnpg_enabled(context.clone()).await {
@@ -554,12 +555,13 @@ impl CoreDB {
                 .expect("All pods should have a name");
 
             let cnpg_psql_command = PsqlCommand::new(
-                pod_name_cnpg,
+                pod_name_cnpg.clone(),
                 self.metadata.namespace.clone().unwrap(),
                 command,
                 database,
                 context,
             );
+            debug!("Running exec command in {}", pod_name_cnpg);
             let cnpg_exec = cnpg_psql_command.execute();
 
             let _coredb_output = coredb_exec.await?;
