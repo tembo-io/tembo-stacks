@@ -1,10 +1,6 @@
 use crate::{apis::coredb_types::CoreDB, Context, Error};
-use base64::decode;
-use base64::{
-    alphabet,
-    engine::{self, general_purpose},
-    Engine as _,
-};
+
+use base64::{engine::general_purpose, Engine as _};
 use k8s_openapi::{api::core::v1::Secret, apimachinery::pkg::apis::meta::v1::ObjectMeta, ByteString};
 use kube::{
     api::{ListParams, Patch, PatchParams},
@@ -49,9 +45,9 @@ pub async fn reconcile_secret(cdb: &CoreDB, ctx: Arc<Context>) -> Result<(), Err
             let bytes = general_purpose::STANDARD
                 .decode(password_encoded)
                 .expect("Expect to always be able to base64 decode a kubernetes secret value");
-            let password = String::from_utf8(bytes)
-                .expect("Expect to always be able to convert a kubernetes secret value to a string");
-            password
+
+            String::from_utf8(bytes)
+                .expect("Expect to always be able to convert a kubernetes secret value to a string")
         }
     };
 
