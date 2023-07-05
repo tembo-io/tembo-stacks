@@ -284,6 +284,7 @@ pub async fn reconcile_cnpg(cdb: &CoreDB, ctx: Arc<Context>) -> Result<(), Error
     debug!("Applied");
     Ok(())
 }
+<<<<<<< HEAD
 
 #[cfg(test)]
 mod tests {
@@ -639,3 +640,5 @@ mod tests {
         let _result: Cluster = serde_json::from_str(json_str).expect("Should be able to deserialize");
     }
 }
+=======
+>>>>>>> 858384a (fix clippy warnings)
