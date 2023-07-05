@@ -512,7 +512,7 @@ mod test {
 
         // apply CRD with serviceAccountTemplate set
         let params = PatchParams::apply("coredb-integration-test");
-        let patch = Patch::Apply(&coredb_json);
+        let patch = Patch::Merge(&coredb_json);
         let _coredb_resource = coredbs.patch(name, &params, &patch).await.unwrap();
 
         thread::sleep(Duration::from_millis(5000));
