@@ -74,7 +74,7 @@ run-telemetry:
 
 # run without opentelemetry
 run:
-  DATA_PLANE_DOMAIN=localhost ENABLE_INITIAL_BACKUP=false RUST_LOG=debug,kube=debug,controller=debug cargo run
+  DATA_PLANE_BASEDOMAIN=localhost ENABLE_INITIAL_BACKUP=false RUST_LOG=info,kube=info,controller=debug cargo run
 
 # annotate namespace to allow for tests
 annotate:
