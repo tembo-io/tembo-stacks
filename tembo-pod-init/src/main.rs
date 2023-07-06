@@ -37,10 +37,13 @@ async fn main() -> std::io::Result<()> {
     tokio::spawn(async move {
         loop {
             match watcher.watch().await {
-                Ok(_) => break,
+                Ok(_) => {
+                    info!("Namespace watcher finished, restarting.");
+                    tokio::time::sleep(tokio::time::Duration::from_secs(1)).await;
+                },
                 Err(e) => {
-                    error!("Namespace watcher failed: {}", e);
-                    tokio::time::sleep(tokio::time::Duration::from_secs(5)).await;
+                    error!("Namespace watcher failed, restarting: {}", e);
+                    tokio::time::sleep(tokio::time::Duration::from_secs(1)).await;
                 }
             }
         }
