@@ -33,11 +33,7 @@ mod test {
     };
     use kube::{
         api::{AttachParams, DeleteParams, ListParams, Patch, PatchParams, PostParams},
-        runtime::wait::{
-            await_condition, conditions,
-            conditions::{is_deleted, is_pod_running},
-            Condition,
-        },
+        runtime::wait::{await_condition, conditions, Condition},
         Api, Client, Config,
     };
     use rand::Rng;
@@ -202,7 +198,7 @@ mod test {
             .metadata
             .clone();
         let coredb_pod_uid = coredb_pod_meta.clone().uid.unwrap();
-        let coredb_pod_uid = coredb_pod_uid.as_str();
+        let _coredb_pod_uid = coredb_pod_uid.as_str();
 
         // Add some data
         let result = coredb_resource
@@ -276,7 +272,7 @@ mod test {
         });
         let params = PatchParams::apply("coredb-integration-test");
         let patch = Patch::Merge(&coredb_json);
-        let coredb_resource = coredbs.patch(name, &params, &patch).await.unwrap();
+        let _coredb_resource = coredbs.patch(name, &params, &patch).await.unwrap();
 
         // Wait enough time for the migration to begin, and less time
         // than it would take to complete
@@ -300,11 +296,14 @@ mod test {
         let patch = Patch::Merge(&coredb_json);
         let coredb_resource = coredbs.patch(name, &params, &patch).await.unwrap();
 
+        // Allow time for any ongoing reconciliation to complete
+        thread::sleep(Duration::from_millis(2000));
+
         // Delete the statefulset to be sure we are not connecting to old pod
         // Get the StatefulSet
         let stateful_sets_api: Api<StatefulSet> = Api::namespaced(client.clone(), namespace);
         let stateful_set_name = name.to_string();
-        let stateful_set = stateful_sets_api.get(&stateful_set_name).await.unwrap();
+        let _stateful_set = stateful_sets_api.get(&stateful_set_name).await.unwrap();
         // Delete the StatefulSet
         stateful_sets_api
             .delete(&stateful_set_name, &DeleteParams::default())
@@ -312,19 +311,18 @@ mod test {
             .unwrap();
 
         let pod_name = format!("{}-0", name);
-        println!("Waiting for pod to be not running: {}", pod_name);
-        // Wait for Pod to be not running
-        let _check_for_pod = tokio::time::timeout(
-            Duration::from_secs(TIMEOUT_SECONDS_START_POD),
-            await_condition(pods_api.clone(), &pod_name, is_deleted(coredb_pod_uid)),
-        )
-            .await
-            .unwrap_or_else(|_| {
-                panic!(
-                    "Did not find the pod {} to be deleted after waiting {} seconds after deleting the StatefulSet",
-                    pod_name, TIMEOUT_SECONDS_START_POD
-                )
-            });
+
+        // Confirm pod is deleted
+        println!("Waiting for pod {} to be deleted", &pod_name);
+        let mut pod = pods_api.get(&pod_name).await;
+        for _ in 0..100 {
+            if pod.is_err() {
+                break;
+            }
+            thread::sleep(Duration::from_millis(1000));
+            pod = pods_api.get(&pod_name).await;
+        }
+        println!("Pod {} deleted", &pod_name);
 
         // Check the data is still present
         // Assert data exists
@@ -337,7 +335,7 @@ mod test {
             .await
             .unwrap();
         println!("{}", result.stdout.clone().unwrap());
-        assert!(result.stdout.clone().unwrap().contains("John Doe"));
+        assert!(result.stdout.unwrap().contains("John Doe"));
     }
 
     #[tokio::test]

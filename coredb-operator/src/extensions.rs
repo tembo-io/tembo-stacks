@@ -1,6 +1,6 @@
 use crate::{apis::coredb_types::CoreDB, controller::patch_cdb_status_merge, defaults, Context, Error};
 
-use kube::api::Api;
+use kube::{api::Api, runtime::controller::Action};
 use lazy_static::lazy_static;
 use regex::Regex;
 use schemars::JsonSchema;
@@ -9,6 +9,7 @@ use std::{
     collections::{HashMap, HashSet},
     sync::Arc,
 };
+use tokio::time::Duration;
 use tracing::{debug, error, info, warn};
 
 lazy_static! {
@@ -131,11 +132,11 @@ enabled desc
 "#;
 
 /// handles installing extensions
-pub async fn install_extension(
+pub async fn install_extensions(
     cdb: &CoreDB,
     extensions: &[Extension],
     ctx: Arc<Context>,
-) -> Result<(), Error> {
+) -> Result<(), Action> {
     debug!("extensions to install: {:?}", extensions);
     let client = ctx.client.clone();
 
@@ -144,10 +145,20 @@ pub async fn install_extension(
     let pod_name_coredb = cdb
         .primary_pod_coredb(client.clone())
         .await
-        .unwrap()
+        .map_err(|_e| {
+            // It is normal to not find a pod
+            info!(
+                "CNPG primary pod of {} is not available, trying again after a short duration",
+                cdb.metadata
+                    .name
+                    .clone()
+                    .expect("instance should always have a name")
+            );
+            Action::requeue(Duration::from_secs(5))
+        })?
         .metadata
         .name
-        .unwrap();
+        .expect("Pod should always have a name");
 
     let pod_name_cnpg: Option<String> = match cnpg_enabled {
         true => {
@@ -208,7 +219,7 @@ pub async fn toggle_extensions(
     cdb: &CoreDB,
     extensions: &[Extension],
     ctx: Arc<Context>,
-) -> Result<(), Error> {
+) -> Result<(), Action> {
     // iterate through list of extensions and run CREATE EXTENSION <extension-name> for each
     for ext in extensions {
         let ext_name = ext.name.as_str();
@@ -253,12 +264,19 @@ pub async fn toggle_extensions(
                     .await;
 
                 match result {
-                    Ok(result) => {
-                        debug!("Result: {}", result.stdout.clone().unwrap());
-                    }
-                    Err(err) => {
-                        error!("error managing extension");
-                        return Err(err.into());
+                    Ok(_) => {}
+                    Err(_) => {
+                        // Even if one extension has failed to reconcile, we should
+                        // still try to create the other extensions.
+                        // It will retry on the next reconcile.
+                        error!(
+                            "Failed to reconcile extension {}, in {}. Ignoring.",
+                            &ext_name,
+                            cdb.metadata
+                                .name
+                                .clone()
+                                .expect("instance should always have a name")
+                        );
                     }
                 }
             }
@@ -272,7 +290,7 @@ pub fn check_input(input: &str) -> bool {
 }
 
 /// returns all the databases in an instance
-pub async fn list_databases(cdb: &CoreDB, ctx: Arc<Context>) -> Result<Vec<String>, Error> {
+pub async fn list_databases(cdb: &CoreDB, ctx: Arc<Context>) -> Result<Vec<String>, Action> {
     let _client = ctx.client.clone();
     let psql_out = cdb
         .psql(LIST_DATABASES_QUERY.to_owned(), "postgres".to_owned(), ctx)
@@ -301,11 +319,10 @@ fn parse_databases(psql_str: &str) -> Vec<String> {
 }
 
 /// lists all extensions in a single database
-pub async fn list_extensions(cdb: &CoreDB, ctx: Arc<Context>, database: &str) -> Result<Vec<ExtRow>, Error> {
+pub async fn list_extensions(cdb: &CoreDB, ctx: Arc<Context>, database: &str) -> Result<Vec<ExtRow>, Action> {
     let psql_out = cdb
         .psql(LIST_EXTENSIONS_QUERY.to_owned(), database.to_owned(), ctx)
-        .await
-        .unwrap();
+        .await?;
     let result_string = psql_out.stdout.unwrap();
     Ok(parse_extensions(&result_string))
 }
@@ -333,7 +350,7 @@ fn parse_extensions(psql_str: &str) -> Vec<ExtRow> {
 }
 
 /// list databases then get all extensions from each database
-pub async fn get_all_extensions(cdb: &CoreDB, ctx: Arc<Context>) -> Result<Vec<Extension>, Error> {
+pub async fn get_all_extensions(cdb: &CoreDB, ctx: Arc<Context>) -> Result<Vec<Extension>, Action> {
     let databases = list_databases(cdb, ctx.clone()).await?;
     debug!("databases: {:?}", databases);
 
@@ -433,7 +450,7 @@ pub async fn reconcile_extensions(
     ctx: Arc<Context>,
     cdb_api: &Api<CoreDB>,
     name: &str,
-) -> Result<Vec<Extension>, Error> {
+) -> Result<Vec<Extension>, Action> {
     // always get the current state of extensions in the database
     // this is due to out of band changes - manual create/drop extension
     let actual_extensions = get_all_extensions(coredb, ctx.clone()).await?;
@@ -461,7 +478,7 @@ pub async fn reconcile_extensions(
             toggle_extensions(coredb, &changed_extensions, ctx.clone()).await?;
         }
         if !extensions_to_install.is_empty() {
-            install_extension(coredb, &extensions_to_install, ctx.clone()).await?;
+            install_extensions(coredb, &extensions_to_install, ctx.clone()).await?;
         }
         let status = serde_json::json!({
             "status": {"extensionsUpdating": false}
