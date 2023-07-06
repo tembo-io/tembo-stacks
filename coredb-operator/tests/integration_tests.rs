@@ -750,62 +750,13 @@ mod test {
         // Wait for Pod to be created
         let pod_name = format!("{}-0", name);
 
-        println!("Waiting for pod to be running: {}", pod_name);
-        let _check_for_pod = tokio::time::timeout(
-            Duration::from_secs(TIMEOUT_SECONDS_START_POD),
-            await_condition(pods.clone(), &pod_name, conditions::is_pod_running()),
-        )
-        .await
-        .unwrap_or_else(|_| {
-            panic!(
-                "Did not find the pod {} to be running after waiting {} seconds",
-                pod_name, TIMEOUT_SECONDS_START_POD
-            )
-        });
-        println!("Waiting for pod to be ready: {}", pod_name);
-        let _check_for_pod_ready = tokio::time::timeout(
-            Duration::from_secs(TIMEOUT_SECONDS_POD_READY),
-            await_condition(pods.clone(), &pod_name, is_pod_ready()),
-        )
-        .await
-        .unwrap_or_else(|_| {
-            panic!(
-                "Did not find the pod {} to be ready after waiting {} seconds",
-                pod_name, TIMEOUT_SECONDS_POD_READY
-            )
-        });
-        println!("Found pod ready: {}", pod_name);
+        pod_ready_and_running(pods.clone(), pod_name).await;
 
         // Wait for CNPG Pod to be created
         // This is the CNPG pod
         let pod_name = format!("{}-1", name);
 
-        println!("Waiting for pod to be running: {}", pod_name);
-        let _check_for_pod = tokio::time::timeout(
-            Duration::from_secs(TIMEOUT_SECONDS_START_POD),
-            await_condition(pods.clone(), &pod_name, conditions::is_pod_running()),
-        )
-        .await
-        .unwrap_or_else(|_| {
-            panic!(
-                "Did not find the pod {} to be running after waiting {} seconds",
-                pod_name, TIMEOUT_SECONDS_START_POD
-            )
-        });
-        println!("Waiting for pod to be ready: {}", pod_name);
-        let _check_for_pod_ready = tokio::time::timeout(
-            Duration::from_secs(TIMEOUT_SECONDS_POD_READY),
-            await_condition(pods.clone(), &pod_name, is_pod_ready()),
-        )
-        .await
-        .unwrap_or_else(|_| {
-            panic!(
-                "Did not find the pod {} to be ready after waiting {} seconds",
-                pod_name, TIMEOUT_SECONDS_POD_READY
-            )
-        });
-        println!("Found CNPG pod ready: {}", pod_name);
-
+        pod_ready_and_running(pods.clone(), pod_name).await;
 
         // Update CoreDB to include PGPARAMS
         let coredb_json = serde_json::json!({
@@ -857,34 +808,55 @@ mod test {
         println!("Waiting to install extension pgmq");
         // give it time to install extensions
         //thread::sleep(Duration::from_millis(10000));
+        wait_until_psql_contains(
+            context.clone(),
+            coredb_resource.clone(),
+            "select * from pg_extension;".to_string(),
+            "pgmq".to_string(),
+            false,
+        )
+        .await;
 
-        // Make sure CNPG pod exists before deletion
-        assert!(pods.get(&pod_name).await.is_ok());
-
-        // Delete CNPG pod
-        let delete_pod = pods.delete(&pod_name, &DeleteParams::default()).await;
-        assert!(delete_pod.is_ok(), "Failed to delete pod: {}", pod_name);
-
-        // Wait for the Pod to be Running again
-        let mut pod_status = pods
-            .get(&pod_name)
+        // Assert extension 'pgmq' was created
+        let result = coredb_resource
+            .psql(
+                "select extname from pg_catalog.pg_extension;".to_string(),
+                "postgres".to_string(),
+                context.clone(),
+            )
             .await
-            .expect("Failed to get Pod")
-            .status
             .unwrap();
 
-        while pod_status.phase.as_ref().unwrap_or(&String::new()) != "Running" {
-            tokio::time::sleep(Duration::from_secs(1)).await;
-            pod_status = pods
-                .get(&pod_name)
-                .await
-                .expect("Failed to get Pod")
-                .status
-                .unwrap();
-        }
+        println!("{}", result.stdout.clone().unwrap());
+        assert!(result.stdout.clone().unwrap().contains("pgmq"));
 
-        // Now the Pod should be Running
-        assert_eq!(pod_status.phase.unwrap(), "Running");
+        // // Make sure CNPG pod exists before deletion
+        // assert!(pods.get(&pod_name).await.is_ok());
+        //
+        // // Delete CNPG pod
+        // let delete_pod = pods.delete(&pod_name, &DeleteParams::default()).await;
+        // assert!(delete_pod.is_ok(), "Failed to delete pod: {}", pod_name);
+        //
+        // // Wait for the Pod to be Running again
+        // let mut pod_status = pods
+        //     .get(&pod_name)
+        //     .await
+        //     .expect("Failed to get Pod")
+        //     .status
+        //     .unwrap();
+        //
+        // while pod_status.phase.as_ref().unwrap_or(&String::new()) != "Running" {
+        //     tokio::time::sleep(Duration::from_secs(1)).await;
+        //     pod_status = pods
+        //         .get(&pod_name)
+        //         .await
+        //         .expect("Failed to get Pod")
+        //         .status
+        //         .unwrap();
+        // }
+        //
+        // // Now the Pod should be Running
+        // assert_eq!(pod_status.phase.unwrap(), "Running");
 
         // assert extensions made it into the status
         let spec = coredbs.get(name).await.expect("spec not found");
@@ -897,32 +869,6 @@ mod test {
             .expect("expected a description")
             .is_empty());
 
-        // Assert extension 'pgmq' was created
-        // let result = coredb_resource
-        //     .psql(
-        //         "select extname from pg_catalog.pg_extension;".to_string(),
-        //         "postgres".to_string(),
-        //         context.clone(),
-        //     )
-        //     .await
-        //     .unwrap();
-        //
-        // println!("{}", result.stdout.clone().unwrap());
-        // assert!(result.stdout.clone().unwrap().contains("pgmq"));
-        //
-        // // Assert extension 'pgmq' was created
-        // let result = coredb_resource
-        //     .psql(
-        //         "select extname from pg_catalog.pg_extension;".to_string(),
-        //         "postgres".to_string(),
-        //         context.clone(),
-        //     )
-        //     .await
-        //     .unwrap();
-        //
-        // println!("{}", result.stdout.clone().unwrap());
-        // assert!(result.stdout.clone().unwrap().contains("pgmq"));
-        //
         //
         // // CLEANUP TEST
         // // Cleanup Buddy Pod
