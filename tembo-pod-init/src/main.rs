@@ -42,9 +42,9 @@ async fn main() -> std::io::Result<()> {
                 }
                 Err(e) => {
                     error!("Namespace watcher failed, restarting: {}", e);
+                    tokio::time::sleep(tokio::time::Duration::from_secs(5)).await;
                 }
             }
-            tokio::time::sleep(tokio::time::Duration::from_secs(5)).await;
         }
     });
 
