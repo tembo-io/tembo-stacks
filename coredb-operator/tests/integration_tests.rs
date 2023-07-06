@@ -32,8 +32,12 @@ mod test {
         apimachinery::pkg::{api::resource::Quantity, apis::meta::v1::ObjectMeta},
     };
     use kube::{
-        api::{AttachParams, ListParams, Patch, PatchParams, PostParams},
-        runtime::wait::{await_condition, conditions, Condition},
+        api::{AttachParams, DeleteParams, ListParams, Patch, PatchParams, PostParams},
+        runtime::wait::{
+            await_condition, conditions,
+            conditions::{is_deleted, is_pod_running},
+            Condition,
+        },
         Api, Client, Config,
     };
     use rand::Rng;
@@ -117,25 +121,25 @@ mod test {
             Duration::from_secs(TIMEOUT_SECONDS_START_POD),
             await_condition(pods.clone(), &pod_name, conditions::is_pod_running()),
         )
-            .await
-            .unwrap_or_else(|_| {
-                panic!(
-                    "Did not find the pod {} to be running after waiting {} seconds",
-                    pod_name, TIMEOUT_SECONDS_START_POD
-                )
-            });
+        .await
+        .unwrap_or_else(|_| {
+            panic!(
+                "Did not find the pod {} to be running after waiting {} seconds",
+                pod_name, TIMEOUT_SECONDS_START_POD
+            )
+        });
         println!("Waiting for pod to be ready: {}", pod_name);
         let _check_for_pod_ready = tokio::time::timeout(
             Duration::from_secs(TIMEOUT_SECONDS_POD_READY),
             await_condition(pods.clone(), &pod_name, is_pod_ready()),
         )
-            .await
-            .unwrap_or_else(|_| {
-                panic!(
-                    "Did not find the pod {} to be ready after waiting {} seconds",
-                    pod_name, TIMEOUT_SECONDS_POD_READY
-                )
-            });
+        .await
+        .unwrap_or_else(|_| {
+            panic!(
+                "Did not find the pod {} to be ready after waiting {} seconds",
+                pod_name, TIMEOUT_SECONDS_POD_READY
+            )
+        });
         println!("Found pod ready: {}", pod_name);
     }
 
@@ -158,9 +162,10 @@ mod test {
             "apiVersion": "v1",
             "kind": "Namespace",
             "metadata": {
-                "name": format!("{}", namespace),
+                "name": namespace.clone()
             }
         });
+        println!("Creating namespace {}", namespace);
         ns_api
             .patch(namespace, &params, &Patch::Apply(&ns))
             .await
@@ -171,9 +176,9 @@ mod test {
         let coredbs: Api<CoreDB> = Api::namespaced(client.clone(), namespace);
         let coredb_json = serde_json::json!({
             "apiVersion": API_VERSION,
-            "kind": kind,
+            "kind": "CoreDB",
             "metadata": {
-                "name": name
+                "name": name.clone()
             },
             "spec": {
                 "replicas": 1,
@@ -187,8 +192,152 @@ mod test {
 
         let pods_api: Api<Pod> = Api::namespaced(client.clone(), namespace);
         // Wait for CoreDB pod to be running and ready
-        pod_ready_and_running(pods_api, format!("{}-0",name)).await;
-        //
+        pod_ready_and_running(pods_api.clone(), format!("{}-0", name)).await;
+
+        // Get the CoreDB pod uid
+        let coredb_pod_meta = pods_api
+            .get(format!("{}-0", name).as_str())
+            .await
+            .unwrap()
+            .metadata
+            .clone();
+        let coredb_pod_uid = coredb_pod_meta.clone().uid.unwrap();
+        let coredb_pod_uid = coredb_pod_uid.as_str();
+
+        // Add some data
+        let result = coredb_resource
+            .psql("\\dt".to_string(), "postgres".to_string(), context.clone())
+            .await
+            .unwrap();
+        println!("psql out: {}", result.stdout.clone().unwrap());
+        assert!(!result.stdout.clone().unwrap().contains("customers"));
+
+        // Create table 'customers'
+        let result = coredb_resource
+            .psql(
+                "
+                CREATE TABLE customers (
+                   id serial PRIMARY KEY,
+                   name VARCHAR(50) NOT NULL,
+                   email VARCHAR(50) NOT NULL UNIQUE,
+                   created_at TIMESTAMP DEFAULT NOW()
+                );
+                INSERT INTO customers (name, email)
+                VALUES ('John Doe', 'john.doe@example.com');
+                "
+                .to_string(),
+                "postgres".to_string(),
+                context.clone(),
+            )
+            .await
+            .unwrap();
+        println!("{}", result.stdout.clone().unwrap());
+        assert!(result.stdout.clone().unwrap().contains("CREATE TABLE"));
+
+        // Assert data exists
+        let result = coredb_resource
+            .psql(
+                "SELECT name FROM customers WHERE email='john.doe@example.com'".to_string(),
+                "postgres".to_string(),
+                context.clone(),
+            )
+            .await
+            .unwrap();
+        println!("{}", result.stdout.clone().unwrap());
+        assert!(result.stdout.clone().unwrap().contains("John Doe"));
+
+        // Label the namespace with "tembo-pod-init.tembo.io/watch"="true"
+        let ns_api: Api<Namespace> = Api::all(client.clone());
+        let ns = serde_json::json!({
+            "apiVersion": "v1",
+            "kind": "Namespace",
+            "metadata": {
+                "name": format!("{}", namespace),
+                "labels": {
+                    "tembo-pod-init.tembo.io/watch": "true"
+                }
+            }
+        });
+        ns_api
+            .patch(namespace, &params, &Patch::Apply(&ns))
+            .await
+            .unwrap();
+
+        // Annotation CoreDB with 'foo: bar' in order to trigger a reconciliation
+        let coredb_json = serde_json::json!({
+            "apiVersion": API_VERSION,
+            "kind": "CoreDB",
+            "metadata": {
+                "name": name.clone(),
+                "annotations": {
+                    "foo": "bar"
+                }
+            }
+        });
+        let params = PatchParams::apply("coredb-integration-test");
+        let patch = Patch::Merge(&coredb_json);
+        let coredb_resource = coredbs.patch(name, &params, &patch).await.unwrap();
+
+        // Wait enough time for the migration to begin, and less time
+        // than it would take to complete
+        thread::sleep(Duration::from_millis(10000));
+
+        // Wait for CNPG pod to be running and ready
+        pod_ready_and_running(pods_api.clone(), format!("{}-1", name)).await;
+
+        // Disable reconciliation on CoreDB
+        let coredb_json = serde_json::json!({
+            "apiVersion": API_VERSION,
+            "kind": "CoreDB",
+            "metadata": {
+                "name": name.clone(),
+                "annotations": {
+                    "coredbs.coredb.io/watch": "false"
+                }
+            }
+        });
+        let params = PatchParams::apply("coredb-integration-test");
+        let patch = Patch::Merge(&coredb_json);
+        let coredb_resource = coredbs.patch(name, &params, &patch).await.unwrap();
+
+        // Delete the statefulset to be sure we are not connecting to old pod
+        // Get the StatefulSet
+        let stateful_sets_api: Api<StatefulSet> = Api::namespaced(client.clone(), namespace);
+        let stateful_set_name = name.to_string();
+        let stateful_set = stateful_sets_api.get(&stateful_set_name).await.unwrap();
+        // Delete the StatefulSet
+        stateful_sets_api
+            .delete(&stateful_set_name, &DeleteParams::default())
+            .await
+            .unwrap();
+
+        let pod_name = format!("{}-0", name);
+        println!("Waiting for pod to be not running: {}", pod_name);
+        // Wait for Pod to be not running
+        let _check_for_pod = tokio::time::timeout(
+            Duration::from_secs(TIMEOUT_SECONDS_START_POD),
+            await_condition(pods_api.clone(), &pod_name, is_deleted(coredb_pod_uid)),
+        )
+            .await
+            .unwrap_or_else(|_| {
+                panic!(
+                    "Did not find the pod {} to be deleted after waiting {} seconds after deleting the StatefulSet",
+                    pod_name, TIMEOUT_SECONDS_START_POD
+                )
+            });
+
+        // Check the data is still present
+        // Assert data exists
+        let result = coredb_resource
+            .psql(
+                "SELECT name FROM customers WHERE email='john.doe@example.com'".to_string(),
+                "postgres".to_string(),
+                context.clone(),
+            )
+            .await
+            .unwrap();
+        println!("{}", result.stdout.clone().unwrap());
+        assert!(result.stdout.clone().unwrap().contains("John Doe"));
     }
 
     #[tokio::test]
@@ -602,10 +751,7 @@ mod test {
         // Wait for Pod to be created
         let pod_name = format!("{}-0", name);
 
-        pod_ready_and_running(
-            pods.clone(),
-            pod_name.clone()
-        ).await;
+        pod_ready_and_running(pods.clone(), pod_name.clone()).await;
 
         let pods: Api<Pod> = Api::namespaced(client.clone(), namespace);
         let lp =
