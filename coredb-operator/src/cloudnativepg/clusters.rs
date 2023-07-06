@@ -6,6 +6,7 @@ use k8s_openapi::apimachinery::pkg::util::intstr::IntOrString;
 use kube::CustomResource;
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
+use k8s_openapi::apimachinery::pkg::api::resource::Quantity;
 
 #[derive(CustomResource, Serialize, Deserialize, Clone, Debug, Default)]
 #[kube(
@@ -1665,9 +1666,9 @@ pub struct ClusterResources {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub claims: Option<Vec<ClusterResourcesClaims>>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub limits: Option<BTreeMap<String, IntOrString>>,
+    pub limits: Option<BTreeMap<String, Quantity>>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub requests: Option<BTreeMap<String, IntOrString>>,
+    pub requests: Option<BTreeMap<String, Quantity>>,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, Default)]

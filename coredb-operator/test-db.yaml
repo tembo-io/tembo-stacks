@@ -2,7 +2,6 @@ apiVersion: coredb.io/v1alpha1
 kind: CoreDB
 metadata:
   name: test-coredb
-  namespace: default
 spec:
   extensions: []
   image: quay.io/coredb/coredb-pg-slim:f57e860
