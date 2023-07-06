@@ -171,7 +171,7 @@ fn cnpg_postgres_config(
             Ok((params, libs))
         }
         Ok(None) => {
-            // Return None, None
+            // Return None, None when no pg_config is set
             Ok((None, None))
         }
         Err(e) => Err(e),
@@ -214,9 +214,6 @@ pub fn cnpg_cluster_from_cdb(cdb: &CoreDB) -> Cluster {
             (None, None)
         }
     };
-
-    println!("PARAMS: {:?}", postgres_parameters);
-    println!("LIBS: {:?}", shared_preload_libraries);
 
     Cluster {
         metadata: ObjectMeta {
@@ -310,7 +307,10 @@ pub async fn reconcile_cnpg(cdb: &CoreDB, ctx: Arc<Context>) -> Result<(), Error
     let _o = cluster_api
         .patch(&name, &ps, &Patch::Apply(&cluster))
         .await
-        .map_err(Error::KubeError)?;
+        .map_err(|err| {
+            debug!("Error patching cluster: {}", err);
+            Error::KubeError(err)
+        })?;
     debug!("Applied");
     Ok(())
 }
