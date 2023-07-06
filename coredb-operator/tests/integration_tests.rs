@@ -14,6 +14,7 @@ mod test {
     use chrono::{DateTime, SecondsFormat, Utc};
     use controller::{
         apis::coredb_types::CoreDB,
+        cloudnativepg::clusters::Cluster,
         defaults::{default_resources, default_storage},
         ingress_route_tcp_crd::IngressRouteTCP,
         is_pod_ready, Context, State,
@@ -756,7 +757,7 @@ mod test {
         // This is the CNPG pod
         let pod_name = format!("{}-1", name);
 
-        pod_ready_and_running(pods.clone(), pod_name).await;
+        pod_ready_and_running(pods.clone(), pod_name.clone()).await;
 
         // Update CoreDB to include PGPARAMS
         let coredb_json = serde_json::json!({
@@ -808,6 +809,28 @@ mod test {
         println!("Waiting to install extension pgmq");
         // give it time to install extensions
         //thread::sleep(Duration::from_millis(10000));
+
+        // Annotate the Cluster object to restart the pod
+        let cluster_api: Api<Cluster> = Api::namespaced(client.clone(), namespace);
+        let cluster_name = name.clone();
+        let restart_time = Utc::now().to_rfc3339_opts(SecondsFormat::Secs, true).to_string();
+        let patch_json = serde_json::json!({
+            "metadata": {
+                "annotations": {
+                    "kubectl.kubernetes.io/restartedAt": restart_time
+                }
+            }
+        });
+
+        println!("Restarting CNPG pod");
+        let params = PatchParams::default();
+        let patch = cluster_api
+            .patch(&cluster_name, &params, &Patch::Merge(patch_json))
+            .await
+            .unwrap();
+
+        pod_ready_and_running(pods.clone(), pod_name.clone()).await;
+
         wait_until_psql_contains(
             context.clone(),
             coredb_resource.clone(),
@@ -816,6 +839,8 @@ mod test {
             false,
         )
         .await;
+
+        thread::sleep(Duration::from_secs(10));
 
         // Assert extension 'pgmq' was created
         let result = coredb_resource
@@ -829,34 +854,6 @@ mod test {
 
         println!("{}", result.stdout.clone().unwrap());
         assert!(result.stdout.clone().unwrap().contains("pgmq"));
-
-        // // Make sure CNPG pod exists before deletion
-        // assert!(pods.get(&pod_name).await.is_ok());
-        //
-        // // Delete CNPG pod
-        // let delete_pod = pods.delete(&pod_name, &DeleteParams::default()).await;
-        // assert!(delete_pod.is_ok(), "Failed to delete pod: {}", pod_name);
-        //
-        // // Wait for the Pod to be Running again
-        // let mut pod_status = pods
-        //     .get(&pod_name)
-        //     .await
-        //     .expect("Failed to get Pod")
-        //     .status
-        //     .unwrap();
-        //
-        // while pod_status.phase.as_ref().unwrap_or(&String::new()) != "Running" {
-        //     tokio::time::sleep(Duration::from_secs(1)).await;
-        //     pod_status = pods
-        //         .get(&pod_name)
-        //         .await
-        //         .expect("Failed to get Pod")
-        //         .status
-        //         .unwrap();
-        // }
-        //
-        // // Now the Pod should be Running
-        // assert_eq!(pod_status.phase.unwrap(), "Running");
 
         // assert extensions made it into the status
         let spec = coredbs.get(name).await.expect("spec not found");
