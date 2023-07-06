@@ -89,7 +89,7 @@ async fn reconcile(cdb: Arc<CoreDB>, ctx: Arc<Context>) -> Result<Action> {
         }
     }
 
-    info!("Reconciling CoreDB \"{}\" in {}", cdb.name_any(), ns);
+    debug!("Reconciling CoreDB \"{}\" in {}", cdb.name_any(), ns);
     finalizer(&coredbs, COREDB_FINALIZER, cdb, |event| async {
         match event {
             Finalizer::Apply(cdb) => match cdb.reconcile(ctx.clone(), &cfg).await {
@@ -168,7 +168,6 @@ impl CoreDB {
             .metadata
             .labels
             .unwrap_or_default();
-        dbg!(ns_labels.clone());
 
         let enabled_value = ns_labels.get(&String::from(cnpg_enabled_label));
         if enabled_value.is_some() {
