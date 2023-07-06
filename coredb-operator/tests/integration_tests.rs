@@ -317,12 +317,12 @@ mod test {
         let mut pod = pods_api.get(&pod_name).await;
         for _ in 0..100 {
             if pod.is_err() {
+                println!("Pod {} deleted", &pod_name);
                 break;
             }
             thread::sleep(Duration::from_millis(1000));
             pod = pods_api.get(&pod_name).await;
         }
-        println!("Pod {} deleted", &pod_name);
 
         // Check the data is still present
         // Assert data exists
@@ -1457,8 +1457,6 @@ mod test {
         println!("{}", result.stdout.clone().unwrap());
         assert!(result.stdout.clone().unwrap().contains("stop_test"));
 
-        thread::sleep(Duration::from_millis(5000));
-
         // stop the instance
         let coredb_json = serde_json::json!({
             "apiVersion": API_VERSION,
@@ -1477,7 +1475,16 @@ mod test {
         let coredb_resource = coredbs.patch(name, &params, &patch).await.unwrap();
 
         // give it time to stop
-        thread::sleep(Duration::from_millis(30000));
+        println!("Waiting for pod {} to be deleted", &pod_name);
+        let mut pod = pods.get(&pod_name).await;
+        for _ in 0..100 {
+            if pod.is_err() {
+                println!("Pod {} deleted", &pod_name);
+                break;
+            }
+            thread::sleep(Duration::from_millis(1000));
+            pod = pods.get(&pod_name).await;
+        }
 
         // pod must not be ready
         let res = coredb_resource.primary_pod_coredb(client.clone()).await;
@@ -1500,12 +1507,8 @@ mod test {
         let coredb_resource = coredbs.patch(name, &params, &patch).await.unwrap();
 
         // give it time to start
-        println!("Waiting for pod to be running: {}", pod_name);
-        let check_for_pod = tokio::time::timeout(
-            Duration::from_secs(TIMEOUT_SECONDS_START_POD),
-            await_condition(pods.clone(), &pod_name, conditions::is_pod_running()),
-        );
-        assert!(check_for_pod.await.is_ok());
+        pod_ready_and_running(pods.clone(), pod_name.clone()).await;
+
         // assert table still exist
         let result = coredb_resource
             .psql("\\dt".to_string(), "postgres".to_string(), context.clone())
