@@ -32,7 +32,7 @@ mod test {
         apimachinery::pkg::{api::resource::Quantity, apis::meta::v1::ObjectMeta},
     };
     use kube::{
-        api::{AttachParams, ListParams, Patch, PatchParams, PostParams},
+        api::{AttachParams, DeleteParams, ListParams, Patch, PatchParams, PostParams},
         runtime::wait::{await_condition, conditions, Condition},
         Api, Client, Config,
     };
@@ -109,6 +109,233 @@ mod test {
         stdout_reader.read_to_string(&mut result_stdout).await.unwrap();
 
         result_stdout
+    }
+
+    async fn pod_ready_and_running(pods: Api<Pod>, pod_name: String) {
+        println!("Waiting for pod to be running: {}", pod_name);
+        let _check_for_pod = tokio::time::timeout(
+            Duration::from_secs(TIMEOUT_SECONDS_START_POD),
+            await_condition(pods.clone(), &pod_name, conditions::is_pod_running()),
+        )
+        .await
+        .unwrap_or_else(|_| {
+            panic!(
+                "Did not find the pod {} to be running after waiting {} seconds",
+                pod_name, TIMEOUT_SECONDS_START_POD
+            )
+        });
+        println!("Waiting for pod to be ready: {}", pod_name);
+        let _check_for_pod_ready = tokio::time::timeout(
+            Duration::from_secs(TIMEOUT_SECONDS_POD_READY),
+            await_condition(pods.clone(), &pod_name, is_pod_ready()),
+        )
+        .await
+        .unwrap_or_else(|_| {
+            panic!(
+                "Did not find the pod {} to be ready after waiting {} seconds",
+                pod_name, TIMEOUT_SECONDS_POD_READY
+            )
+        });
+        println!("Found pod ready: {}", pod_name);
+    }
+
+    #[tokio::test]
+    #[ignore]
+    async fn functional_test_cnpg_migration_basic() {
+        // Initialize the Kubernetes client
+        let client = kube_client().await;
+        let state = State::default();
+        let context = state.create_context(client.clone());
+
+        // Configurations
+        let mut rng = rand::thread_rng();
+        let name = &format!("test-cnpg-migration-{}", rng.gen_range(0..100000));
+        let params = PatchParams::apply("coredb-integration-test").force();
+        let namespace = name;
+
+        let ns_api: Api<Namespace> = Api::all(client.clone());
+        let ns = serde_json::json!({
+            "apiVersion": "v1",
+            "kind": "Namespace",
+            "metadata": {
+                "name": namespace.clone()
+            }
+        });
+        println!("Creating namespace {}", namespace);
+        ns_api
+            .patch(namespace, &params, &Patch::Apply(&ns))
+            .await
+            .unwrap();
+
+        // Apply a basic configuration of CoreDB
+        println!("Creating CoreDB resource {}", name);
+        let coredbs: Api<CoreDB> = Api::namespaced(client.clone(), namespace);
+        let coredb_json = serde_json::json!({
+            "apiVersion": API_VERSION,
+            "kind": "CoreDB",
+            "metadata": {
+                "name": name.clone()
+            },
+            "spec": {
+                "replicas": 1,
+                "extensions": [],
+                "storage": "1Gi"
+            }
+        });
+        let params = PatchParams::apply("coredb-integration-test");
+        let patch = Patch::Apply(&coredb_json);
+        let coredb_resource = coredbs.patch(name, &params, &patch).await.unwrap();
+
+        let pods_api: Api<Pod> = Api::namespaced(client.clone(), namespace);
+        // Wait for CoreDB pod to be running and ready
+        pod_ready_and_running(pods_api.clone(), format!("{}-0", name)).await;
+
+        // Get the CoreDB pod uid
+        let coredb_pod_meta = pods_api
+            .get(format!("{}-0", name).as_str())
+            .await
+            .unwrap()
+            .metadata
+            .clone();
+        let coredb_pod_uid = coredb_pod_meta.clone().uid.unwrap();
+        let _coredb_pod_uid = coredb_pod_uid.as_str();
+
+        // Add some data
+        let result = coredb_resource
+            .psql("\\dt".to_string(), "postgres".to_string(), context.clone())
+            .await
+            .unwrap();
+        println!("psql out: {}", result.stdout.clone().unwrap());
+        assert!(!result.stdout.clone().unwrap().contains("customers"));
+
+        // Create table 'customers'
+        let result = coredb_resource
+            .psql(
+                "
+                CREATE TABLE customers (
+                   id serial PRIMARY KEY,
+                   name VARCHAR(50) NOT NULL,
+                   email VARCHAR(50) NOT NULL UNIQUE,
+                   created_at TIMESTAMP DEFAULT NOW()
+                );
+                INSERT INTO customers (name, email)
+                VALUES ('John Doe', 'john.doe@example.com');
+                "
+                .to_string(),
+                "postgres".to_string(),
+                context.clone(),
+            )
+            .await
+            .unwrap();
+        println!("{}", result.stdout.clone().unwrap());
+        assert!(result.stdout.clone().unwrap().contains("CREATE TABLE"));
+
+        // Assert data exists
+        let result = coredb_resource
+            .psql(
+                "SELECT name FROM customers WHERE email='john.doe@example.com'".to_string(),
+                "postgres".to_string(),
+                context.clone(),
+            )
+            .await
+            .unwrap();
+        println!("{}", result.stdout.clone().unwrap());
+        assert!(result.stdout.clone().unwrap().contains("John Doe"));
+
+        // Label the namespace with "tembo-pod-init.tembo.io/watch"="true"
+        let ns_api: Api<Namespace> = Api::all(client.clone());
+        let ns = serde_json::json!({
+            "apiVersion": "v1",
+            "kind": "Namespace",
+            "metadata": {
+                "name": format!("{}", namespace),
+                "labels": {
+                    "tembo-pod-init.tembo.io/watch": "true"
+                }
+            }
+        });
+        ns_api
+            .patch(namespace, &params, &Patch::Apply(&ns))
+            .await
+            .unwrap();
+
+        // Annotation CoreDB with 'foo: bar' in order to trigger a reconciliation
+        let coredb_json = serde_json::json!({
+            "apiVersion": API_VERSION,
+            "kind": "CoreDB",
+            "metadata": {
+                "name": name.clone(),
+                "annotations": {
+                    "foo": "bar"
+                }
+            }
+        });
+        let params = PatchParams::apply("coredb-integration-test");
+        let patch = Patch::Merge(&coredb_json);
+        let _coredb_resource = coredbs.patch(name, &params, &patch).await.unwrap();
+
+        // Wait enough time for the migration to begin, and less time
+        // than it would take to complete
+        thread::sleep(Duration::from_millis(10000));
+
+        // Wait for CNPG pod to be running and ready
+        pod_ready_and_running(pods_api.clone(), format!("{}-1", name)).await;
+
+        // Disable reconciliation on CoreDB
+        let coredb_json = serde_json::json!({
+            "apiVersion": API_VERSION,
+            "kind": "CoreDB",
+            "metadata": {
+                "name": name.clone(),
+                "annotations": {
+                    "coredbs.coredb.io/watch": "false"
+                }
+            }
+        });
+        let params = PatchParams::apply("coredb-integration-test");
+        let patch = Patch::Merge(&coredb_json);
+        let coredb_resource = coredbs.patch(name, &params, &patch).await.unwrap();
+
+        // Allow time for any ongoing reconciliation to complete
+        thread::sleep(Duration::from_millis(2000));
+
+        // Delete the statefulset to be sure we are not connecting to old pod
+        // Get the StatefulSet
+        let stateful_sets_api: Api<StatefulSet> = Api::namespaced(client.clone(), namespace);
+        let stateful_set_name = name.to_string();
+        let _stateful_set = stateful_sets_api.get(&stateful_set_name).await.unwrap();
+        // Delete the StatefulSet
+        stateful_sets_api
+            .delete(&stateful_set_name, &DeleteParams::default())
+            .await
+            .unwrap();
+
+        let pod_name = format!("{}-0", name);
+
+        // Confirm pod is deleted
+        println!("Waiting for pod {} to be deleted", &pod_name);
+        let mut pod = pods_api.get(&pod_name).await;
+        for _ in 0..100 {
+            if pod.is_err() {
+                println!("Pod {} deleted", &pod_name);
+                break;
+            }
+            thread::sleep(Duration::from_millis(1000));
+            pod = pods_api.get(&pod_name).await;
+        }
+
+        // Check the data is still present
+        // Assert data exists
+        let result = coredb_resource
+            .psql(
+                "SELECT name FROM customers WHERE email='john.doe@example.com'".to_string(),
+                "postgres".to_string(),
+                context.clone(),
+            )
+            .await
+            .unwrap();
+        println!("{}", result.stdout.clone().unwrap());
+        assert!(result.stdout.unwrap().contains("John Doe"));
     }
 
     #[tokio::test]
@@ -200,32 +427,7 @@ mod test {
         // Wait for Pod to be created
         let pod_name = format!("{}-0", name);
 
-        println!("Waiting for pod to be running: {}", pod_name);
-        let _check_for_pod = tokio::time::timeout(
-            Duration::from_secs(TIMEOUT_SECONDS_START_POD),
-            await_condition(pods.clone(), &pod_name, conditions::is_pod_running()),
-        )
-        .await
-        .unwrap_or_else(|_| {
-            panic!(
-                "Did not find the pod {} to be running after waiting {} seconds",
-                pod_name, TIMEOUT_SECONDS_START_POD
-            )
-        });
-        println!("Waiting for pod to be ready: {}", pod_name);
-        let _check_for_pod_ready = tokio::time::timeout(
-            Duration::from_secs(TIMEOUT_SECONDS_POD_READY),
-            await_condition(pods.clone(), &pod_name, is_pod_ready()),
-        )
-        .await
-        .unwrap_or_else(|_| {
-            panic!(
-                "Did not find the pod {} to be ready after waiting {} seconds",
-                pod_name, TIMEOUT_SECONDS_POD_READY
-            )
-        });
-        println!("Found pod ready: {}", pod_name);
-
+        pod_ready_and_running(pods.clone(), pod_name.clone()).await;
 
         let pods: Api<Pod> = Api::namespaced(client.clone(), namespace);
         let lp =
@@ -234,18 +436,7 @@ mod test {
         let exporter_pod_name = exporter_pods.items[0].metadata.name.as_ref().unwrap();
         println!("Exporter pod name: {}", &exporter_pod_name);
 
-        let _check_for_pod_ready = tokio::time::timeout(
-            Duration::from_secs(TIMEOUT_SECONDS_POD_READY),
-            await_condition(pods.clone(), exporter_pod_name, is_pod_ready()),
-        )
-        .await
-        .unwrap_or_else(|_| {
-            panic!(
-                "Did not find the pod {} to be ready after waiting {} seconds",
-                pod_name, TIMEOUT_SECONDS_POD_READY
-            )
-        });
-        println!("Found pod ready: {}", &exporter_pod_name);
+        pod_ready_and_running(pods.clone(), exporter_pod_name.clone()).await;
 
         // assert for postgres-exporter secret to be created
         let exporter_name = format!("{}-metrics", name);
@@ -275,31 +466,7 @@ mod test {
         // This is the CNPG pod
         let pod_name = format!("{}-1", name);
 
-        println!("Waiting for pod to be running: {}", pod_name);
-        let _check_for_pod = tokio::time::timeout(
-            Duration::from_secs(TIMEOUT_SECONDS_START_POD),
-            await_condition(pods.clone(), &pod_name, conditions::is_pod_running()),
-        )
-        .await
-        .unwrap_or_else(|_| {
-            panic!(
-                "Did not find the pod {} to be running after waiting {} seconds",
-                pod_name, TIMEOUT_SECONDS_START_POD
-            )
-        });
-        println!("Waiting for pod to be ready: {}", pod_name);
-        let _check_for_pod_ready = tokio::time::timeout(
-            Duration::from_secs(TIMEOUT_SECONDS_POD_READY),
-            await_condition(pods.clone(), &pod_name, is_pod_ready()),
-        )
-        .await
-        .unwrap_or_else(|_| {
-            panic!(
-                "Did not find the pod {} to be ready after waiting {} seconds",
-                pod_name, TIMEOUT_SECONDS_POD_READY
-            )
-        });
-        println!("Found pod ready: {}", pod_name);
+        pod_ready_and_running(pods.clone(), pod_name.clone()).await;
 
         // Assert default storage values are applied to PVC
         let pvc_api: Api<PersistentVolumeClaim> = Api::namespaced(client.clone(), namespace);
@@ -582,31 +749,7 @@ mod test {
         // Wait for Pod to be created
         let pod_name = format!("{}-0", name);
 
-        println!("Waiting for pod to be running: {}", pod_name);
-        let _check_for_pod = tokio::time::timeout(
-            Duration::from_secs(TIMEOUT_SECONDS_START_POD),
-            await_condition(pods.clone(), &pod_name, conditions::is_pod_running()),
-        )
-        .await
-        .unwrap_or_else(|_| {
-            panic!(
-                "Did not find the pod {} to be running after waiting {} seconds",
-                pod_name, TIMEOUT_SECONDS_START_POD
-            )
-        });
-        println!("Waiting for pod to be ready: {}", pod_name);
-        let _check_for_pod_ready = tokio::time::timeout(
-            Duration::from_secs(TIMEOUT_SECONDS_POD_READY),
-            await_condition(pods.clone(), &pod_name, is_pod_ready()),
-        )
-        .await
-        .unwrap_or_else(|_| {
-            panic!(
-                "Did not find the pod {} to be ready after waiting {} seconds",
-                pod_name, TIMEOUT_SECONDS_POD_READY
-            )
-        });
-        println!("Found pod ready: {}", pod_name);
+        pod_ready_and_running(pods.clone(), pod_name.clone()).await;
 
         let pods: Api<Pod> = Api::namespaced(client.clone(), namespace);
         let lp =
@@ -1175,31 +1318,7 @@ mod test {
         // Assert coredb is running
         let pod_name = format!("{}-0", name);
         let pods: Api<Pod> = Api::namespaced(client.clone(), namespace);
-        println!("Waiting for pod to be running: {}", pod_name);
-        let _check_for_pod = tokio::time::timeout(
-            Duration::from_secs(TIMEOUT_SECONDS_START_POD),
-            await_condition(pods.clone(), &pod_name, conditions::is_pod_running()),
-        )
-        .await
-        .unwrap_or_else(|_| {
-            panic!(
-                "Did not find the pod {} to be running after waiting {} seconds",
-                pod_name, TIMEOUT_SECONDS_START_POD
-            )
-        });
-        println!("Waiting for pod to be ready: {}", pod_name);
-        let _check_for_pod_ready = tokio::time::timeout(
-            Duration::from_secs(TIMEOUT_SECONDS_POD_READY),
-            await_condition(pods.clone(), &pod_name, is_pod_ready()),
-        )
-        .await
-        .unwrap_or_else(|_| {
-            panic!(
-                "Did not find the pod {} to be ready after waiting {} seconds",
-                pod_name, TIMEOUT_SECONDS_POD_READY
-            )
-        });
-        println!("Found pod ready: {}", pod_name);
+        pod_ready_and_running(pods.clone(), pod_name.clone()).await;
 
         // Delete namespace
         ns_api.delete(namespace, &Default::default()).await.unwrap();
@@ -1292,31 +1411,7 @@ mod test {
         // Wait for Pod to be created
         let pod_name = format!("{}-0", name);
 
-        println!("Waiting for pod to be running: {}", pod_name);
-        let _check_for_pod = tokio::time::timeout(
-            Duration::from_secs(TIMEOUT_SECONDS_START_POD),
-            await_condition(pods.clone(), &pod_name, conditions::is_pod_running()),
-        )
-        .await
-        .unwrap_or_else(|_| {
-            panic!(
-                "Did not find the pod {} to be running after waiting {} seconds",
-                pod_name, TIMEOUT_SECONDS_START_POD
-            )
-        });
-        println!("Waiting for pod to be ready: {}", pod_name);
-        let _check_for_pod_ready = tokio::time::timeout(
-            Duration::from_secs(TIMEOUT_SECONDS_POD_READY),
-            await_condition(pods.clone(), &pod_name, is_pod_ready()),
-        )
-        .await
-        .unwrap_or_else(|_| {
-            panic!(
-                "Did not find the pod {} to be ready after waiting {} seconds",
-                pod_name, TIMEOUT_SECONDS_POD_READY
-            )
-        });
-        println!("Found pod ready: {}", pod_name);
+        pod_ready_and_running(pods.clone(), pod_name.clone()).await;
 
         // Assert default resource values are applied to postgres container
         let default_resources: ResourceRequirements = default_resources();
@@ -1362,8 +1457,6 @@ mod test {
         println!("{}", result.stdout.clone().unwrap());
         assert!(result.stdout.clone().unwrap().contains("stop_test"));
 
-        thread::sleep(Duration::from_millis(5000));
-
         // stop the instance
         let coredb_json = serde_json::json!({
             "apiVersion": API_VERSION,
@@ -1382,7 +1475,16 @@ mod test {
         let coredb_resource = coredbs.patch(name, &params, &patch).await.unwrap();
 
         // give it time to stop
-        thread::sleep(Duration::from_millis(30000));
+        println!("Waiting for pod {} to be deleted", &pod_name);
+        let mut pod = pods.get(&pod_name).await;
+        for _ in 0..100 {
+            if pod.is_err() {
+                println!("Pod {} deleted", &pod_name);
+                break;
+            }
+            thread::sleep(Duration::from_millis(1000));
+            pod = pods.get(&pod_name).await;
+        }
 
         // pod must not be ready
         let res = coredb_resource.primary_pod_coredb(client.clone()).await;
@@ -1405,12 +1507,8 @@ mod test {
         let coredb_resource = coredbs.patch(name, &params, &patch).await.unwrap();
 
         // give it time to start
-        println!("Waiting for pod to be running: {}", pod_name);
-        let check_for_pod = tokio::time::timeout(
-            Duration::from_secs(TIMEOUT_SECONDS_START_POD),
-            await_condition(pods.clone(), &pod_name, conditions::is_pod_running()),
-        );
-        assert!(check_for_pod.await.is_ok());
+        pod_ready_and_running(pods.clone(), pod_name.clone()).await;
+
         // assert table still exist
         let result = coredb_resource
             .psql("\\dt".to_string(), "postgres".to_string(), context.clone())
@@ -1555,17 +1653,7 @@ mod test {
 
         // Wait for Pod to be created
         let pod_name = format!("{}-0", name);
-        let _check_for_pod = tokio::time::timeout(
-            Duration::from_secs(TIMEOUT_SECONDS_START_POD),
-            await_condition(pods.clone(), &pod_name, conditions::is_pod_running()),
-        )
-        .await
-        .unwrap_or_else(|_| {
-            panic!(
-                "Did not find the pod {} to be running after waiting {} seconds",
-                pod_name, TIMEOUT_SECONDS_START_POD
-            )
-        });
+        pod_ready_and_running(pods.clone(), pod_name.clone()).await;
 
         // This TCP route should not exist, because instead we adopted the existing one
         let ing_route_tcp_name = format!("{}-rw-0", name);
@@ -1653,17 +1741,7 @@ mod test {
 
         // Wait for Pod to be created
         let pod_name = format!("{}-0", name);
-        let _check_for_pod = tokio::time::timeout(
-            Duration::from_secs(TIMEOUT_SECONDS_START_POD),
-            await_condition(pods.clone(), &pod_name, conditions::is_pod_running()),
-        )
-        .await
-        .unwrap_or_else(|_| {
-            panic!(
-                "Did not find the pod {} to be running after waiting {} seconds",
-                pod_name, TIMEOUT_SECONDS_START_POD
-            )
-        });
+        pod_ready_and_running(pods.clone(), pod_name.clone()).await;
 
         // This TCP route is the one we adopted
         let ingress_route_tcp = ingress_route_tcp_api
@@ -1750,17 +1828,7 @@ mod test {
 
         // Wait for Pod to be created
         let pod_name = format!("{}-0", name);
-        let _check_for_pod = tokio::time::timeout(
-            Duration::from_secs(TIMEOUT_SECONDS_START_POD),
-            await_condition(pods.clone(), &pod_name, conditions::is_pod_running()),
-        )
-        .await
-        .unwrap_or_else(|_| {
-            panic!(
-                "Did not find the pod {} to be running after waiting {} seconds",
-                pod_name, TIMEOUT_SECONDS_START_POD
-            )
-        });
+        pod_ready_and_running(pods.clone(), pod_name.clone()).await;
 
         // This TCP route is the one we adopted
         let ingress_route_tcp = ingress_route_tcp_api
