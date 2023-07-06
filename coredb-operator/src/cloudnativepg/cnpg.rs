@@ -178,7 +178,6 @@ fn cnpg_postgres_config(
     }
 }
 
-
 fn cnpg_cluster_storage(cdb: &CoreDB) -> Option<ClusterStorage> {
     let storage = cdb.spec.storage.clone().0;
     Some(ClusterStorage {
@@ -318,7 +317,6 @@ pub async fn reconcile_cnpg(cdb: &CoreDB, ctx: Arc<Context>) -> Result<(), Error
 #[cfg(test)]
 mod tests {
     use super::*;
-
 
     #[test]
     fn test_deserialize_cluster() {
