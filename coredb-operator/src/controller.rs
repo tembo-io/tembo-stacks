@@ -310,7 +310,7 @@ impl CoreDB {
                 let primary_pod_coredb = self.primary_pod_coredb(ctx.client.clone()).await?;
 
                 if !is_postgres_ready().matches_object(Some(&primary_pod_coredb)) {
-                    info!(
+                    debug!(
                         "Did not find postgres ready {}, waiting a short period",
                         self.name_any()
                     );
@@ -326,7 +326,7 @@ impl CoreDB {
                     let primary_pod_cnpg = self.primary_pod_cnpg(ctx.client.clone()).await?;
 
                     if !is_postgres_ready().matches_object(Some(&primary_pod_cnpg)) {
-                        info!(
+                        debug!(
                             "Did not find CNPG postgres pod ready for {}, waiting a short period",
                             self.name_any()
                         );
@@ -338,7 +338,7 @@ impl CoreDB {
 
                 // This step is applicable to coredb but not cnpg
                 if !is_pod_ready().matches_object(Some(&primary_pod_coredb)) {
-                    info!(
+                    debug!(
                         "Did not find pod ready {}, waiting a short period",
                         self.name_any()
                     );
