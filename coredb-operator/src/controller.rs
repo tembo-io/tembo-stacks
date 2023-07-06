@@ -314,7 +314,7 @@ impl CoreDB {
                         "Did not find postgres ready {}, waiting a short period",
                         self.name_any()
                     );
-                    return Ok(Action::requeue(Duration::from_secs(1)));
+                    return Ok(Action::requeue(Duration::from_secs(5)));
                 }
 
                 if cnpg_enabled {
@@ -330,7 +330,7 @@ impl CoreDB {
                             "Did not find CNPG postgres pod ready for {}, waiting a short period",
                             self.name_any()
                         );
-                        return Ok(Action::requeue(Duration::from_secs(1)));
+                        return Ok(Action::requeue(Duration::from_secs(5)));
                     }
                 }
 
@@ -342,7 +342,7 @@ impl CoreDB {
                         "Did not find pod ready {}, waiting a short period",
                         self.name_any()
                     );
-                    return Ok(Action::requeue(Duration::from_secs(1)));
+                    return Ok(Action::requeue(Duration::from_secs(5)));
                 }
 
                 let extensions: Vec<Extension> =
