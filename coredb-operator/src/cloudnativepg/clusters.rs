@@ -2,11 +2,10 @@
 // kopium command: kopium -D Default clusters.postgresql.cnpg.io
 // kopium version: 0.15.0
 
-use k8s_openapi::apimachinery::pkg::util::intstr::IntOrString;
+use k8s_openapi::apimachinery::pkg::{api::resource::Quantity, util::intstr::IntOrString};
 use kube::CustomResource;
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
-use k8s_openapi::apimachinery::pkg::api::resource::Quantity;
 
 #[derive(CustomResource, Serialize, Deserialize, Clone, Debug, Default)]
 #[kube(

@@ -9,8 +9,8 @@ use crate::{
         ClusterExternalClusters, ClusterExternalClustersPassword, ClusterLogLevel, ClusterMonitoring,
         ClusterMonitoringCustomQueriesConfigMap, ClusterPostgresql,
         ClusterPostgresqlSyncReplicaElectionConstraint, ClusterPrimaryUpdateMethod,
-        ClusterPrimaryUpdateStrategy, ClusterServiceAccountTemplate, ClusterServiceAccountTemplateMetadata,
-        ClusterSpec, ClusterStorage, ClusterSuperuserSecret,
+        ClusterPrimaryUpdateStrategy, ClusterResources, ClusterServiceAccountTemplate,
+        ClusterServiceAccountTemplateMetadata, ClusterSpec, ClusterStorage, ClusterSuperuserSecret,
     },
     Context, Error,
 };
@@ -21,7 +21,6 @@ use kube::{
 };
 use std::{collections::BTreeMap, sync::Arc};
 use tracing::log::{debug, warn};
-use crate::cloudnativepg::clusters::ClusterResources;
 
 pub fn cnpg_backup_configuration(
     cdb: &CoreDB,
