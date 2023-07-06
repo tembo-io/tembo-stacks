@@ -353,9 +353,6 @@ impl CoreDB {
                     }
                 }
 
-                // TODO: before merge (bug) on fresh DB, this cannot run because postgres not ready on CNPG
-                // and primary of coredb also not ready
-                // creating exporter role is pre-requisite to the postgres pod becoming "ready"
                 if self.spec.postgresExporterEnabled {
                     create_postgres_exporter_role(self, ctx.clone(), secret_data)
                         .await
