@@ -34,10 +34,7 @@ mod test {
     };
     use kube::{
         api::{AttachParams, DeleteParams, ListParams, Patch, PatchParams, PostParams},
-        runtime::{
-            controller::Action,
-            wait::{await_condition, conditions, Condition},
-        },
+        runtime::wait::{await_condition, conditions, Condition},
         Api, Client, Config,
     };
     use rand::Rng;
@@ -52,7 +49,6 @@ mod test {
     const TIMEOUT_SECONDS_SECRET_PRESENT: u64 = 60;
     const TIMEOUT_SECONDS_NS_DELETED: u64 = 60;
     const TIMEOUT_SECONDS_COREDB_DELETED: u64 = 60;
-    const TIMEOUT_SECONDS_POD_DELETED: u64 = 60;
 
     async fn create_test_buddy(pods_api: Api<Pod>, name: String) -> String {
         // Launch a pod we can connect to if we want to
@@ -129,8 +125,8 @@ mod test {
             let result = coredb_resource
                 .psql(query.clone(), "postgres".to_string(), context.clone())
                 .await;
-            match result {
-                Ok(output) => match inverse {
+            if let Ok(output) = result {
+                match inverse {
                     true => {
                         if !output.stdout.clone().unwrap().contains(expected.clone().as_str()) {
                             break;
@@ -141,8 +137,7 @@ mod test {
                             break;
                         }
                     }
-                },
-                Err(_) => {}
+                }
             }
             println!(
                 "Waiting for psql result on DB {}...",
@@ -727,11 +722,9 @@ mod test {
 
         // Create a pod we can use to run commands in the cluster
         let pods: Api<Pod> = Api::namespaced(client.clone(), namespace);
-        let test_pod_name = create_test_buddy(pods.clone(), name.to_string()).await;
 
         // Apply a basic configuration of CoreDB
         println!("Creating CoreDB resource {}", name);
-        let test_metric_decr = format!("coredb_integration_test_{}", rng.gen_range(0..100000));
         let coredbs: Api<CoreDB> = Api::namespaced(client.clone(), namespace);
         // Generate basic CoreDB resource to start with
         let coredb_json = serde_json::json!({
@@ -746,7 +739,7 @@ mod test {
         });
         let params = PatchParams::apply("coredb-integration-test");
         let patch = Patch::Apply(&coredb_json);
-        let coredb_resource = coredbs.patch(name, &params, &patch).await.unwrap();
+        let _coredb_resource = coredbs.patch(name, &params, &patch).await.unwrap();
 
         // Wait for Pod to be created
         let pod_name = format!("{}-0", name);
@@ -807,8 +800,6 @@ mod test {
         let coredb_resource = coredbs.patch(name, &params, &patch).await.unwrap();
 
         println!("Waiting to install extension pgmq");
-        // give it time to install extensions
-        //thread::sleep(Duration::from_millis(10000));
 
         // Annotate the Cluster object to restart the pod
         let cluster_api: Api<Cluster> = Api::namespaced(client.clone(), namespace);
@@ -824,7 +815,7 @@ mod test {
 
         println!("Restarting CNPG pod");
         let params = PatchParams::default();
-        let patch = cluster_api
+        let _patch = cluster_api
             .patch(&cluster_name, &params, &Patch::Merge(patch_json))
             .await
             .unwrap();
@@ -866,29 +857,23 @@ mod test {
             .expect("expected a description")
             .is_empty());
 
-        //
-        // // CLEANUP TEST
-        // // Cleanup Buddy Pod
-        // pods.delete(&test_pod_name, &Default::default()).await.unwrap();
-        // let _check_buddy_pod_deletion = tokio::time::timeout(
-        //     Duration::from_secs(TIMEOUT_SECONDS_POD_DELETED),
-        //     await_condition(pods.clone(), &test_pod_name, conditions::is_deleted("")),
-        // );
-        // // Cleanup CoreDB
-        // coredbs.delete(name, &Default::default()).await.unwrap();
-        // println!("Waiting for CoreDB to be deleted: {}", &name);
-        // let _assert_coredb_deleted = tokio::time::timeout(
-        //     Duration::from_secs(TIMEOUT_SECONDS_COREDB_DELETED),
-        //     await_condition(coredbs.clone(), name, conditions::is_deleted("")),
-        // )
-        // .await
-        // .unwrap_or_else(|_| {
-        //     panic!(
-        //         "CoreDB {} was not deleted after waiting {} seconds",
-        //         name, TIMEOUT_SECONDS_COREDB_DELETED
-        //     )
-        // });
-        // println!("CoreDB resource deleted {}", name);
+
+        // CLEANUP TEST
+        // Cleanup CoreDB
+        coredbs.delete(name, &Default::default()).await.unwrap();
+        println!("Waiting for CoreDB to be deleted: {}", &name);
+        let _assert_coredb_deleted = tokio::time::timeout(
+            Duration::from_secs(TIMEOUT_SECONDS_COREDB_DELETED),
+            await_condition(coredbs.clone(), name, conditions::is_deleted("")),
+        )
+        .await
+        .unwrap_or_else(|_| {
+            panic!(
+                "CoreDB {} was not deleted after waiting {} seconds",
+                name, TIMEOUT_SECONDS_COREDB_DELETED
+            )
+        });
+        println!("CoreDB resource deleted {}", name);
     }
 
     #[tokio::test]
@@ -1370,7 +1355,7 @@ mod test {
         let pod = match pods.iter().next() {
             Some(pod) => pod,
             None => {
-                println!("Expected label: {}", format!("statefulset={}", stateful_set_name));
+                println!("Expected label: statefulset={}", stateful_set_name);
                 panic!("No matching pods found")
             }
         };
