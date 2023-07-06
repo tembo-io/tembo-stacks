@@ -215,6 +215,9 @@ pub fn cnpg_cluster_from_cdb(cdb: &CoreDB) -> Cluster {
         }
     };
 
+    println!("PARAMS: {:?}", postgres_parameters);
+    println!("LIBS: {:?}", shared_preload_libraries);
+
     Cluster {
         metadata: ObjectMeta {
             name: Some(name),

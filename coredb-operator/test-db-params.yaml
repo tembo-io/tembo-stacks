@@ -49,3 +49,5 @@ spec:
       value: '5s'
     - name: wal_sender_timeout 
       value: '5s'
+    - name: pg_stat_statements.track
+      value: 'top'
