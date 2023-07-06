@@ -16,7 +16,7 @@ mod test {
         apis::coredb_types::CoreDB,
         defaults::{default_resources, default_storage},
         ingress_route_tcp_crd::IngressRouteTCP,
-        is_pod_ready, State,
+        is_pod_ready, Context, State,
     };
     use k8s_openapi::{
         api::{
@@ -33,11 +33,14 @@ mod test {
     };
     use kube::{
         api::{AttachParams, DeleteParams, ListParams, Patch, PatchParams, PostParams},
-        runtime::wait::{await_condition, conditions, Condition},
+        runtime::{
+            controller::Action,
+            wait::{await_condition, conditions, Condition},
+        },
         Api, Client, Config,
     };
     use rand::Rng;
-    use std::{collections::BTreeMap, str, thread, time::Duration};
+    use std::{collections::BTreeMap, str, sync::Arc, thread, time::Duration};
 
     use tokio::io::AsyncReadExt;
 
@@ -109,6 +112,41 @@ mod test {
         stdout_reader.read_to_string(&mut result_stdout).await.unwrap();
 
         result_stdout
+    }
+
+    async fn wait_until_psql_contains(
+        context: Arc<Context>,
+        coredb_resource: CoreDB,
+        query: String,
+        expected: String,
+        inverse: bool,
+    ) {
+        for _ in 1..300 {
+            thread::sleep(Duration::from_millis(5000));
+            // Assert extension no longer created
+            let result = coredb_resource
+                .psql(query.clone(), "postgres".to_string(), context.clone())
+                .await;
+            match result {
+                Ok(output) => match inverse {
+                    true => {
+                        if !output.stdout.clone().unwrap().contains(expected.clone().as_str()) {
+                            break;
+                        }
+                    }
+                    false => {
+                        if output.stdout.clone().unwrap().contains(expected.clone().as_str()) {
+                            break;
+                        }
+                    }
+                },
+                Err(_) => {}
+            }
+            println!(
+                "Waiting for psql result on DB {}...",
+                coredb_resource.metadata.name.clone().unwrap()
+            );
+        }
     }
 
     async fn pod_ready_and_running(pods: Api<Pod>, pod_name: String) {
@@ -520,8 +558,14 @@ mod test {
         println!("{}", result.stdout.clone().unwrap());
         assert!(result.stdout.clone().unwrap().contains("customers"));
 
-        // TODO(ianstanton) we need to properly wait for 'aggs_for_vecs' extension to be created
-        thread::sleep(Duration::from_millis(10000));
+        wait_until_psql_contains(
+            context.clone(),
+            coredb_resource.clone(),
+            "select * from pg_extension;".to_string(),
+            "aggs_for_vecs".to_string(),
+            false,
+        )
+        .await;
 
         // Assert extension 'aggs_for_vecs' was created
         let result = coredb_resource
@@ -606,10 +650,16 @@ mod test {
         let patch = Patch::Apply(&coredb_json);
         let coredb_resource = coredbs.patch(name, &params, &patch).await.unwrap();
 
-        // give it time to drop
-        thread::sleep(Duration::from_millis(5000));
+        wait_until_psql_contains(
+            context.clone(),
+            coredb_resource.clone(),
+            "select extname from pg_catalog.pg_extension;".to_string(),
+            "aggs_for_vecs".to_string(),
+            true,
+        )
+        .await;
 
-        // Assert extension no longer created
+        // assert does not contain aggs_for_vecs
         let result = coredb_resource
             .psql(
                 "select extname from pg_catalog.pg_extension;".to_string(),
@@ -618,8 +668,6 @@ mod test {
             )
             .await
             .unwrap();
-
-        // assert does not contain aggs_for_vecs
         assert!(
             !result.stdout.clone().unwrap().contains("aggs_for_vecs"),
             "results should not contain aggs_for_vecs: {}",
@@ -845,8 +893,14 @@ mod test {
         println!("{}", result.stdout.clone().unwrap());
         assert!(result.stdout.clone().unwrap().contains("customers"));
 
-        // TODO(ianstanton) we need to properly wait for 'aggs_for_vecs' extension to be created
-        thread::sleep(Duration::from_millis(10000));
+        wait_until_psql_contains(
+            context.clone(),
+            coredb_resource.clone(),
+            "select * from pg_extension;".to_string(),
+            "aggs_for_vecs".to_string(),
+            false,
+        )
+        .await;
 
         // Assert extension 'aggs_for_vecs' was created
         let result = coredb_resource
@@ -932,7 +986,14 @@ mod test {
         let coredb_resource = coredbs.patch(name, &params, &patch).await.unwrap();
 
         // give it time to drop
-        thread::sleep(Duration::from_millis(5000));
+        wait_until_psql_contains(
+            context.clone(),
+            coredb_resource.clone(),
+            "select extname from pg_catalog.pg_extension;".to_string(),
+            "aggs_for_vecs".to_string(),
+            true,
+        )
+        .await;
 
         // Assert extension no longer created
         let result = coredb_resource
@@ -1008,7 +1069,6 @@ mod test {
         let patch = Patch::Apply(&coredb_json);
         let _coredb_resource = coredbs.patch(name, &params, &patch).await.unwrap();
 
-        // give it some time 500ms
         thread::sleep(Duration::from_millis(5000));
 
         // Assert that the service account exists

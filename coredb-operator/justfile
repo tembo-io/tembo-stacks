@@ -76,11 +76,11 @@ start-kind:
 
 # run with opentelemetry
 run-telemetry:
-  OPENTELEMETRY_ENDPOINT_URL=https://0.0.0.0:55680 RUST_LOG=info,kube=debug,controller=debug cargo run --features=telemetry
+  OPENTELEMETRY_ENDPOINT_URL=https://0.0.0.0:55680 RUST_LOG=info,kube=info,controller=info cargo run --features=telemetry
 
 # run without opentelemetry
 run:
-  DATA_PLANE_BASEDOMAIN=localhost ENABLE_INITIAL_BACKUP=false RUST_LOG=info,kube=info,controller=debug cargo run
+  DATA_PLANE_BASEDOMAIN=localhost ENABLE_INITIAL_BACKUP=false RUST_LOG=info,kube=info,controller=info cargo run
 
 # annotate namespace to allow for tests
 annotate:
