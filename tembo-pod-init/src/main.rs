@@ -39,13 +39,12 @@ async fn main() -> std::io::Result<()> {
             match watcher.watch().await {
                 Ok(_) => {
                     info!("Namespace watcher finished, restarting.");
-                    tokio::time::sleep(tokio::time::Duration::from_secs(1)).await;
-                },
+                }
                 Err(e) => {
                     error!("Namespace watcher failed, restarting: {}", e);
-                    tokio::time::sleep(tokio::time::Duration::from_secs(1)).await;
                 }
             }
+            tokio::time::sleep(tokio::time::Duration::from_secs(5)).await;
         }
     });
 
