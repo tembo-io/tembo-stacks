@@ -20,7 +20,9 @@ use kube::{
     Api, Resource, ResourceExt,
 };
 use std::{collections::BTreeMap, sync::Arc};
-use tracing::{debug, error, warn};
+use kube::runtime::controller::Action;
+use tokio::{sync::RwLock, time::Duration};
+use tracing::{debug, error, info, warn};
 
 pub struct PostgresConfig {
     pub postgres_parameters: Option<BTreeMap<String, String>>,
@@ -226,6 +228,8 @@ pub fn cnpg_cluster_from_cdb(cdb: &CoreDB) -> Cluster {
             }
         }
     };
+    // make shared_preload_libraries mutable so we can change them if we need
+    let shared_preload_libraries = shared_preload_libraries.clone();
 
     Cluster {
         metadata: ObjectMeta {
@@ -298,9 +302,10 @@ pub fn cnpg_cluster_from_cdb(cdb: &CoreDB) -> Cluster {
     }
 }
 
-pub async fn reconcile_cnpg(cdb: &CoreDB, ctx: Arc<Context>) -> Result<(), Error> {
+pub async fn reconcile_cnpg(cdb: &CoreDB, ctx: Arc<Context>) -> Result<(), Action> {
     debug!("Generating CNPG spec");
-    let cluster = cnpg_cluster_from_cdb(cdb);
+    let mut cluster = cnpg_cluster_from_cdb(cdb);
+
     debug!("Getting namespace of cluster");
     let namespace = cluster
         .metadata
@@ -313,17 +318,102 @@ pub async fn reconcile_cnpg(cdb: &CoreDB, ctx: Arc<Context>) -> Result<(), Error
         .name
         .clone()
         .expect("CNPG Cluster should always have a name");
-    debug!("Patching cluster");
     let cluster_api: Api<Cluster> = Api::namespaced(ctx.client.clone(), namespace.as_str());
+
+    let mut restart_required = false;
+
+    match cluster
+        .spec
+        .postgresql
+        .clone()
+        .expect("We always set the postgresql spec")
+        .shared_preload_libraries
+    {
+        None => {
+            debug!("We are not setting any shared_preload_libraries");
+        }
+        Some(new_libs) => {
+            debug!("We are setting shared_preload_libraries, so we have to check if the files are already installed");
+            match cluster_api.get(&name).await {
+                Ok(current_cluster) => {
+                    let current_shared_preload_libraries = match current_cluster
+                        .spec
+                        .postgresql
+                        .clone()
+                        .expect("We always set postgresql cluster spec")
+                        .shared_preload_libraries
+                    {
+                        None => {
+                            let current_libs: Vec<String> = vec![];
+                            current_libs
+                        }
+                        Some(current_libs) => current_libs,
+                    };
+                    // Check if current_shared_preload_libraries and new_libs are the same
+                    if current_shared_preload_libraries != new_libs {
+                        let mut libs_that_are_installed: Vec<String> = vec![];
+                        // If we can't find the existing primary pod, returns a requeue
+                        let primary_pod_cnpg = cdb.primary_pod_cnpg(ctx.client.clone()).await?;
+                        for new_lib in new_libs {
+                            // Check if the file is already installed
+                            let command = vec![
+                                "/bin/sh".to_string(),
+                                "-c".to_string(),
+                                "ls $(pg_config --pkglibdir)".to_string(),
+                            ];
+                            let result = cdb
+                                .exec(primary_pod_cnpg.name_any(), ctx.client.clone(), &command)
+                                .await
+                                .map_err(|e| {
+                                    error!("Error checking for presence of extension files: {:?}", e);
+                                    Action::requeue(Duration::from_secs(30))
+                                })?;
+                            match result.stdout {
+                                None => {
+                                    error!("Error checking for presence of extension files");
+                                    return Err(Action::requeue(Duration::from_secs(30)));
+                                }
+                                Some(output) => {
+                                    if output.contains(&format!("{}.so", new_lib)) {
+                                        info!("Changing shared_preload_libraries on {}, found {} is installed, so including it", &name, &new_lib);
+                                        libs_that_are_installed.push(new_lib.clone());
+                                        if !current_shared_preload_libraries.contains(&new_lib) {
+                                            restart_required = true;
+                                        }
+                                    } else {
+                                        info!("Changing shared_preload_libraries on {}, found {} is NOT installed, so dropping it", &name, &new_lib);
+                                    }
+                                }
+                            }
+                        }
+                        if let Some(postgresql) = cluster.spec.postgresql.as_mut() {
+                            postgresql.shared_preload_libraries =
+                                Some(libs_that_are_installed);
+                        }
+                    }
+                }
+                Err(_) => {
+                    // Here, we should drop all shared_preload_libraries
+                    if let Some(postgresql) = cluster.spec.postgresql.as_mut() {
+                        info!("We are dropping all shared_preload_libraries for initial creation of Cluster {}", &name);
+                        postgresql.shared_preload_libraries = None;
+                    }
+                }
+            }
+        }
+    }
+
+    debug!("Patching cluster");
     let ps = PatchParams::apply("cntrlr");
     let _o = cluster_api
         .patch(&name, &ps, &Patch::Apply(&cluster))
         .await
-        .map_err(|err| {
-            debug!("Error patching cluster: {}", err);
-            Error::KubeError(err)
+        .map_err(|e| {
+            error!("Error patching cluster: {}", e);
+            Action::requeue(Duration::from_secs(300))
         })?;
     debug!("Applied");
+    // If restart is required, then we should trigger the restart above
     Ok(())
 }
 

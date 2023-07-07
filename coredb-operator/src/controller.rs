@@ -318,35 +318,13 @@ impl CoreDB {
                 }
 
                 if cnpg_enabled {
-                    reconcile_cnpg(self, ctx.clone()).await.map_err(|e| {
-                        error!("Error reconciling CNPG: {:?}", e);
-                        Action::requeue(Duration::from_secs(300))
-                    })?;
-
-                    let primary_pod_cnpg = self.primary_pod_cnpg(ctx.client.clone()).await?;
-
-                    if !is_postgres_ready().matches_object(Some(&primary_pod_cnpg)) {
-                        debug!(
-                            "Did not find CNPG postgres pod ready for {}, waiting a short period",
-                            self.name_any()
-                        );
-                        return Ok(Action::requeue(Duration::from_secs(5)));
-                    }
-                }
-
-                create_postgres_exporter_role(self, ctx.clone(), secret_data).await?;
-
-                // This step is applicable to coredb but not cnpg
-                if !is_pod_ready().matches_object(Some(&primary_pod_coredb)) {
-                    debug!(
-                        "Did not find pod ready {}, waiting a short period",
-                        self.name_any()
-                    );
-                    return Ok(Action::requeue(Duration::from_secs(5)));
+                    reconcile_cnpg(self, ctx.clone()).await?;
                 }
 
                 let extensions: Vec<Extension> =
                     reconcile_extensions(self, ctx.clone(), &coredbs, &name).await?;
+
+                create_postgres_exporter_role(self, ctx.clone(), secret_data).await?;
 
                 // Check cfg.enable_initial_backup to make sure we should run the initial backup
                 // if it's true, run the backup
