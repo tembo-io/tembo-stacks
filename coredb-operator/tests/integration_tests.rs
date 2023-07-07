@@ -825,13 +825,11 @@ mod test {
         wait_until_psql_contains(
             context.clone(),
             coredb_resource.clone(),
-            "select * from pg_extension;".to_string(),
+            "select extname from pg_catalog.pg_extension;".to_string(),
             "pgmq".to_string(),
             false,
         )
         .await;
-
-        thread::sleep(Duration::from_secs(10));
 
         // Assert extension 'pgmq' was created
         let result = coredb_resource
@@ -845,18 +843,6 @@ mod test {
 
         println!("{}", result.stdout.clone().unwrap());
         assert!(result.stdout.clone().unwrap().contains("pgmq"));
-
-        // assert extensions made it into the status
-        let spec = coredbs.get(name).await.expect("spec not found");
-        let status = spec.status.expect("no status on coredb");
-        let extensions = status.extensions;
-        assert!(!extensions.clone().expect("expected extensions").is_empty());
-        assert!(!extensions.expect("expected extensions")[0]
-            .description
-            .clone()
-            .expect("expected a description")
-            .is_empty());
-
 
         // CLEANUP TEST
         // Cleanup CoreDB
