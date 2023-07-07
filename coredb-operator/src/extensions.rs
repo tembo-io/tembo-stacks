@@ -148,7 +148,7 @@ pub async fn install_extensions(
         .map_err(|_e| {
             // It is normal to not find a pod
             info!(
-                "CNPG primary pod of {} is not available, trying again after a short duration",
+                "CoreDB primary pod of {} is not available, trying again after a short duration",
                 cdb.metadata
                     .name
                     .clone()
