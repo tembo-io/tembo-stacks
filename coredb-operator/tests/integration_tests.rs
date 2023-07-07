@@ -61,7 +61,7 @@ mod test {
             spec: Some(PodSpec {
                 containers: vec![Container {
                     command: Some(vec!["sleep".to_string()]),
-                    args: Some(vec!["360".to_string()]),
+                    args: Some(vec!["1200".to_string()]),
                     name: "test-connection".to_string(),
                     image: Some("curlimages/curl:latest".to_string()),
                     ..Container::default()
