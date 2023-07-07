@@ -14,6 +14,7 @@ mod test {
     use chrono::{DateTime, SecondsFormat, Utc};
     use controller::{
         apis::coredb_types::CoreDB,
+        cloudnativepg::clusters::Cluster,
         defaults::{default_resources, default_storage},
         ingress_route_tcp_crd::IngressRouteTCP,
         is_pod_ready, Context, State,
@@ -33,10 +34,7 @@ mod test {
     };
     use kube::{
         api::{AttachParams, DeleteParams, ListParams, Patch, PatchParams, PostParams},
-        runtime::{
-            controller::Action,
-            wait::{await_condition, conditions, Condition},
-        },
+        runtime::wait::{await_condition, conditions, Condition},
         Api, Client, Config,
     };
     use rand::Rng;
@@ -51,7 +49,6 @@ mod test {
     const TIMEOUT_SECONDS_SECRET_PRESENT: u64 = 60;
     const TIMEOUT_SECONDS_NS_DELETED: u64 = 60;
     const TIMEOUT_SECONDS_COREDB_DELETED: u64 = 60;
-    const TIMEOUT_SECONDS_POD_DELETED: u64 = 60;
 
     async fn create_test_buddy(pods_api: Api<Pod>, name: String) -> String {
         // Launch a pod we can connect to if we want to
@@ -128,8 +125,8 @@ mod test {
             let result = coredb_resource
                 .psql(query.clone(), "postgres".to_string(), context.clone())
                 .await;
-            match result {
-                Ok(output) => match inverse {
+            if let Ok(output) = result {
+                match inverse {
                     true => {
                         if !output.stdout.clone().unwrap().contains(expected.clone().as_str()) {
                             break;
@@ -140,8 +137,7 @@ mod test {
                             break;
                         }
                     }
-                },
-                Err(_) => {}
+                }
             }
             println!(
                 "Waiting for psql result on DB {}...",
@@ -726,11 +722,9 @@ mod test {
 
         // Create a pod we can use to run commands in the cluster
         let pods: Api<Pod> = Api::namespaced(client.clone(), namespace);
-        let test_pod_name = create_test_buddy(pods.clone(), name.to_string()).await;
 
         // Apply a basic configuration of CoreDB
         println!("Creating CoreDB resource {}", name);
-        let test_metric_decr = format!("coredb_integration_test_{}", rng.gen_range(0..100000));
         let coredbs: Api<CoreDB> = Api::namespaced(client.clone(), namespace);
         // Generate basic CoreDB resource to start with
         let coredb_json = serde_json::json!({
@@ -745,7 +739,7 @@ mod test {
         });
         let params = PatchParams::apply("coredb-integration-test");
         let patch = Patch::Apply(&coredb_json);
-        let coredb_resource = coredbs.patch(name, &params, &patch).await.unwrap();
+        let _coredb_resource = coredbs.patch(name, &params, &patch).await.unwrap();
 
         // Wait for Pod to be created
         let pod_name = format!("{}-0", name);
@@ -756,7 +750,7 @@ mod test {
         // This is the CNPG pod
         let pod_name = format!("{}-1", name);
 
-        pod_ready_and_running(pods.clone(), pod_name).await;
+        pod_ready_and_running(pods.clone(), pod_name.clone()).await;
 
         // Update CoreDB to include PGPARAMS
         let coredb_json = serde_json::json!({
@@ -806,8 +800,28 @@ mod test {
         let coredb_resource = coredbs.patch(name, &params, &patch).await.unwrap();
 
         println!("Waiting to install extension pgmq");
-        // give it time to install extensions
-        //thread::sleep(Duration::from_millis(10000));
+
+        // Annotate the Cluster object to restart the pod
+        let cluster_api: Api<Cluster> = Api::namespaced(client.clone(), namespace);
+        let cluster_name = name.clone();
+        let restart_time = Utc::now().to_rfc3339_opts(SecondsFormat::Secs, true).to_string();
+        let patch_json = serde_json::json!({
+            "metadata": {
+                "annotations": {
+                    "kubectl.kubernetes.io/restartedAt": restart_time
+                }
+            }
+        });
+
+        println!("Restarting CNPG pod");
+        let params = PatchParams::default();
+        let _patch = cluster_api
+            .patch(&cluster_name, &params, &Patch::Merge(patch_json))
+            .await
+            .unwrap();
+
+        pod_ready_and_running(pods.clone(), pod_name.clone()).await;
+
         wait_until_psql_contains(
             context.clone(),
             coredb_resource.clone(),
@@ -816,6 +830,8 @@ mod test {
             false,
         )
         .await;
+
+        thread::sleep(Duration::from_secs(10));
 
         // Assert extension 'pgmq' was created
         let result = coredb_resource
@@ -830,34 +846,6 @@ mod test {
         println!("{}", result.stdout.clone().unwrap());
         assert!(result.stdout.clone().unwrap().contains("pgmq"));
 
-        // // Make sure CNPG pod exists before deletion
-        // assert!(pods.get(&pod_name).await.is_ok());
-        //
-        // // Delete CNPG pod
-        // let delete_pod = pods.delete(&pod_name, &DeleteParams::default()).await;
-        // assert!(delete_pod.is_ok(), "Failed to delete pod: {}", pod_name);
-        //
-        // // Wait for the Pod to be Running again
-        // let mut pod_status = pods
-        //     .get(&pod_name)
-        //     .await
-        //     .expect("Failed to get Pod")
-        //     .status
-        //     .unwrap();
-        //
-        // while pod_status.phase.as_ref().unwrap_or(&String::new()) != "Running" {
-        //     tokio::time::sleep(Duration::from_secs(1)).await;
-        //     pod_status = pods
-        //         .get(&pod_name)
-        //         .await
-        //         .expect("Failed to get Pod")
-        //         .status
-        //         .unwrap();
-        // }
-        //
-        // // Now the Pod should be Running
-        // assert_eq!(pod_status.phase.unwrap(), "Running");
-
         // assert extensions made it into the status
         let spec = coredbs.get(name).await.expect("spec not found");
         let status = spec.status.expect("no status on coredb");
@@ -869,29 +857,23 @@ mod test {
             .expect("expected a description")
             .is_empty());
 
-        //
-        // // CLEANUP TEST
-        // // Cleanup Buddy Pod
-        // pods.delete(&test_pod_name, &Default::default()).await.unwrap();
-        // let _check_buddy_pod_deletion = tokio::time::timeout(
-        //     Duration::from_secs(TIMEOUT_SECONDS_POD_DELETED),
-        //     await_condition(pods.clone(), &test_pod_name, conditions::is_deleted("")),
-        // );
-        // // Cleanup CoreDB
-        // coredbs.delete(name, &Default::default()).await.unwrap();
-        // println!("Waiting for CoreDB to be deleted: {}", &name);
-        // let _assert_coredb_deleted = tokio::time::timeout(
-        //     Duration::from_secs(TIMEOUT_SECONDS_COREDB_DELETED),
-        //     await_condition(coredbs.clone(), name, conditions::is_deleted("")),
-        // )
-        // .await
-        // .unwrap_or_else(|_| {
-        //     panic!(
-        //         "CoreDB {} was not deleted after waiting {} seconds",
-        //         name, TIMEOUT_SECONDS_COREDB_DELETED
-        //     )
-        // });
-        // println!("CoreDB resource deleted {}", name);
+
+        // CLEANUP TEST
+        // Cleanup CoreDB
+        coredbs.delete(name, &Default::default()).await.unwrap();
+        println!("Waiting for CoreDB to be deleted: {}", &name);
+        let _assert_coredb_deleted = tokio::time::timeout(
+            Duration::from_secs(TIMEOUT_SECONDS_COREDB_DELETED),
+            await_condition(coredbs.clone(), name, conditions::is_deleted("")),
+        )
+        .await
+        .unwrap_or_else(|_| {
+            panic!(
+                "CoreDB {} was not deleted after waiting {} seconds",
+                name, TIMEOUT_SECONDS_COREDB_DELETED
+            )
+        });
+        println!("CoreDB resource deleted {}", name);
     }
 
     #[tokio::test]
@@ -1373,7 +1355,7 @@ mod test {
         let pod = match pods.iter().next() {
             Some(pod) => pod,
             None => {
-                println!("Expected label: {}", format!("statefulset={}", stateful_set_name));
+                println!("Expected label: statefulset={}", stateful_set_name);
                 panic!("No matching pods found")
             }
         };

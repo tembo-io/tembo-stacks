@@ -24,6 +24,11 @@ use kube::runtime::controller::Action;
 use tokio::{sync::RwLock, time::Duration};
 use tracing::{debug, error, info, warn};
 
+pub struct PostgresConfig {
+    pub postgres_parameters: Option<BTreeMap<String, String>>,
+    pub shared_preload_libraries: Option<Vec<String>>,
+}
+
 pub fn cnpg_backup_configuration(
     cdb: &CoreDB,
 ) -> (Option<ClusterBackup>, Option<ClusterServiceAccountTemplate>) {
@@ -139,9 +144,7 @@ pub fn cnpg_cluster_bootstrap_from_cdb(
 }
 
 // Get PGConfig from CoreDB and convert it to a postgres_parameters and shared_preload_libraries
-fn cnpg_postgres_config(
-    cdb: &CoreDB,
-) -> Result<(Option<BTreeMap<String, String>>, Option<Vec<String>>), MergeError> {
+fn cnpg_postgres_config(cdb: &CoreDB) -> Result<PostgresConfig, MergeError> {
     match cdb.spec.get_pg_configs() {
         Ok(Some(pg_configs)) => {
             let mut postgres_parameters: BTreeMap<String, String> = BTreeMap::new();
@@ -170,11 +173,17 @@ fn cnpg_postgres_config(
                 Some(shared_preload_libraries)
             };
 
-            Ok((params, libs))
+            Ok(PostgresConfig {
+                postgres_parameters: params,
+                shared_preload_libraries: libs,
+            })
         }
         Ok(None) => {
             // Return None, None when no pg_config is set
-            Ok((None, None))
+            Ok(PostgresConfig {
+                postgres_parameters: None,
+                shared_preload_libraries: None,
+            })
         }
         Err(e) => Err(e),
     }
@@ -206,13 +215,17 @@ pub fn cnpg_cluster_from_cdb(cdb: &CoreDB) -> Cluster {
 
     let storage = cnpg_cluster_storage(cdb);
 
-    let (postgres_parameters, shared_preload_libraries) = match cnpg_postgres_config(cdb) {
-        Ok((postgres_parameters, shared_preload_libraries)) => {
-            (postgres_parameters, shared_preload_libraries)
-        }
+    let PostgresConfig {
+        postgres_parameters,
+        shared_preload_libraries,
+    } = match cnpg_postgres_config(cdb) {
+        Ok(config) => config,
         Err(e) => {
             error!("Error generating postgres parameters: {}", e);
-            (None, None)
+            PostgresConfig {
+                postgres_parameters: None,
+                shared_preload_libraries: None,
+            }
         }
     };
     // make shared_preload_libraries mutable so we can change them if we need
