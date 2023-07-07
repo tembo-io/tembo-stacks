@@ -1,16 +1,21 @@
 use crate::{
     apis::{coredb_types::CoreDB, postgres_parameters::MergeError},
-    cloudnativepg::clusters::{
-        Cluster, ClusterAffinity, ClusterBackup, ClusterBackupBarmanObjectStore,
-        ClusterBackupBarmanObjectStoreData, ClusterBackupBarmanObjectStoreDataCompression,
-        ClusterBackupBarmanObjectStoreDataEncryption, ClusterBackupBarmanObjectStoreS3Credentials,
-        ClusterBackupBarmanObjectStoreWal, ClusterBackupBarmanObjectStoreWalCompression,
-        ClusterBackupBarmanObjectStoreWalEncryption, ClusterBootstrap, ClusterBootstrapPgBasebackup,
-        ClusterExternalClusters, ClusterExternalClustersPassword, ClusterLogLevel, ClusterMonitoring,
-        ClusterMonitoringCustomQueriesConfigMap, ClusterPostgresql,
-        ClusterPostgresqlSyncReplicaElectionConstraint, ClusterPrimaryUpdateMethod,
-        ClusterPrimaryUpdateStrategy, ClusterResources, ClusterServiceAccountTemplate,
-        ClusterServiceAccountTemplateMetadata, ClusterSpec, ClusterStorage, ClusterSuperuserSecret,
+    cloudnativepg::{
+        clusters::{
+            Cluster, ClusterAffinity, ClusterBackup, ClusterBackupBarmanObjectStore,
+            ClusterBackupBarmanObjectStoreData, ClusterBackupBarmanObjectStoreDataCompression,
+            ClusterBackupBarmanObjectStoreDataEncryption, ClusterBackupBarmanObjectStoreS3Credentials,
+            ClusterBackupBarmanObjectStoreWal, ClusterBackupBarmanObjectStoreWalCompression,
+            ClusterBackupBarmanObjectStoreWalEncryption, ClusterBootstrap, ClusterBootstrapPgBasebackup,
+            ClusterExternalClusters, ClusterExternalClustersPassword, ClusterLogLevel, ClusterMonitoring,
+            ClusterMonitoringCustomQueriesConfigMap, ClusterPostgresql,
+            ClusterPostgresqlSyncReplicaElectionConstraint, ClusterPrimaryUpdateMethod,
+            ClusterPrimaryUpdateStrategy, ClusterResources, ClusterServiceAccountTemplate,
+            ClusterServiceAccountTemplateMetadata, ClusterSpec, ClusterStorage, ClusterSuperuserSecret,
+        },
+        scheduledbackups::{
+            ScheduledBackup, ScheduledBackupBackupOwnerReference, ScheduledBackupCluster, ScheduledBackupSpec,
+        },
     },
     Context,
 };
@@ -33,19 +38,19 @@ pub fn cnpg_backup_configuration(
     cdb: &CoreDB,
 ) -> (Option<ClusterBackup>, Option<ClusterServiceAccountTemplate>) {
     let backup_path = cdb.spec.backup.destinationPath.clone();
-    if backup_path.is_some() {
+    if backup_path.is_none() {
         warn!("Backups are disabled because we don't have an S3 backup path");
         return (None, None);
     }
     let service_account_metadata = cdb.spec.serviceAccountTemplate.metadata.clone();
-    if service_account_metadata.is_some() {
+    if service_account_metadata.is_none() {
         warn!("Backups are disabled because we don't have a service account template");
         return (None, None);
     }
     let service_account_annotations = service_account_metadata
         .expect("Expected service account template metadata")
         .annotations;
-    if service_account_annotations.is_some() {
+    if service_account_annotations.is_none() {
         warn!("Backups are disabled because we don't have a service account template with annotations");
         return (None, None);
     }
@@ -250,7 +255,7 @@ pub fn cnpg_cluster_from_cdb(cdb: &CoreDB) -> Cluster {
             external_clusters,
             enable_superuser_access: Some(true),
             failover_delay: Some(0),
-            image_name: Some("quay.io/tembo/tembo-pg-cnpg:15.3.0-1-3953e4e".to_string()),
+            image_name: Some("quay.io/tembo/tembo-pg-cnpg:15.3.0-2-48fd1ce".to_string()),
             instances: 1,
             log_level: Some(ClusterLogLevel::Info),
             max_sync_replicas: Some(0),
@@ -414,6 +419,59 @@ pub async fn reconcile_cnpg(cdb: &CoreDB, ctx: Arc<Context>) -> Result<(), Actio
         })?;
     debug!("Applied");
     // If restart is required, then we should trigger the restart above
+    Ok(())
+}
+
+// Generate a ScheduledBackup
+fn cnpg_scheduled_backup(cdb: &CoreDB) -> ScheduledBackup {
+    let name = cdb.name_any();
+    let namespace = cdb.namespace().unwrap();
+
+    ScheduledBackup {
+        metadata: ObjectMeta {
+            name: Some(name.clone()),
+            namespace: Some(namespace),
+            ..ObjectMeta::default()
+        },
+        spec: ScheduledBackupSpec {
+            backup_owner_reference: Some(ScheduledBackupBackupOwnerReference::Cluster),
+            cluster: Some(ScheduledBackupCluster { name }),
+            immediate: Some(true),
+            schedule: cdb.spec.backup.schedule.clone().unwrap(),
+            suspend: Some(false),
+            ..ScheduledBackupSpec::default()
+        },
+        status: None,
+    }
+}
+
+// Reconcile a SheduledBackup
+pub async fn reconcile_cnpg_scheduled_backup(cdb: &CoreDB, ctx: Arc<Context>) -> Result<(), Action> {
+    let scheduledbackup = cnpg_scheduled_backup(cdb);
+    let client = ctx.client.clone();
+    let name = scheduledbackup
+        .metadata
+        .name
+        .clone()
+        .expect("ScheduledBackup should always have a name");
+    let namespace = scheduledbackup
+        .metadata
+        .namespace
+        .clone()
+        .expect("ScheduledBackup should always have a namespace");
+    let backup_api: Api<ScheduledBackup> = Api::namespaced(client.clone(), namespace.as_str());
+
+
+    debug!("Patching ScheduledBackup");
+    let ps = PatchParams::apply("cntrlr");
+    let _o = backup_api
+        .patch(&name, &ps, &Patch::Apply(&scheduledbackup))
+        .await
+        .map_err(|e| {
+            error!("Error patching ScheduledBackup: {}", e);
+            Action::requeue(Duration::from_secs(300))
+        })?;
+    debug!("Applied ScheduledBackup");
     Ok(())
 }
 
