@@ -14,7 +14,6 @@ mod test {
     use chrono::{DateTime, SecondsFormat, Utc};
     use controller::{
         apis::coredb_types::CoreDB,
-        cloudnativepg::clusters::Cluster,
         defaults::{default_resources, default_storage},
         ingress_route_tcp_crd::IngressRouteTCP,
         is_pod_ready, Context, State,
@@ -800,27 +799,6 @@ mod test {
         let coredb_resource = coredbs.patch(name, &params, &patch).await.unwrap();
 
         println!("Waiting to install extension pgmq");
-
-        // Annotate the Cluster object to restart the pod
-        let cluster_api: Api<Cluster> = Api::namespaced(client.clone(), namespace);
-        let cluster_name = name.clone();
-        let restart_time = Utc::now().to_rfc3339_opts(SecondsFormat::Secs, true).to_string();
-        let patch_json = serde_json::json!({
-            "metadata": {
-                "annotations": {
-                    "kubectl.kubernetes.io/restartedAt": restart_time
-                }
-            }
-        });
-
-        println!("Restarting CNPG pod");
-        let params = PatchParams::default();
-        let _patch = cluster_api
-            .patch(&cluster_name, &params, &Patch::Merge(patch_json))
-            .await
-            .unwrap();
-
-        pod_ready_and_running(pods.clone(), pod_name.clone()).await;
 
         wait_until_psql_contains(
             context.clone(),
