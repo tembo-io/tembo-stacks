@@ -1,5 +1,5 @@
 use crate::{
-    apis::coredb_types::CoreDB,
+    apis::{coredb_types::CoreDB, postgres_parameters::MergeError},
     cloudnativepg::clusters::{
         Cluster, ClusterAffinity, ClusterBackup, ClusterBackupBarmanObjectStore,
         ClusterBackupBarmanObjectStoreData, ClusterBackupBarmanObjectStoreDataCompression,
@@ -12,15 +12,22 @@ use crate::{
         ClusterPrimaryUpdateStrategy, ClusterResources, ClusterServiceAccountTemplate,
         ClusterServiceAccountTemplateMetadata, ClusterSpec, ClusterStorage, ClusterSuperuserSecret,
     },
-    Context, Error,
+    Context,
 };
 use k8s_openapi::apimachinery::pkg::apis::meta::v1::ObjectMeta;
 use kube::{
     api::{Patch, PatchParams},
+    runtime::controller::Action,
     Api, Resource, ResourceExt,
 };
 use std::{collections::BTreeMap, sync::Arc};
-use tracing::log::{debug, warn};
+use tokio::time::Duration;
+use tracing::{debug, error, info, warn};
+
+pub struct PostgresConfig {
+    pub postgres_parameters: Option<BTreeMap<String, String>>,
+    pub shared_preload_libraries: Option<Vec<String>>,
+}
 
 pub fn cnpg_backup_configuration(
     cdb: &CoreDB,
@@ -136,28 +143,50 @@ pub fn cnpg_cluster_bootstrap_from_cdb(
     )
 }
 
-fn cnpg_postgres_config(_cdb: &CoreDB) -> (Option<BTreeMap<String, String>>, Option<Vec<String>>) {
-    let mut postgres_parameters = BTreeMap::new();
-    postgres_parameters.insert("archive_mode".to_string(), "on".to_string());
-    postgres_parameters.insert("archive_timeout".to_string(), "5min".to_string());
-    postgres_parameters.insert("dynamic_shared_memory_type".to_string(), "posix".to_string());
-    postgres_parameters.insert("log_destination".to_string(), "csvlog".to_string());
-    postgres_parameters.insert("log_directory".to_string(), "/controller/log".to_string());
-    postgres_parameters.insert("log_filename".to_string(), "postgres".to_string());
-    postgres_parameters.insert("log_rotation_age".to_string(), "0".to_string());
-    postgres_parameters.insert("log_rotation_size".to_string(), "0".to_string());
-    postgres_parameters.insert("log_truncate_on_rotation".to_string(), "false".to_string());
-    postgres_parameters.insert("logging_collector".to_string(), "on".to_string());
-    postgres_parameters.insert("max_parallel_workers".to_string(), "32".to_string());
-    postgres_parameters.insert("max_replication_slots".to_string(), "32".to_string());
-    postgres_parameters.insert("max_worker_processes".to_string(), "32".to_string());
-    postgres_parameters.insert("shared_memory_type".to_string(), "mmap".to_string());
-    postgres_parameters.insert("wal_keep_size".to_string(), "512MB".to_string());
-    postgres_parameters.insert("wal_receiver_timeout".to_string(), "5s".to_string());
-    postgres_parameters.insert("wal_sender_timeout".to_string(), "5s".to_string());
-    // TODO: right here, overlay other postgres configs
-    let shared_preload_libraries = None;
-    (Some(postgres_parameters), shared_preload_libraries)
+// Get PGConfig from CoreDB and convert it to a postgres_parameters and shared_preload_libraries
+fn cnpg_postgres_config(cdb: &CoreDB) -> Result<PostgresConfig, MergeError> {
+    match cdb.spec.get_pg_configs() {
+        Ok(Some(pg_configs)) => {
+            let mut postgres_parameters: BTreeMap<String, String> = BTreeMap::new();
+            let mut shared_preload_libraries: Vec<String> = Vec::new();
+
+            for pg_config in pg_configs {
+                match &pg_config.name[..] {
+                    "shared_preload_libraries" => {
+                        shared_preload_libraries.push(pg_config.value.to_string());
+                    }
+                    _ => {
+                        postgres_parameters.insert(pg_config.name.clone(), pg_config.value.to_string());
+                    }
+                }
+            }
+
+            let params = if postgres_parameters.is_empty() {
+                None
+            } else {
+                Some(postgres_parameters)
+            };
+
+            let libs = if shared_preload_libraries.is_empty() {
+                None
+            } else {
+                Some(shared_preload_libraries)
+            };
+
+            Ok(PostgresConfig {
+                postgres_parameters: params,
+                shared_preload_libraries: libs,
+            })
+        }
+        Ok(None) => {
+            // Return None, None when no pg_config is set
+            Ok(PostgresConfig {
+                postgres_parameters: None,
+                shared_preload_libraries: None,
+            })
+        }
+        Err(e) => Err(e),
+    }
 }
 
 fn cnpg_cluster_storage(cdb: &CoreDB) -> Option<ClusterStorage> {
@@ -182,11 +211,23 @@ pub fn cnpg_cluster_from_cdb(cdb: &CoreDB) -> Cluster {
 
     let (bootstrap, external_clusters, superuser_secret) = cnpg_cluster_bootstrap_from_cdb(cdb);
 
-    let (postgres_parameters, shared_preload_libraries) = cnpg_postgres_config(cdb);
-
     let (backup, service_account_template) = cnpg_backup_configuration(cdb);
 
     let storage = cnpg_cluster_storage(cdb);
+
+    let PostgresConfig {
+        postgres_parameters,
+        shared_preload_libraries,
+    } = match cnpg_postgres_config(cdb) {
+        Ok(config) => config,
+        Err(e) => {
+            error!("Error generating postgres parameters: {}", e);
+            PostgresConfig {
+                postgres_parameters: None,
+                shared_preload_libraries: None,
+            }
+        }
+    };
 
     Cluster {
         metadata: ObjectMeta {
@@ -259,9 +300,10 @@ pub fn cnpg_cluster_from_cdb(cdb: &CoreDB) -> Cluster {
     }
 }
 
-pub async fn reconcile_cnpg(cdb: &CoreDB, ctx: Arc<Context>) -> Result<(), Error> {
+pub async fn reconcile_cnpg(cdb: &CoreDB, ctx: Arc<Context>) -> Result<(), Action> {
     debug!("Generating CNPG spec");
-    let cluster = cnpg_cluster_from_cdb(cdb);
+    let mut cluster = cnpg_cluster_from_cdb(cdb);
+
     debug!("Getting namespace of cluster");
     let namespace = cluster
         .metadata
@@ -274,21 +316,110 @@ pub async fn reconcile_cnpg(cdb: &CoreDB, ctx: Arc<Context>) -> Result<(), Error
         .name
         .clone()
         .expect("CNPG Cluster should always have a name");
-    debug!("Patching cluster");
     let cluster_api: Api<Cluster> = Api::namespaced(ctx.client.clone(), namespace.as_str());
+
+    let mut _restart_required = false;
+
+    match cluster
+        .spec
+        .postgresql
+        .clone()
+        .expect("We always set the postgresql spec")
+        .shared_preload_libraries
+    {
+        None => {
+            debug!("We are not setting any shared_preload_libraries");
+        }
+        Some(new_libs) => {
+            debug!("We are setting shared_preload_libraries, so we have to check if the files are already installed");
+            match cluster_api.get(&name).await {
+                Ok(current_cluster) => {
+                    let current_shared_preload_libraries = match current_cluster
+                        .spec
+                        .postgresql
+                        .clone()
+                        .expect("We always set postgresql cluster spec")
+                        .shared_preload_libraries
+                    {
+                        None => {
+                            let current_libs: Vec<String> = vec![];
+                            current_libs
+                        }
+                        Some(current_libs) => current_libs,
+                    };
+                    // Check if current_shared_preload_libraries and new_libs are the same
+                    if current_shared_preload_libraries != new_libs {
+                        let mut libs_that_are_installed: Vec<String> = vec![];
+                        // If we can't find the existing primary pod, returns a requeue
+                        let primary_pod_cnpg = cdb.primary_pod_cnpg(ctx.client.clone()).await?;
+                        for new_lib in new_libs {
+                            // Check if the file is already installed
+                            let command = vec![
+                                "/bin/sh".to_string(),
+                                "-c".to_string(),
+                                "ls $(pg_config --pkglibdir)".to_string(),
+                            ];
+                            let result = cdb
+                                .exec(primary_pod_cnpg.name_any(), ctx.client.clone(), &command)
+                                .await
+                                .map_err(|e| {
+                                    error!("Error checking for presence of extension files: {:?}", e);
+                                    Action::requeue(Duration::from_secs(30))
+                                })?;
+                            match result.stdout {
+                                None => {
+                                    error!("Error checking for presence of extension files");
+                                    return Err(Action::requeue(Duration::from_secs(30)));
+                                }
+                                Some(output) => {
+                                    if output.contains(&format!("{}.so", new_lib)) {
+                                        info!("Changing shared_preload_libraries on {}, found {} is installed, so including it", &name, &new_lib);
+                                        libs_that_are_installed.push(new_lib.clone());
+                                        if !current_shared_preload_libraries.contains(&new_lib) {
+                                            _restart_required = true;
+                                        }
+                                    } else {
+                                        info!("Changing shared_preload_libraries on {}, found {} is NOT installed, so dropping it", &name, &new_lib);
+                                    }
+                                }
+                            }
+                        }
+                        if let Some(postgresql) = cluster.spec.postgresql.as_mut() {
+                            postgresql.shared_preload_libraries = Some(libs_that_are_installed);
+                        }
+                    }
+                }
+                Err(_) => {
+                    // Here, we should drop all shared_preload_libraries
+                    if let Some(postgresql) = cluster.spec.postgresql.as_mut() {
+                        info!(
+                            "We are dropping all shared_preload_libraries for initial creation of Cluster {}",
+                            &name
+                        );
+                        postgresql.shared_preload_libraries = None;
+                    }
+                }
+            }
+        }
+    }
+
+    debug!("Patching cluster");
     let ps = PatchParams::apply("cntrlr");
     let _o = cluster_api
         .patch(&name, &ps, &Patch::Apply(&cluster))
         .await
-        .map_err(Error::KubeError)?;
+        .map_err(|e| {
+            error!("Error patching cluster: {}", e);
+            Action::requeue(Duration::from_secs(300))
+        })?;
     debug!("Applied");
+    // If restart is required, then we should trigger the restart above
     Ok(())
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-
 
     #[test]
     fn test_deserialize_cluster() {

@@ -33,10 +33,7 @@ mod test {
     };
     use kube::{
         api::{AttachParams, DeleteParams, ListParams, Patch, PatchParams, PostParams},
-        runtime::{
-            controller::Action,
-            wait::{await_condition, conditions, Condition},
-        },
+        runtime::wait::{await_condition, conditions, Condition},
         Api, Client, Config,
     };
     use rand::Rng;
@@ -127,8 +124,8 @@ mod test {
             let result = coredb_resource
                 .psql(query.clone(), "postgres".to_string(), context.clone())
                 .await;
-            match result {
-                Ok(output) => match inverse {
+            if let Ok(output) = result {
+                match inverse {
                     true => {
                         if !output.stdout.clone().unwrap().contains(expected.clone().as_str()) {
                             break;
@@ -139,8 +136,7 @@ mod test {
                             break;
                         }
                     }
-                },
-                Err(_) => {}
+                }
             }
             println!(
                 "Waiting for psql result on DB {}...",
@@ -710,6 +706,142 @@ mod test {
 
     #[tokio::test]
     #[ignore]
+    async fn functional_test_cnpg_pgparams() {
+        // Initialize the Kubernetes client
+        let client = kube_client().await;
+        let state = State::default();
+        let context = state.create_context(client.clone());
+
+        // Configurations
+        let mut rng = rand::thread_rng();
+        let name = &format!("test-coredb-{}", rng.gen_range(0..100000));
+        let namespace = "cnpg-test";
+        let kind = "CoreDB";
+        let replicas = 1;
+
+        // Create a pod we can use to run commands in the cluster
+        let pods: Api<Pod> = Api::namespaced(client.clone(), namespace);
+
+        // Apply a basic configuration of CoreDB
+        println!("Creating CoreDB resource {}", name);
+        let coredbs: Api<CoreDB> = Api::namespaced(client.clone(), namespace);
+        // Generate basic CoreDB resource to start with
+        let coredb_json = serde_json::json!({
+            "apiVersion": API_VERSION,
+            "kind": kind,
+            "metadata": {
+                "name": name
+            },
+            "spec": {
+                "replicas": replicas,
+            }
+        });
+        let params = PatchParams::apply("coredb-integration-test");
+        let patch = Patch::Apply(&coredb_json);
+        let _coredb_resource = coredbs.patch(name, &params, &patch).await.unwrap();
+
+        // Wait for Pod to be created
+        let pod_name = format!("{}-0", name);
+
+        pod_ready_and_running(pods.clone(), pod_name).await;
+
+        // Wait for CNPG Pod to be created
+        // This is the CNPG pod
+        let pod_name = format!("{}-1", name);
+
+        pod_ready_and_running(pods.clone(), pod_name.clone()).await;
+
+        // Update CoreDB to include PGPARAMS
+        let coredb_json = serde_json::json!({
+            "apiVersion": API_VERSION,
+            "kind": kind,
+            "metadata": {
+                "name": name
+            },
+            "spec": {
+                "replicas": replicas,
+                "extensions": [
+                    {
+                        "name": "pgmq",
+                        "locations": [
+                        {
+                          "enabled": true,
+                          "version": "0.9.0",
+                          "database": "postgres",
+                          "schema": "public"
+                        }]
+                    }
+                ],
+                "runtime_config": [
+                    {
+                        "name": "shared_preload_libraries",
+                        "value": "pg_partman_bgw"
+                    },
+                    {
+                        "name": "pg_partman_bgw.interval",
+                        "value": "60"
+                    },
+                    {
+                        "name": "pg_partman_bgw.role",
+                        "value": "postgres"
+                    },
+                    {
+                        "name": "pg_partman_bgw.dbname",
+                        "value": "postgres"
+                    }
+                ]
+            }
+        });
+
+        // Patch CoreDB with PGPARAMS
+        let params = PatchParams::apply("coredb-integration-test");
+        let patch = Patch::Apply(&coredb_json);
+        let coredb_resource = coredbs.patch(name, &params, &patch).await.unwrap();
+
+        println!("Waiting to install extension pgmq");
+
+        wait_until_psql_contains(
+            context.clone(),
+            coredb_resource.clone(),
+            "select extname from pg_catalog.pg_extension;".to_string(),
+            "pgmq".to_string(),
+            false,
+        )
+        .await;
+
+        // Assert extension 'pgmq' was created
+        let result = coredb_resource
+            .psql(
+                "select extname from pg_catalog.pg_extension;".to_string(),
+                "postgres".to_string(),
+                context.clone(),
+            )
+            .await
+            .unwrap();
+
+        println!("{}", result.stdout.clone().unwrap());
+        assert!(result.stdout.clone().unwrap().contains("pgmq"));
+
+        // CLEANUP TEST
+        // Cleanup CoreDB
+        coredbs.delete(name, &Default::default()).await.unwrap();
+        println!("Waiting for CoreDB to be deleted: {}", &name);
+        let _assert_coredb_deleted = tokio::time::timeout(
+            Duration::from_secs(TIMEOUT_SECONDS_COREDB_DELETED),
+            await_condition(coredbs.clone(), name, conditions::is_deleted("")),
+        )
+        .await
+        .unwrap_or_else(|_| {
+            panic!(
+                "CoreDB {} was not deleted after waiting {} seconds",
+                name, TIMEOUT_SECONDS_COREDB_DELETED
+            )
+        });
+        println!("CoreDB resource deleted {}", name);
+    }
+
+    #[tokio::test]
+    #[ignore]
     async fn functional_test_basic_create() {
         // Initialize the Kubernetes client
         let client = kube_client().await;
@@ -1187,7 +1319,7 @@ mod test {
         let pod = match pods.iter().next() {
             Some(pod) => pod,
             None => {
-                println!("Expected label: {}", format!("statefulset={}", stateful_set_name));
+                println!("Expected label: statefulset={}", stateful_set_name);
                 panic!("No matching pods found")
             }
         };
