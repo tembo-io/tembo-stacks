@@ -15,8 +15,6 @@ on:
   pull_request:
     branches:
       - main
-      # temporary, delete before merge
-      - tem-1205
     paths:
     - '.github/workflows/operator.yaml'
     - 'coredb-operator/**'
