@@ -12,16 +12,16 @@ use crate::{
         ClusterPrimaryUpdateStrategy, ClusterResources, ClusterServiceAccountTemplate,
         ClusterServiceAccountTemplateMetadata, ClusterSpec, ClusterStorage, ClusterSuperuserSecret,
     },
-    Context, Error,
+    Context,
 };
 use k8s_openapi::apimachinery::pkg::apis::meta::v1::ObjectMeta;
 use kube::{
     api::{Patch, PatchParams},
+    runtime::controller::Action,
     Api, Resource, ResourceExt,
 };
 use std::{collections::BTreeMap, sync::Arc};
-use kube::runtime::controller::Action;
-use tokio::{sync::RwLock, time::Duration};
+use tokio::time::Duration;
 use tracing::{debug, error, info, warn};
 
 pub struct PostgresConfig {
@@ -228,8 +228,6 @@ pub fn cnpg_cluster_from_cdb(cdb: &CoreDB) -> Cluster {
             }
         }
     };
-    // make shared_preload_libraries mutable so we can change them if we need
-    let shared_preload_libraries = shared_preload_libraries.clone();
 
     Cluster {
         metadata: ObjectMeta {
@@ -320,7 +318,7 @@ pub async fn reconcile_cnpg(cdb: &CoreDB, ctx: Arc<Context>) -> Result<(), Actio
         .expect("CNPG Cluster should always have a name");
     let cluster_api: Api<Cluster> = Api::namespaced(ctx.client.clone(), namespace.as_str());
 
-    let mut restart_required = false;
+    let mut _restart_required = false;
 
     match cluster
         .spec
@@ -378,7 +376,7 @@ pub async fn reconcile_cnpg(cdb: &CoreDB, ctx: Arc<Context>) -> Result<(), Actio
                                         info!("Changing shared_preload_libraries on {}, found {} is installed, so including it", &name, &new_lib);
                                         libs_that_are_installed.push(new_lib.clone());
                                         if !current_shared_preload_libraries.contains(&new_lib) {
-                                            restart_required = true;
+                                            _restart_required = true;
                                         }
                                     } else {
                                         info!("Changing shared_preload_libraries on {}, found {} is NOT installed, so dropping it", &name, &new_lib);
@@ -387,15 +385,17 @@ pub async fn reconcile_cnpg(cdb: &CoreDB, ctx: Arc<Context>) -> Result<(), Actio
                             }
                         }
                         if let Some(postgresql) = cluster.spec.postgresql.as_mut() {
-                            postgresql.shared_preload_libraries =
-                                Some(libs_that_are_installed);
+                            postgresql.shared_preload_libraries = Some(libs_that_are_installed);
                         }
                     }
                 }
                 Err(_) => {
                     // Here, we should drop all shared_preload_libraries
                     if let Some(postgresql) = cluster.spec.postgresql.as_mut() {
-                        info!("We are dropping all shared_preload_libraries for initial creation of Cluster {}", &name);
+                        info!(
+                            "We are dropping all shared_preload_libraries for initial creation of Cluster {}",
+                            &name
+                        );
                         postgresql.shared_preload_libraries = None;
                     }
                 }
