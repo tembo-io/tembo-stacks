@@ -94,21 +94,29 @@ mod test {
             max_stderr_buf_size: Some(1024),
         };
 
-        let attach_res = pods_api.exec(pod_name.as_str(), &command, &attach_params).await;
-        let mut attached_process = match attach_res {
-            Ok(ap) => ap,
-            Err(e) => {
-                panic!(
-                    "Error attaching to pod: {}, container: {:?}, error: {}",
-                    pod_name, container, e
-                )
-            }
-        };
-        let mut stdout_reader = attached_process.stdout().unwrap();
-        let mut result_stdout = String::new();
-        stdout_reader.read_to_string(&mut result_stdout).await.unwrap();
+        let MAX_RETRIES = 10;
+        let MILLISEC_BETWEEN_TRIES = 5;
 
-        result_stdout
+        for _i in 1..MAX_RETRIES {
+            let attach_res = pods_api.exec(pod_name.as_str(), &command, &attach_params).await;
+            let mut attached_process = match attach_res {
+                Ok(ap) => ap,
+                Err(e) => {
+                    println!(
+                        "Error attaching to pod: {}, container: {:?}, error: {}",
+                        pod_name, container, e
+                    );
+                    thread::sleep(Duration::from_millis(MILLISEC_BETWEEN_TRIES));
+                    continue;
+                }
+            };
+            let mut stdout_reader = attached_process.stdout().unwrap();
+            let mut result_stdout = String::new();
+            stdout_reader.read_to_string(&mut result_stdout).await.unwrap();
+
+            return result_stdout;
+        }
+        panic!("Failed to run command in container");
     }
 
     async fn wait_until_psql_contains(
