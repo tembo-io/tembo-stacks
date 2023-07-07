@@ -762,6 +762,16 @@ mod test {
                 "replicas": replicas,
                 "extensions": [
                     {
+                        "name": "pg_partman",
+                        "locations": [
+                        {
+                          "enabled": true,
+                          "version": "4.7.3",
+                          "database": "postgres",
+                          "schema": "public"
+                        }]
+                    },
+                    {
                         "name": "pgmq",
                         "locations": [
                         {
