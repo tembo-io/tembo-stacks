@@ -827,4 +827,78 @@ mod tests {
 
         let _result: Cluster = serde_json::from_str(json_str).expect("Should be able to deserialize");
     }
+
+    use serde_yaml::from_str;
+
+    #[test]
+    fn test_cnpg_scheduled_backup() {
+        // Arrange
+        let cdb_yaml = r#"
+        apiVersion: coredb.io/v1alpha1
+        kind: CoreDB
+        metadata:
+          name: test
+          namespace: default
+        spec:
+          backup:
+            destinationPath: s3://aws-s3-bucket/tembo/backup
+            encryption: AES256
+            retentionPolicy: "30"
+            schedule: 55 7 * * *
+          image: quay.io/coredb/coredb-pg-slim:latest
+          port: 5432
+          postgresExporterEnabled: true
+          postgresExporterImage: quay.io/prometheuscommunity/postgres-exporter:v0.12.1
+          replicas: 1
+          resources:
+            limits:
+              cpu: "1"
+              memory: 0.5Gi
+          serviceAccountTemplate:
+            metadata:
+              annotations:
+                eks.amazonaws.com/role-arn: arn:aws:iam::012345678901:role/aws-iam-role-iam
+          sharedirStorage: 1Gi
+          stop: false
+          storage: 1Gi
+          uid: 999
+        "#;
+        let cdb: CoreDB = from_str(cdb_yaml).unwrap();
+
+        let scheduled_backup: ScheduledBackup = cnpg_scheduled_backup(&cdb);
+        let (backup, service_account_template) = cnpg_backup_configuration(&cdb);
+
+        // Assert to make sure that backup schedule is set
+        assert_eq!(
+            scheduled_backup.spec.to_owned().schedule,
+            "55 7 * * *".to_string()
+        );
+
+        // Assert to make sure that backup destination path is set
+        assert_eq!(
+            backup
+                .to_owned()
+                .unwrap()
+                .barman_object_store
+                .to_owned()
+                .unwrap()
+                .destination_path,
+            "s3://aws-s3-bucket/tembo/backup".to_string()
+        );
+
+        // Assert to make sure that service account template is set
+        assert_eq!(
+            service_account_template
+                .to_owned()
+                .unwrap()
+                .metadata
+                .to_owned()
+                .annotations
+                .to_owned()
+                .unwrap()
+                .get("eks.amazonaws.com/role-arn")
+                .unwrap(),
+            "arn:aws:iam::012345678901:role/aws-iam-role-iam"
+        );
+    }
 }
