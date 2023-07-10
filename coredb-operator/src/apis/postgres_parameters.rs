@@ -31,6 +31,9 @@ pub const MULTI_VAL_CONFIGS: [&str; 5] = [
     "search_path",
 ];
 
+// This array defines the priority order for any multi-value config
+pub const MULTI_VAL_CONFIGS_PRIORITY_LIST: [&str; 2] = ["pg_stat_statements", "pg_stat_kcache"];
+
 // configurations that are not allowed to be set by the user
 pub const DISALLOWED_CONFIGS: [&str; 66] = [
     "allow_system_table_mods",
@@ -125,6 +128,16 @@ pub enum MergeError {
     SingleValueNotAllowed,
 }
 
+// If a value does not exist in the priority list, it will be placed at the end since
+// Option::None is greater than Option::Some(_)
+fn sort_multivalue_configs(values: &mut Vec<String>, priorities: &Vec<&str>) {
+    values.sort_by(|a, b| {
+        let a_index = priorities.iter().position(|x| x == a);
+        let b_index = priorities.iter().position(|x| x == b);
+        a_index.cmp(&b_index)
+    });
+}
+
 impl ConfigValue {
     fn combine(self, other: Self) -> Result<Self, MergeError> {
         match (self, other) {
@@ -215,7 +228,9 @@ impl std::fmt::Display for ConfigValue {
         match self {
             ConfigValue::Single(value) => write!(f, "{}", value),
             ConfigValue::Multiple(values) => {
-                let joined_values = values.iter().cloned().collect::<Vec<String>>().join(",");
+                let mut configs = values.iter().cloned().collect::<Vec<String>>();
+                sort_multivalue_configs(&mut configs, &MULTI_VAL_CONFIGS_PRIORITY_LIST.to_vec());
+                let joined_values = configs.join(",");
                 write!(f, "{}", joined_values)
             }
         }
