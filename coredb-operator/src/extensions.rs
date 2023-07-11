@@ -421,6 +421,12 @@ fn extension_plan(have_changed: &[Extension], actual: &[Extension]) -> (Vec<Exte
                 // extension exists, therefore has been installed
                 // determine if the `enabled` toggle has changed
                 'loc: for loc_desired in extension_desired.locations.clone() {
+                    // Never need to install disabled extensions
+                    if !loc_desired.enabled {
+                        debug!("desired: {:?}, actual: {:?}", extension_desired, extension_actual);
+                        break 'loc;
+                    }
+
                     for loc_actual in extension_actual.locations.clone() {
                         if loc_desired.database == loc_actual.database {
                             if loc_desired.enabled != loc_actual.enabled {
