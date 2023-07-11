@@ -417,17 +417,17 @@ fn extension_plan(have_changed: &[Extension], actual: &[Extension]) -> (Vec<Exte
                 // extension exists, therefore has been installed
                 // determine if the `enabled` toggle has changed
                 'loc: for loc_desired in extension_desired.locations.clone() {
-                    // Never need to install disabled extensions
-                    if !loc_desired.enabled {
-                        debug!("desired: {:?}, actual: {:?}", extension_desired, extension_actual);
-                        break 'loc;
-                    }
-
                     for loc_actual in extension_actual.locations.clone() {
                         if loc_desired.database == loc_actual.database {
                             if loc_desired.enabled != loc_actual.enabled {
                                 debug!("desired: {:?}, actual: {:?}", extension_desired, extension_actual);
                                 changed.push(extension_desired.clone());
+                                break 'loc;
+                            }
+
+                            // Never need to install disabled extensions
+                            if !loc_desired.enabled {
+                                debug!("desired: {:?}, actual: {:?}", extension_desired, extension_actual);
                                 break 'loc;
                             }
 
@@ -603,7 +603,6 @@ mod tests {
         let actual = vec![pg_stat_statements_no_patch];
         let (changed, to_install) = extension_plan(&diff, &actual);
         assert!(changed.is_empty());
-        dbg!(&to_install);
         assert!(to_install.is_empty());
     }
 
