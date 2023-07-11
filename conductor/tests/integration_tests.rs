@@ -286,123 +286,6 @@ mod test {
         // we added an extension, so it should be +1 now
         assert_eq!(num_expected_extensions, extensions.len());
 
-        // delete the instance
-        let msg = types::CRUDevent {
-            organization_name: org_name.clone(),
-            data_plane_id: "org_02s3owPQskuGXHE8vYsGSY".to_owned(),
-            event_id: "test-install-extension".to_owned(),
-            event_type: types::Event::Delete,
-            dbname: dbname.clone(),
-            spec: None,
-        };
-        let msg_id = queue.send(&myqueue, &msg).await;
-        println!("msg_id: {msg_id:?}");
-
-        // wait for it to delete
-        let wait_for_delete = 60;
-        println!("Waiting {} seconds for delete operation", wait_for_delete);
-        thread::sleep(time::Duration::from_secs(wait_for_delete));
-
-        // assert namespace is gone
-        let ns_api: Api<Namespace> = Api::all(client.clone());
-        let ns_dne = ns_api.get(&namespace).await;
-        assert!(ns_dne.is_err(), "Namespace was not deleted");
-        // assert pvcs is gone
-        let pvcs: Api<PersistentVolumeClaim> = Api::all(client.clone());
-        let lp = ListParams::default().fields(&format!("metadata.name=data-{}-0", namespace));
-        let pvc_list = pvcs.list(&lp).await.expect("failed to list pvcs");
-        assert!(
-            pvc_list.items.is_empty(),
-            "PVCs were not deleted: {:?}",
-            pvc_list
-        );
-
-        let cdb_api: Api<CoreDB> = Api::all(client.clone());
-        let cdb_dne = cdb_api.get(&namespace).await;
-        assert!(cdb_dne.is_err(), "CoreDB was not deleted");
-
-        // call aws api and verify CF stack was deleted
-        use aws_sdk_cloudformation::config::Region;
-        use conductor::aws::cloudformation::AWSConfigState;
-        let aws_region = "us-east-1".to_owned();
-        let region = Region::new(aws_region);
-        let aws_config_state = AWSConfigState::new(region).await;
-        let stack_name = format!("org-{}-inst-{}-cf", org_name, dbname);
-        let exists = aws_config_state.does_stack_exist(&stack_name).await;
-        assert!(!exists, "CF stack was not deleted");
-    }
-
-    #[tokio::test]
-    #[ignore]
-    async fn functional_cnpg_restart() {
-        let queue = PGMQueueExt::new("postgres://postgres:postgres@0.0.0.0:5431".to_owned(), 1)
-            .await
-            .unwrap();
-        queue.init().await.expect("failed creating extension");
-
-        let myqueue = "myqueue_control_plane".to_owned();
-        let _ = queue.create(&myqueue).await;
-
-        // Configurations
-        let mut rng = rand::thread_rng();
-        let org_name = "coredb-test-org".to_owned();
-        let dbname = format!("test-coredb-{}", rng.gen_range(0..100000));
-        let namespace = format!("org-{}-inst-{}", org_name, dbname);
-
-        let limits: BTreeMap<String, String> = BTreeMap::from([
-            ("cpu".to_owned(), "1".to_string()),
-            ("memory".to_owned(), "1Gi".to_string()),
-        ]);
-
-        // conductor receives a CRUDevent from control plane
-        let spec_js = serde_json::json!({
-            "storage": Some("1Gi".to_owned()),
-            "replicas": Some(1),
-            "resources":
-                serde_json::json!({
-                    "limits": limits,
-                }),
-        });
-        let spec: CoreDBSpec = serde_json::from_value(spec_js).unwrap();
-
-        let msg = types::CRUDevent {
-            organization_name: org_name.clone(),
-            data_plane_id: "org_02s3owPQskuGXHE8vYsGSY".to_owned(),
-            event_id: format!(
-                "{name}.org_02s3owPQskuGXHE8vYsGSY.CoreDB.inst_02s4UKVbRy34SAYVSwZq2H",
-                name = dbname
-            ),
-            event_type: types::Event::Create,
-            dbname: dbname.clone(),
-            spec: Some(spec),
-        };
-
-        let msg_id = queue.send(&myqueue, &msg).await;
-        println!("msg_id: {msg_id:?}");
-
-        let client = kube_client().await;
-
-        let state = State::default();
-        let context = state.create_context(client.clone());
-
-        let pods: Api<Pod> = Api::namespaced(client.clone(), &namespace);
-
-        let timeout_seconds_start_pod = 120;
-
-        let pod_name = format!("{namespace}-0");
-
-        let _check_for_pod = tokio::time::timeout(
-            std::time::Duration::from_secs(timeout_seconds_start_pod),
-            await_condition(pods.clone(), &pod_name, conditions::is_pod_running()),
-        )
-        .await
-        .unwrap_or_else(|_| panic!("Did not find the pod {pod_name} to be running after waiting {timeout_seconds_start_pod} seconds"));
-
-        // wait for conductor to send message to data_plane_events queue
-        let retries = 120;
-        let retry_delay = 2;
-        let _msg = get_dataplane_message(retries, retry_delay, &queue).await;
-
         // Enable CNPG in the namespace
         // Label the namespace with "tembo-pod-init.tembo.io/watch"="true"
         let ns_api: Api<Namespace> = Api::all(client.clone());
@@ -491,15 +374,11 @@ mod test {
         println!("restart_time: {:?}", restart_time.stdout.clone().unwrap());
         // assert that restart_time is greater than start_time
         assert!(restart_time.stdout.clone().unwrap() > start_time.stdout.clone().unwrap());
-
         // delete the instance
         let msg = types::CRUDevent {
             organization_name: org_name.clone(),
             data_plane_id: "org_02s3owPQskuGXHE8vYsGSY".to_owned(),
-            event_id: format!(
-                "{name}.org_02s3owPQskuGXHE8vYsGSY.CoreDB.inst_02s4UKVbRy34SAYVSwZq2H",
-                name = dbname
-            ),
+            event_id: "test-install-extension".to_owned(),
             event_type: types::Event::Delete,
             dbname: dbname.clone(),
             spec: None,
@@ -508,9 +387,28 @@ mod test {
         println!("msg_id: {msg_id:?}");
 
         // wait for it to delete
-        let wait_for_delete = 90;
+        let wait_for_delete = 60;
         println!("Waiting {} seconds for delete operation", wait_for_delete);
         thread::sleep(time::Duration::from_secs(wait_for_delete));
+
+        // assert namespace is gone
+        let ns_api: Api<Namespace> = Api::all(client.clone());
+        let ns_dne = ns_api.get(&namespace).await;
+        assert!(ns_dne.is_err(), "Namespace was not deleted");
+        // assert pvcs is gone
+        let pvcs: Api<PersistentVolumeClaim> = Api::all(client.clone());
+        let lp = ListParams::default().fields(&format!("metadata.name=data-{}-0", namespace));
+        let pvc_list = pvcs.list(&lp).await.expect("failed to list pvcs");
+        assert!(
+            pvc_list.items.is_empty(),
+            "PVCs were not deleted: {:?}",
+            pvc_list
+        );
+
+        let cdb_api: Api<CoreDB> = Api::all(client.clone());
+        let cdb_dne = cdb_api.get(&namespace).await;
+        assert!(cdb_dne.is_err(), "CoreDB was not deleted");
+
         // call aws api and verify CF stack was deleted
         use aws_sdk_cloudformation::config::Region;
         use conductor::aws::cloudformation::AWSConfigState;
