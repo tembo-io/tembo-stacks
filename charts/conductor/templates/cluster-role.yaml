@@ -23,4 +23,4 @@ rules:
     verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
   - apiGroups: ["postgresql.cnpg.io"]
     resources: ["backups", "clusters", "poolers", "scheduledbackups"]
-    verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+    verbs: ["get", "list", "watch", "update", "patch"]
