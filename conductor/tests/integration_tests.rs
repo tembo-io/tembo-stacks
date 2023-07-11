@@ -171,6 +171,8 @@ mod test {
         println!("msg_id: {msg_id:?}");
 
         let client = kube_client().await;
+        let state = State::default();
+        let context = state.create_context(client.clone());
 
         let pods: Api<Pod> = Api::namespaced(client.clone(), &namespace);
 
