@@ -20,22 +20,31 @@ mod test {
     };
 
     use kube::{
-        api::ListParams,
+        api::{ListParams, Patch, PatchParams},
         runtime::wait::{await_condition, conditions},
         Api, Client, Config,
     };
     use pgmq::{Message, PGMQueueExt};
 
     use conductor::{
-        restart_statefulset,
+        restart_cnpg, restart_statefulset,
         types::{self, StateToControlPlane},
     };
-    use controller::apis::coredb_types::{CoreDB, CoreDBSpec};
-    use controller::extensions::{Extension, ExtensionInstallLocation};
-    use controller::postgres_exporter::{PostgresMetrics, QueryConfig};
+    use controller::{
+        apis::coredb_types::{CoreDB, CoreDBSpec},
+        extensions::{Extension, ExtensionInstallLocation},
+        is_pod_ready,
+        postgres_exporter::{PostgresMetrics, QueryConfig},
+        State,
+    };
     use rand::Rng;
     use std::collections::BTreeMap;
-    use std::{thread, time};
+    use std::{thread, time, time::Duration};
+
+    const API_VERSION: &str = "coredb.io/v1alpha1";
+    // Timeout settings while waiting for an event
+    const TIMEOUT_SECONDS_START_POD: u64 = 600;
+    const TIMEOUT_SECONDS_POD_READY: u64 = 600;
 
     // helper to poll for messages from data plane queue with retries
     async fn get_dataplane_message(
@@ -165,7 +174,7 @@ mod test {
 
         let pods: Api<Pod> = Api::namespaced(client.clone(), &namespace);
 
-        let timeout_seconds_start_pod = 90;
+        let timeout_seconds_start_pod = 120;
 
         let pod_name = format!("{namespace}-0");
 
@@ -177,7 +186,7 @@ mod test {
         .unwrap_or_else(|_| panic!("Did not find the pod {pod_name} to be running after waiting {timeout_seconds_start_pod} seconds"));
 
         // wait for conductor to send message to data_plane_events queue
-        let retries = 90;
+        let retries = 120;
         let retry_delay = 2;
         let msg = get_dataplane_message(retries, retry_delay, &queue).await;
 
@@ -323,6 +332,196 @@ mod test {
         assert!(!exists, "CF stack was not deleted");
     }
 
+    #[tokio::test]
+    #[ignore]
+    async fn functional_cnpg_restart() {
+        let queue = PGMQueueExt::new("postgres://postgres:postgres@0.0.0.0:5431".to_owned(), 1)
+            .await
+            .unwrap();
+        queue.init().await.expect("failed creating extension");
+
+        let myqueue = "myqueue_control_plane".to_owned();
+        let _ = queue.create(&myqueue).await;
+
+        // Configurations
+        let mut rng = rand::thread_rng();
+        let org_name = "coredb-test-org".to_owned();
+        let dbname = format!("test-coredb-{}", rng.gen_range(0..100000));
+        let namespace = format!("org-{}-inst-{}", org_name, dbname);
+
+        let limits: BTreeMap<String, String> = BTreeMap::from([
+            ("cpu".to_owned(), "1".to_string()),
+            ("memory".to_owned(), "1Gi".to_string()),
+        ]);
+
+        // conductor receives a CRUDevent from control plane
+        let spec_js = serde_json::json!({
+            "storage": Some("1Gi".to_owned()),
+            "replicas": Some(1),
+            "resources":
+                serde_json::json!({
+                    "limits": limits,
+                }),
+        });
+        let spec: CoreDBSpec = serde_json::from_value(spec_js).unwrap();
+
+        let msg = types::CRUDevent {
+            organization_name: org_name.clone(),
+            data_plane_id: "org_02s3owPQskuGXHE8vYsGSY".to_owned(),
+            event_id: format!(
+                "{name}.org_02s3owPQskuGXHE8vYsGSY.CoreDB.inst_02s4UKVbRy34SAYVSwZq2H",
+                name = dbname
+            ),
+            event_type: types::Event::Create,
+            dbname: dbname.clone(),
+            spec: Some(spec),
+        };
+
+        let msg_id = queue.send(&myqueue, &msg).await;
+        println!("msg_id: {msg_id:?}");
+
+        let client = kube_client().await;
+
+        let state = State::default();
+        let context = state.create_context(client.clone());
+
+        let pods: Api<Pod> = Api::namespaced(client.clone(), &namespace);
+
+        let timeout_seconds_start_pod = 120;
+
+        let pod_name = format!("{namespace}-0");
+
+        let _check_for_pod = tokio::time::timeout(
+            std::time::Duration::from_secs(timeout_seconds_start_pod),
+            await_condition(pods.clone(), &pod_name, conditions::is_pod_running()),
+        )
+        .await
+        .unwrap_or_else(|_| panic!("Did not find the pod {pod_name} to be running after waiting {timeout_seconds_start_pod} seconds"));
+
+        // wait for conductor to send message to data_plane_events queue
+        let retries = 120;
+        let retry_delay = 2;
+        let _msg = get_dataplane_message(retries, retry_delay, &queue).await;
+
+        // Enable CNPG in the namespace
+        // Label the namespace with "tembo-pod-init.tembo.io/watch"="true"
+        let ns_api: Api<Namespace> = Api::all(client.clone());
+        let params = PatchParams::apply("conductor-integration-test");
+        let ns = serde_json::json!({
+            "apiVersion": "v1",
+            "kind": "Namespace",
+            "metadata": {
+                "name": format!("{}", namespace),
+                "labels": {
+                    "tembo-pod-init.tembo.io/watch": "true"
+                }
+            }
+        });
+        ns_api
+            .patch(&namespace, &params, &Patch::Apply(&ns))
+            .await
+            .unwrap();
+
+        // Annotation CoreDB with 'foo: bar' in order to trigger a reconciliation
+        let coredb_name = namespace.clone();
+        let coredb_api: Api<CoreDB> = Api::namespaced(client.clone(), &namespace);
+        let coredb_json = serde_json::json!({
+            "apiVersion": API_VERSION,
+            "kind": "CoreDB",
+            "metadata": {
+                "name": coredb_name.clone(),
+                "annotations": {
+                    "foo": "bar"
+                }
+            }
+        });
+        let params = PatchParams::apply("coredb-integration-test");
+        let patch = Patch::Merge(&coredb_json);
+        let coredb_resource = coredb_api
+            .patch(&coredb_name, &params, &patch)
+            .await
+            .unwrap();
+
+        // Wait enough time for the migration to begin, and less time
+        // than it would take to complete
+        thread::sleep(Duration::from_millis(10000));
+
+        // Wait for CNPG pod to be running and ready
+        let pods_api: Api<Pod> = Api::namespaced(client.clone(), &namespace);
+        let pod_name = namespace.clone();
+        pod_ready_and_running(pods_api.clone(), format!("{}-1", pod_name)).await;
+
+        // Get the last time the pod was started
+        // using SELECT pg_postmaster_start_time();
+        let start_time = coredb_resource
+            .psql(
+                "SELECT pg_postmaster_start_time();".to_string(),
+                "postgres".to_string(),
+                context.clone(),
+            )
+            .await
+            .unwrap();
+
+        println!("start_time: {:?}", start_time.stdout.clone().unwrap());
+
+        // Once CNPG is running we want to restart
+        let cluster_name = namespace.clone();
+        restart_cnpg(client.clone(), &namespace, &cluster_name)
+            .await
+            .expect("failed restarting cnpg pod");
+
+        // Restarting of the pod can take some time as CNPG does various
+        // checks before shutting down.  We will need to wait up to 20 seconds
+        // then check that the pod is running and ready
+        thread::sleep(time::Duration::from_secs(20));
+        pod_ready_and_running(pods_api.clone(), format!("{}-1", pod_name)).await;
+
+        // Get the last time the pod was started
+        // using SELECT pg_postmaster_start_time();
+        // and compare to the previous time
+        let restart_time = coredb_resource
+            .psql(
+                "SELECT pg_postmaster_start_time();".to_string(),
+                "postgres".to_string(),
+                context.clone(),
+            )
+            .await
+            .unwrap();
+
+        println!("restart_time: {:?}", restart_time.stdout.clone().unwrap());
+        // assert that restart_time is greater than start_time
+        assert!(restart_time.stdout.clone().unwrap() > start_time.stdout.clone().unwrap());
+
+        // delete the instance
+        let msg = types::CRUDevent {
+            organization_name: org_name.clone(),
+            data_plane_id: "org_02s3owPQskuGXHE8vYsGSY".to_owned(),
+            event_id: format!(
+                "{name}.org_02s3owPQskuGXHE8vYsGSY.CoreDB.inst_02s4UKVbRy34SAYVSwZq2H",
+                name = dbname
+            ),
+            event_type: types::Event::Delete,
+            dbname: dbname.clone(),
+            spec: None,
+        };
+        let msg_id = queue.send(&myqueue, &msg).await;
+        println!("msg_id: {msg_id:?}");
+
+        // wait for it to delete
+        let wait_for_delete = 90;
+        println!("Waiting {} seconds for delete operation", wait_for_delete);
+        thread::sleep(time::Duration::from_secs(wait_for_delete));
+        // call aws api and verify CF stack was deleted
+        use aws_sdk_cloudformation::config::Region;
+        use conductor::aws::cloudformation::AWSConfigState;
+        let aws_region = "us-east-1".to_owned();
+        let region = Region::new(aws_region);
+        let aws_config_state = AWSConfigState::new(region).await;
+        let stack_name = format!("org-{}-inst-{}-cf", org_name, dbname);
+        let exists = aws_config_state.does_stack_exist(&stack_name).await;
+        assert!(!exists, "CF stack was not deleted");
+    }
+
     async fn kube_client() -> kube::Client {
         // Get the name of the currently selected namespace
         let kube_config = Config::infer()
@@ -350,5 +549,33 @@ mod test {
         .await
         .expect("Custom Resource Definition for CoreDB was not found, do you need to install that before running the tests?");
         client
+    }
+
+    async fn pod_ready_and_running(pods: Api<Pod>, pod_name: String) {
+        println!("Waiting for pod to be running: {}", pod_name);
+        let _check_for_pod = tokio::time::timeout(
+            Duration::from_secs(TIMEOUT_SECONDS_START_POD),
+            await_condition(pods.clone(), &pod_name, conditions::is_pod_running()),
+        )
+        .await
+        .unwrap_or_else(|_| {
+            panic!(
+                "Did not find the pod {} to be running after waiting {} seconds",
+                pod_name, TIMEOUT_SECONDS_START_POD
+            )
+        });
+        println!("Waiting for pod to be ready: {}", pod_name);
+        let _check_for_pod_ready = tokio::time::timeout(
+            Duration::from_secs(TIMEOUT_SECONDS_POD_READY),
+            await_condition(pods.clone(), &pod_name, is_pod_ready()),
+        )
+        .await
+        .unwrap_or_else(|_| {
+            panic!(
+                "Did not find the pod {} to be ready after waiting {} seconds",
+                pod_name, TIMEOUT_SECONDS_POD_READY
+            )
+        });
+        println!("Found pod ready: {}", pod_name);
     }
 }
