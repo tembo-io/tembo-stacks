@@ -9,6 +9,7 @@ use serde::{
     Deserialize, Deserializer, Serialize, Serializer,
 };
 use std::{
+    cmp::Ordering,
     collections::{BTreeMap, BTreeSet},
     fmt,
     str::FromStr,
@@ -128,13 +129,17 @@ pub enum MergeError {
     SingleValueNotAllowed,
 }
 
-// If a value does not exist in the priority list, it will be placed at the end since
-// Option::None is greater than Option::Some(_)
-fn sort_multivalue_configs(values: &mut Vec<String>, priorities: &Vec<&str>) {
-    values.sort_by(|a, b| {
+fn sort_multivalue_configs(values: &mut Vec<String>, priorities: &[&str]) {
+    values.sort_unstable_by(|a, b| {
         let a_index = priorities.iter().position(|x| x == a);
         let b_index = priorities.iter().position(|x| x == b);
-        a_index.cmp(&b_index)
+
+        match (a_index, b_index) {
+            (Some(ai), Some(bi)) => ai.cmp(&bi),
+            (Some(_), None) => Ordering::Less,
+            (None, Some(_)) => Ordering::Greater,
+            (None, None) => a.cmp(b),
+        }
     });
 }
 
@@ -229,7 +234,7 @@ impl std::fmt::Display for ConfigValue {
             ConfigValue::Single(value) => write!(f, "{}", value),
             ConfigValue::Multiple(values) => {
                 let mut configs = values.iter().cloned().collect::<Vec<String>>();
-                sort_multivalue_configs(&mut configs, &MULTI_VAL_CONFIGS_PRIORITY_LIST.to_vec());
+                sort_multivalue_configs(&mut configs, &MULTI_VAL_CONFIGS_PRIORITY_LIST);
                 let joined_values = configs.join(",");
                 write!(f, "{}", joined_values)
             }
@@ -412,7 +417,7 @@ mod pg_param_tests {
         };
         assert_eq!(
             pg_config_multi.to_postgres(),
-            "shared_preload_libraries = 'pg_cron,pg_stat_statements'"
+            "shared_preload_libraries = 'pg_stat_statements,pg_cron'"
         );
     }
 
@@ -468,30 +473,40 @@ mod pg_param_tests {
         assert_eq!(pg_configs[2].name, "shared_preload_libraries");
         assert_eq!(
             pg_configs[2].value.to_string(),
-            "pg_cron,pg_partman_bgw,pg_stat_statements"
+            "pg_stat_statements,pg_cron,pg_partman_bgw"
         );
     }
 
     #[test]
     fn test_alpha_order_multiple() {
-        // assert ordering of multi values is always alpha
+        // assert ordering of multi values is according to the priority list
+        // values not in the priority list are sorted alphabetically, and go at the end
         let pgc = PgConfig {
             name: "test_configuration".to_string(),
-            value: "a,b,c".parse().unwrap(),
+            value: "pg_stat_kcache,pg_stat_statements,a,b,c".parse().unwrap(),
         };
-        assert_eq!(pgc.to_postgres(), "test_configuration = 'a,b,c'");
+        assert_eq!(
+            pgc.to_postgres(),
+            "test_configuration = 'pg_stat_statements,pg_stat_kcache,a,b,c'"
+        );
         let pgc = PgConfig {
             name: "test_configuration".to_string(),
-            value: "a,z,c".parse().unwrap(),
+            value: "a,z,c,pg_stat_kcache,pg_stat_statements".parse().unwrap(),
         };
         println!("pgc: {:?}", pgc);
         println!("pgcval: {:?}", pgc.to_postgres());
-        assert_eq!(pgc.to_postgres(), "test_configuration = 'a,c,z'");
+        assert_eq!(
+            pgc.to_postgres(),
+            "test_configuration = 'pg_stat_statements,pg_stat_kcache,a,c,z'"
+        );
         let pgc = PgConfig {
             name: "test_configuration".to_string(),
-            value: "z,y,x".parse().unwrap(),
+            value: "pg_stat_statments,z,y,x".parse().unwrap(),
         };
-        assert_eq!(pgc.to_postgres(), "test_configuration = 'x,y,z'");
+        assert_eq!(
+            pgc.to_postgres(),
+            "test_configuration = 'pg_stat_statments,x,y,z'"
+        );
     }
 
     #[test]
