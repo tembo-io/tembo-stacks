@@ -392,6 +392,12 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
                     Ok(_) => {}
                     Err(err) => {
                         error!("error restarting cnpg: {:?}", err);
+                        // archive message from queue no matter what for a restart
+                        let archived = queue
+                            .archive(&control_plane_events_queue, read_msg.msg_id)
+                            .await
+                            .expect("error archiving message from queue");
+                        info!("archived: {:?}", archived);
                         continue;
                     }
                 }
