@@ -20,7 +20,7 @@ mod test {
     };
 
     use kube::{
-        api::{ListParams, Patch, PatchParams},
+        api::ListParams,
         runtime::wait::{await_condition, conditions},
         Api, Client, Config,
     };
