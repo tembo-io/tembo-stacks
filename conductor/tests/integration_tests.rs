@@ -251,7 +251,7 @@ mod test {
             name: "pgmq".to_owned(),
             description: Some("pgmq description".to_string()),
             locations: vec![ExtensionInstallLocation {
-                enabled: false,
+                enabled: true,
                 version: Some("0.2.1".to_owned()),
                 schema: "public".to_owned(),
                 database: "postgres".to_owned(),
