@@ -255,11 +255,11 @@ mod test {
         // take note of number of extensions at this point in time
         let mut extensions_add = extensions.clone();
         extensions_add.push(Extension {
-            name: "pgmq".to_owned(),
-            description: Some("pgmq description".to_string()),
+            name: "pg_jsonschema".to_owned(),
+            description: Some("fake description".to_string()),
             locations: vec![ExtensionInstallLocation {
                 enabled: true,
-                version: Some("0.2.1".to_owned()),
+                version: Some("0.1.4".to_owned()),
                 schema: "public".to_owned(),
                 database: "postgres".to_owned(),
             }],
