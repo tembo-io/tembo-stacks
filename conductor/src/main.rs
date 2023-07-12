@@ -385,20 +385,12 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
                     Ok(_) => {}
                     Err(err) => {
                         error!("error restarting statefulset: {:?}", err);
-                        continue;
                     }
                 }
                 match restart_cnpg(client.clone(), &namespace, &namespace).await {
                     Ok(_) => {}
                     Err(err) => {
                         error!("error restarting cnpg: {:?}", err);
-                        // archive message from queue no matter what for a restart
-                        let archived = queue
-                            .archive(&control_plane_events_queue, read_msg.msg_id)
-                            .await
-                            .expect("error archiving message from queue");
-                        info!("archived: {:?}", archived);
-                        continue;
                     }
                 }
                 let retry_strategy = FixedInterval::from_millis(5000).take(20);
