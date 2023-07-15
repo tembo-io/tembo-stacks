@@ -40,9 +40,9 @@ impl NamespaceWatcher {
             }
         }
 
-        // Disable the use to WatchParams for now until we can upgrade the kube-rs
+        // Disable the use of WatchParams for now until we can upgrade the kube-rs
         // crate to >= 0.83
-        //let wp = WatchParams::default().labels(&self.config.namespace_label);
+        // let wp = WatchParams::default().labels(&self.config.namespace_label);
         let mut stream = api.watch(&lp, "0").await?.boxed();
 
         while let Some(status) = stream.try_next().await? {
