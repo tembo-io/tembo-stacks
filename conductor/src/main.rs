@@ -1,4 +1,7 @@
+use actix_web::{web, App, HttpServer};
+use actix_web_opentelemetry::{PrometheusMetricsHandler, RequestTracing};
 use conductor::errors::ConductorError;
+use conductor::monitoring::CustomMetrics;
 use conductor::{
     create_cloudformation, create_namespace, create_networkpolicy, create_or_update, delete,
     delete_cloudformation, delete_namespace, extensions::extension_plan, generate_rand_schedule,
@@ -9,17 +12,14 @@ use controller::apis::coredb_types::{Backup, CoreDBSpec, ServiceAccountTemplate}
 use k8s_openapi::apimachinery::pkg::apis::meta::v1::ObjectMeta;
 use kube::Client;
 use log::{debug, error, info, warn};
+use opentelemetry::sdk::export::metrics::aggregation;
+use opentelemetry::sdk::metrics::{controllers, processors, selectors};
+use opentelemetry::{global, KeyValue};
 use pgmq::{Message, PGMQueueExt};
 use std::env;
 use std::{thread, time};
-use actix_web::{App, HttpServer, web};
-use actix_web_opentelemetry::{PrometheusMetricsHandler, RequestTracing};
-use opentelemetry::global;
-use opentelemetry::sdk::export::metrics::aggregation;
-use opentelemetry::sdk::metrics::{controllers, processors, selectors};
 use tokio_retry::strategy::FixedInterval;
 use tokio_retry::Retry;
-use conductor::monitoring::CustomMetrics;
 use types::{CRUDevent, Event};
 
 async fn run(metrics: CustomMetrics) -> Result<(), Box<dyn std::error::Error>> {
@@ -73,10 +73,15 @@ async fn run(metrics: CustomMetrics) -> Result<(), Box<dyn std::error::Error>> {
                 message
             }
             None => {
+                debug!("no messages in queue");
                 thread::sleep(time::Duration::from_secs(1));
                 continue;
             }
         };
+
+        metrics
+            .conductor_total
+            .add(&opentelemetry::Context::current(), 1, &[]);
 
         // note: messages are recycled on purpose
         // but absurdly high read_ct means its probably never going to get processed
@@ -88,6 +93,9 @@ async fn run(metrics: CustomMetrics) -> Result<(), Box<dyn std::error::Error>> {
             queue
                 .archive(&control_plane_events_queue, read_msg.msg_id)
                 .await?;
+            metrics
+                .conductor_errors
+                .add(&opentelemetry::Context::current(), 1, &[]);
             // this is what we'll send back to control-plane
             let error_event = types::StateToControlPlane {
                 data_plane_id: read_msg.message.data_plane_id,
@@ -123,6 +131,9 @@ async fn run(metrics: CustomMetrics) -> Result<(), Box<dyn std::error::Error>> {
                         .archive(&control_plane_events_queue, read_msg.msg_id)
                         .await
                         .expect("error archiving message from queue");
+                    metrics
+                        .conductor_errors
+                        .add(&opentelemetry::Context::current(), 1, &[]);
                     continue;
                 }
                 // spec.expect() should be safe here - since above we continue in loop when it is None
@@ -157,6 +168,11 @@ async fn run(metrics: CustomMetrics) -> Result<(), Box<dyn std::error::Error>> {
                                     REQUEUE_VT_SEC_SHORT,
                                 )
                                 .await?;
+                            metrics.conductor_requeues.add(
+                                &opentelemetry::Context::current(),
+                                1,
+                                &[KeyValue::new("queue_duration", "short")],
+                            );
                             continue;
                         }
                         _ => {
@@ -171,6 +187,11 @@ async fn run(metrics: CustomMetrics) -> Result<(), Box<dyn std::error::Error>> {
                                     REQUEUE_VT_SEC_LONG,
                                 )
                                 .await?;
+                            metrics.conductor_requeues.add(
+                                &opentelemetry::Context::current(),
+                                1,
+                                &[KeyValue::new("queue_duration", "long")],
+                            );
                             continue;
                         }
                     },
@@ -241,6 +262,11 @@ async fn run(metrics: CustomMetrics) -> Result<(), Box<dyn std::error::Error>> {
                                         REQUEUE_VT_SEC_SHORT,
                                     )
                                     .await?;
+                                metrics.conductor_requeues.add(
+                                    &opentelemetry::Context::current(),
+                                    1,
+                                    &[KeyValue::new("queue_duration", "short")],
+                                );
                                 continue;
                             }
                             _ => {
@@ -255,6 +281,11 @@ async fn run(metrics: CustomMetrics) -> Result<(), Box<dyn std::error::Error>> {
                                         REQUEUE_VT_SEC_LONG,
                                     )
                                     .await?;
+                                metrics.conductor_errors.add(
+                                    &opentelemetry::Context::current(),
+                                    1,
+                                    &[],
+                                );
                                 continue;
                             }
                         }
@@ -318,6 +349,9 @@ async fn run(metrics: CustomMetrics) -> Result<(), Box<dyn std::error::Error>> {
                             namespace.clone(),
                             err
                         );
+                        metrics
+                            .conductor_errors
+                            .add(&opentelemetry::Context::current(), 1, &[]);
                         true
                     }
                 };
@@ -410,6 +444,9 @@ async fn run(metrics: CustomMetrics) -> Result<(), Box<dyn std::error::Error>> {
                         namespace.clone(),
                         result
                     );
+                    metrics
+                        .conductor_errors
+                        .add(&opentelemetry::Context::current(), 1, &[]);
                     continue;
                 }
                 let mut current_spec = result?;
@@ -436,6 +473,9 @@ async fn run(metrics: CustomMetrics) -> Result<(), Box<dyn std::error::Error>> {
             }
             _ => {
                 warn!("Unhandled event_type: {:?}", read_msg.message.event_type);
+                metrics
+                    .conductor_errors
+                    .add(&opentelemetry::Context::current(), 1, &[]);
                 continue;
             }
         };
@@ -447,7 +487,11 @@ async fn run(metrics: CustomMetrics) -> Result<(), Box<dyn std::error::Error>> {
             .archive(&control_plane_events_queue, read_msg.msg_id)
             .await
             .expect("error archiving message from queue");
-        // TODO(ianstanton) Improve logging everywhere
+
+        metrics
+            .conductor_completed
+            .add(&opentelemetry::Context::current(), 1, &[]);
+
         info!("archived: {:?}", archived);
     }
 }
@@ -477,6 +521,11 @@ async fn main() -> std::io::Result<()> {
             match run(custom_metrics_copy.clone()).await {
                 Ok(_) => {}
                 Err(err) => {
+                    custom_metrics_copy.clone().conductor_errors.add(
+                        &opentelemetry::Context::current(),
+                        1,
+                        &[],
+                    );
                     error!("error: {:?}", err);
                 }
             }
