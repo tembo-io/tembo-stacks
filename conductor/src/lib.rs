@@ -2,6 +2,7 @@ pub mod aws;
 pub mod errors;
 pub mod extensions;
 pub mod types;
+pub mod monitoring;
 
 use crate::aws::cloudformation::{AWSConfigState, CloudFormationParams};
 use aws_sdk_cloudformation::config::Region;

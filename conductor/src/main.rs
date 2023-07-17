@@ -12,11 +12,17 @@ use log::{debug, error, info, warn};
 use pgmq::{Message, PGMQueueExt};
 use std::env;
 use std::{thread, time};
+use actix_web::{App, HttpServer, web};
+use actix_web_opentelemetry::{PrometheusMetricsHandler, RequestTracing};
+use opentelemetry::global;
+use opentelemetry::sdk::export::metrics::aggregation;
+use opentelemetry::sdk::metrics::{controllers, processors, selectors};
 use tokio_retry::strategy::FixedInterval;
 use tokio_retry::Retry;
+use conductor::monitoring::CustomMetrics;
 use types::{CRUDevent, Event};
-#[tokio::main]
-async fn run() -> Result<(), Box<dyn std::error::Error>> {
+
+async fn run(metrics: CustomMetrics) -> Result<(), Box<dyn std::error::Error>> {
     // Read connection info from environment variable
     let pg_conn_url =
         env::var("POSTGRES_QUEUE_CONNECTION").expect("POSTGRES_QUEUE_CONNECTION must be set");
@@ -446,15 +452,48 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
     }
 }
 
-fn main() {
+#[actix_web::main]
+async fn main() -> std::io::Result<()> {
     env_logger::init();
-    info!("starting");
-    loop {
-        match run() {
-            Ok(_) => {}
-            Err(err) => {
-                error!("error: {:?}", err);
+
+    let controller = controllers::basic(
+        processors::factory(
+            selectors::simple::histogram([1.0, 2.0, 5.0, 10.0, 20.0, 50.0]),
+            aggregation::cumulative_temporality_selector(),
+        )
+        .with_memory(true),
+    )
+    .build();
+
+    let exporter = opentelemetry_prometheus::exporter(controller).init();
+    let meter = global::meter("actix_web");
+    let custom_metrics = CustomMetrics::new(&meter);
+    let custom_metrics_copy = custom_metrics.clone();
+
+    info!("Starting conductor");
+
+    tokio::spawn(async move {
+        loop {
+            match run(custom_metrics_copy.clone()).await {
+                Ok(_) => {}
+                Err(err) => {
+                    error!("error: {:?}", err);
+                }
             }
         }
-    }
+    });
+
+    HttpServer::new(move || {
+        App::new()
+            .app_data(web::Data::new(custom_metrics.clone()))
+            .wrap(RequestTracing::new())
+            .route(
+                "/metrics",
+                web::get().to(PrometheusMetricsHandler::new(exporter.clone())),
+            )
+    })
+    .workers(1)
+    .bind(("0.0.0.0", 8080))?
+    .run()
+    .await
 }
