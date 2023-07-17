@@ -788,12 +788,22 @@ mod test {
                           "database": "postgres",
                           "schema": "public"
                         }]
+                    },
+                    {
+                        "name": "pg_stat_statements",
+                        "locations": [
+                        {
+                          "enabled": true,
+                          "version": "1.10.0",
+                          "database": "postgres",
+                          "schema": "public"
+                        }]
                     }
                 ],
                 "runtime_config": [
                     {
                         "name": "shared_preload_libraries",
-                        "value": "pg_partman_bgw"
+                        "value": "pg_stat_statements,pg_partman_bgw"
                     },
                     {
                         "name": "pg_partman_bgw.interval",
@@ -839,6 +849,23 @@ mod test {
 
         println!("{}", result.stdout.clone().unwrap());
         assert!(result.stdout.clone().unwrap().contains("pgmq"));
+
+        // Assert that shared_preload_libraries contains pg_stat_statements
+        // and pg_partman_bgw
+        let result = coredb_resource
+            .psql(
+                "show shared_preload_libraries;".to_string(),
+                "postgres".to_string(),
+                context.clone(),
+            )
+            .await
+            .unwrap();
+        println!("{}", result.stdout.clone().unwrap());
+        assert!(result
+            .stdout
+            .clone()
+            .unwrap()
+            .contains("pg_stat_statements,pg_partman_bgw"));
 
         // CLEANUP TEST
         // Cleanup CoreDB
