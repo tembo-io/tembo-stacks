@@ -391,7 +391,7 @@ pub async fn reconcile_cnpg(cdb: &CoreDB, ctx: Arc<Context>) -> Result<(), Actio
                             }
                         };
                         for libs in new_libs {
-                            let split_libs = libs.split(",").map(|s| s.to_string()).collect::<Vec<String>>();
+                            let split_libs = libs.split(',').map(|s| s.to_string()).collect::<Vec<String>>();
                             for new_lib in split_libs {
                                 if available_libs.contains(&format!("{}.so", new_lib)) {
                                     info!("Changing shared_preload_libraries on {}, found {} is installed, so including it", &name, &new_lib);
