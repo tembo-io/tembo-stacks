@@ -26,6 +26,7 @@
   "fiscalYearStartMonth": 0,
   "gnetId": 9628,
   "graphTooltip": 0,
+  "id": 1470,
   "links": [],
   "liveNow": false,
   "panels": [
@@ -538,7 +539,7 @@
             "uid": "prometheus"
           },
           "editorMode": "code",
-          "expr": "(sum by (namespace) (max_over_time(pg_stat_activity_count{}[1h])))",
+          "expr": "(sum by (namespace) (max_over_time(pg_stat_activity_count{}[1m])))",
           "hide": false,
           "legendFormat": "{{namespace}}",
           "range": true,
@@ -969,7 +970,7 @@
     ]
   },
   "time": {
-    "from": "now-7d",
+    "from": "now-2d",
     "to": "now"
   },
   "timepicker": {
@@ -998,8 +999,8 @@
     ]
   },
   "timezone": "",
-  "title": "Cloud Tracker",
-  "uid": "bE7Y7zEVz",
-  "version": 1,
+  "title": "Cloud Tracker Ry-Copy",
+  "uid": "XW3MOlCVz",
+  "version": 2,
   "weekStart": ""
 }
