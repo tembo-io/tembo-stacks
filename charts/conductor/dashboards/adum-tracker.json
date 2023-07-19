@@ -970,7 +970,7 @@
     ]
   },
   "time": {
-    "from": "now-2d",
+    "from": "now-7d",
     "to": "now"
   },
   "timepicker": {
@@ -999,7 +999,7 @@
     ]
   },
   "timezone": "",
-  "title": "Cloud Tracker Ry-Copy",
+  "title": "Cloud Tracker",
   "uid": "XW3MOlCVz",
   "version": 2,
   "weekStart": ""
