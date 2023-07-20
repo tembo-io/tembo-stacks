@@ -1,4 +1,4 @@
-// Include the #[ignore] macro on slow tests.
+// Include the #[ignore] macro on slow tests
 // That way, 'cargo test' does not run them by default.
 // To run just these tests, use 'cargo test -- --ignored'
 // To run all tests, use 'cargo test -- --include-ignored'
@@ -22,7 +22,6 @@ mod test {
     use k8s_openapi::{
         api::{
             apps::v1::{Deployment, StatefulSet},
-            batch::v1::CronJob,
             core::v1::{
                 Container, Namespace, PersistentVolumeClaim, Pod, PodSpec, ResourceRequirements, Secret,
                 ServiceAccount,
@@ -33,7 +32,7 @@ mod test {
         apimachinery::pkg::{api::resource::Quantity, apis::meta::v1::ObjectMeta},
     };
     use kube::{
-        api::{AttachParams, DeleteParams, ListParams, Patch, PatchParams, PostParams},
+        api::{AttachParams, ListParams, Patch, PatchParams, PostParams},
         runtime::wait::{await_condition, conditions, Condition},
         Api, Client, Config,
     };
@@ -48,6 +47,7 @@ mod test {
     const TIMEOUT_SECONDS_POD_READY: u64 = 600;
     const TIMEOUT_SECONDS_SECRET_PRESENT: u64 = 120;
     const TIMEOUT_SECONDS_NS_DELETED: u64 = 120;
+    const TIMEOUT_SECONDS_POD_DELETED: u64 = 120;
     const TIMEOUT_SECONDS_COREDB_DELETED: u64 = 120;
 
     async fn create_test_buddy(pods_api: Api<Pod>, name: String) -> String {
@@ -184,206 +184,7 @@ mod test {
 
     #[tokio::test]
     #[ignore]
-    async fn functional_test_cnpg_migration_basic() {
-        // Initialize the Kubernetes client
-        let client = kube_client().await;
-        let state = State::default();
-        let context = state.create_context(client.clone());
-
-        // Configurations
-        let mut rng = rand::thread_rng();
-        let name = &format!("test-cnpg-migration-{}", rng.gen_range(0..100000));
-        let params = PatchParams::apply("coredb-integration-test").force();
-        let namespace = name;
-
-        let ns_api: Api<Namespace> = Api::all(client.clone());
-        let ns = serde_json::json!({
-            "apiVersion": "v1",
-            "kind": "Namespace",
-            "metadata": {
-                "name": namespace.clone()
-            }
-        });
-        println!("Creating namespace {}", namespace);
-        ns_api
-            .patch(namespace, &params, &Patch::Apply(&ns))
-            .await
-            .unwrap();
-
-        // Apply a basic configuration of CoreDB
-        println!("Creating CoreDB resource {}", name);
-        let coredbs: Api<CoreDB> = Api::namespaced(client.clone(), namespace);
-        let coredb_json = serde_json::json!({
-            "apiVersion": API_VERSION,
-            "kind": "CoreDB",
-            "metadata": {
-                "name": name.clone()
-            },
-            "spec": {
-                "replicas": 1,
-                "extensions": [],
-                "storage": "1Gi"
-            }
-        });
-        let params = PatchParams::apply("coredb-integration-test");
-        let patch = Patch::Apply(&coredb_json);
-        let coredb_resource = coredbs.patch(name, &params, &patch).await.unwrap();
-
-        let pods_api: Api<Pod> = Api::namespaced(client.clone(), namespace);
-        // Wait for CoreDB pod to be running and ready
-        pod_ready_and_running(pods_api.clone(), format!("{}-0", name)).await;
-
-        // Get the CoreDB pod uid
-        let coredb_pod_meta = pods_api
-            .get(format!("{}-0", name).as_str())
-            .await
-            .unwrap()
-            .metadata
-            .clone();
-        let coredb_pod_uid = coredb_pod_meta.clone().uid.unwrap();
-        let _coredb_pod_uid = coredb_pod_uid.as_str();
-
-        // Add some data
-        let result = coredb_resource
-            .psql("\\dt".to_string(), "postgres".to_string(), context.clone())
-            .await
-            .unwrap();
-        println!("psql out: {}", result.stdout.clone().unwrap());
-        assert!(!result.stdout.clone().unwrap().contains("customers"));
-
-        // Create table 'customers'
-        let result = coredb_resource
-            .psql(
-                "
-                CREATE TABLE customers (
-                   id serial PRIMARY KEY,
-                   name VARCHAR(50) NOT NULL,
-                   email VARCHAR(50) NOT NULL UNIQUE,
-                   created_at TIMESTAMP DEFAULT NOW()
-                );
-                INSERT INTO customers (name, email)
-                VALUES ('John Doe', 'john.doe@example.com');
-                "
-                .to_string(),
-                "postgres".to_string(),
-                context.clone(),
-            )
-            .await
-            .unwrap();
-        println!("{}", result.stdout.clone().unwrap());
-        assert!(result.stdout.clone().unwrap().contains("CREATE TABLE"));
-
-        // Assert data exists
-        let result = coredb_resource
-            .psql(
-                "SELECT name FROM customers WHERE email='john.doe@example.com'".to_string(),
-                "postgres".to_string(),
-                context.clone(),
-            )
-            .await
-            .unwrap();
-        println!("{}", result.stdout.clone().unwrap());
-        assert!(result.stdout.clone().unwrap().contains("John Doe"));
-
-        // Label the namespace with "tembo-pod-init.tembo.io/watch"="true"
-        let ns_api: Api<Namespace> = Api::all(client.clone());
-        let ns = serde_json::json!({
-            "apiVersion": "v1",
-            "kind": "Namespace",
-            "metadata": {
-                "name": format!("{}", namespace),
-                "labels": {
-                    "tembo-pod-init.tembo.io/watch": "true"
-                }
-            }
-        });
-        ns_api
-            .patch(namespace, &params, &Patch::Apply(&ns))
-            .await
-            .unwrap();
-
-        // Annotation CoreDB with 'foo: bar' in order to trigger a reconciliation
-        let coredb_json = serde_json::json!({
-            "apiVersion": API_VERSION,
-            "kind": "CoreDB",
-            "metadata": {
-                "name": name.clone(),
-                "annotations": {
-                    "foo": "bar"
-                }
-            }
-        });
-        let params = PatchParams::apply("coredb-integration-test");
-        let patch = Patch::Merge(&coredb_json);
-        let _coredb_resource = coredbs.patch(name, &params, &patch).await.unwrap();
-
-        // Wait enough time for the migration to begin, and less time
-        // than it would take to complete
-        thread::sleep(Duration::from_millis(10000));
-
-        // Wait for CNPG pod to be running and ready
-        pod_ready_and_running(pods_api.clone(), format!("{}-1", name)).await;
-
-        // Disable reconciliation on CoreDB
-        let coredb_json = serde_json::json!({
-            "apiVersion": API_VERSION,
-            "kind": "CoreDB",
-            "metadata": {
-                "name": name.clone(),
-                "annotations": {
-                    "coredbs.coredb.io/watch": "false"
-                }
-            }
-        });
-        let params = PatchParams::apply("coredb-integration-test");
-        let patch = Patch::Merge(&coredb_json);
-        let coredb_resource = coredbs.patch(name, &params, &patch).await.unwrap();
-
-        // Allow time for any ongoing reconciliation to complete
-        thread::sleep(Duration::from_millis(2000));
-
-        // Delete the statefulset to be sure we are not connecting to old pod
-        // Get the StatefulSet
-        let stateful_sets_api: Api<StatefulSet> = Api::namespaced(client.clone(), namespace);
-        let stateful_set_name = name.to_string();
-        let _stateful_set = stateful_sets_api.get(&stateful_set_name).await.unwrap();
-        // Delete the StatefulSet
-        stateful_sets_api
-            .delete(&stateful_set_name, &DeleteParams::default())
-            .await
-            .unwrap();
-
-        let pod_name = format!("{}-0", name);
-
-        // Confirm pod is deleted
-        println!("Waiting for pod {} to be deleted", &pod_name);
-        let mut pod = pods_api.get(&pod_name).await;
-        for _ in 0..100 {
-            if pod.is_err() {
-                println!("Pod {} deleted", &pod_name);
-                break;
-            }
-            thread::sleep(Duration::from_millis(1000));
-            pod = pods_api.get(&pod_name).await;
-        }
-
-        // Check the data is still present
-        // Assert data exists
-        let result = coredb_resource
-            .psql(
-                "SELECT name FROM customers WHERE email='john.doe@example.com'".to_string(),
-                "postgres".to_string(),
-                context.clone(),
-            )
-            .await
-            .unwrap();
-        println!("{}", result.stdout.clone().unwrap());
-        assert!(result.stdout.unwrap().contains("John Doe"));
-    }
-
-    #[tokio::test]
-    #[ignore]
-    async fn functional_test_basic_create_cnpg() {
+    async fn functional_test_cnpg_create() {
         // Initialize the Kubernetes client
         let client = kube_client().await;
         let state = State::default();
@@ -711,6 +512,29 @@ mod test {
         let storage = pvc.spec.unwrap().resources.unwrap().requests.unwrap();
         let s = storage.get("storage").unwrap().to_owned();
         assert_eq!(Quantity("10Gi".to_owned()), s);
+
+        // Cleanup test buddy pod resource
+        pods.delete(&test_pod_name, &Default::default()).await.unwrap();
+        println!("Waiting for test buddy pod to be deleted: {}", &test_pod_name);
+        let _assert_test_buddy_pod_deleted = tokio::time::timeout(
+            Duration::from_secs(TIMEOUT_SECONDS_POD_DELETED),
+            await_condition(pods.clone(), &test_pod_name, conditions::is_deleted("")),
+        );
+        // Cleanup CoreDB resource
+        coredbs.delete(name, &Default::default()).await.unwrap();
+        println!("Waiting for CoreDB to be deleted: {}", &name);
+        let _assert_coredb_deleted = tokio::time::timeout(
+            Duration::from_secs(TIMEOUT_SECONDS_COREDB_DELETED),
+            await_condition(coredbs.clone(), name, conditions::is_deleted("")),
+        )
+        .await
+        .unwrap_or_else(|_| {
+            panic!(
+                "CoreDB {} was not deleted after waiting {} seconds",
+                name, TIMEOUT_SECONDS_COREDB_DELETED
+            )
+        });
+        println!("CoreDB resource deleted {}", name);
     }
 
     #[tokio::test]
@@ -871,7 +695,12 @@ mod test {
         let patch = Patch::Merge(patch_json);
         let _patch = cluster.patch(name, &params, &patch);
 
-        thread::sleep(Duration::from_millis(10000));
+        thread::sleep(Duration::from_millis(20000));
+
+        // Print entire Cluster resource that is set, pretty printed with serde
+        let cluster_resource = cluster.get(name).await.unwrap();
+        let pretty_cluster = serde_json::to_string_pretty(&cluster_resource).unwrap();
+        println!("Cluster resource: {}", pretty_cluster);
 
         pod_ready_and_running(pods.clone(), pod_name.clone()).await;
 
@@ -1397,82 +1226,37 @@ mod test {
         let pod_service_account_name = pod.spec.as_ref().unwrap().service_account_name.as_ref();
         assert_eq!(pod_service_account_name, Some(&sa_name));
 
-        // Update the coredb resource to add backups
-        let coredb_json = serde_json::json!({
-            "apiVersion": API_VERSION,
-            "kind": kind,
-            "metadata": {
-                "name": name
-            },
-            "spec": {
-                "backup": {
-                    "destinationPath": "s3://test-bucket/coredb/test-org/test-db",
-                    "encryption": "AES256",
-                    "retentionPolicy": "30",
-                    "schedule": "0 0 * * *",
-                }
-            }
-        });
-
-        // apply CRD with serviceAccountTemplate set
-        let params = PatchParams::apply("coredb-integration-test");
-        let patch = Patch::Apply(&coredb_json);
-        let _coredb_resource = coredbs.patch(name, &params, &patch).await.unwrap();
-
-        // give it some time 500ms
-        thread::sleep(Duration::from_millis(5000));
-
-        // assert that the destinationPath is set in the sts env
-        let stateful_sets_api: Api<StatefulSet> = Api::namespaced(client.clone(), namespace);
-        let stateful_set_name = name.to_string();
-        let stateful_set = stateful_sets_api.get(&stateful_set_name).await.unwrap();
-
-        // Extract the environment variables from the StatefulSet
-        if let Some(container) = stateful_set
-            .spec
-            .as_ref()
-            .unwrap()
-            .template
-            .spec
-            .as_ref()
-            .and_then(|s| s.containers.get(0))
-        {
-            if let Some(env) = container.env.as_ref() {
-                let destination_path_env = env
-                    .iter()
-                    .find(|e| e.name == "WALG_S3_PREFIX")
-                    .and_then(|e| e.value.clone());
-                let walg_s3_sse_env = env
-                    .iter()
-                    .find(|e| e.name == "WALG_S3_SSE")
-                    .and_then(|e| e.value.clone());
-
-                assert_eq!(
-                    destination_path_env,
-                    Some(String::from("s3://test-bucket/coredb/test-org/test-db"))
-                );
-                assert_eq!(walg_s3_sse_env, Some(String::from("AES256")));
-            } else {
-                panic!("No environment variables found in the StatefulSet's container");
-            }
-        } else {
-            panic!("No container found in the StatefulSet's template spec");
-        }
-
-        // Assert that the CronJob was created and the schedule is set
-        let cron_jobs_api: Api<CronJob> = Api::namespaced(client.clone(), namespace);
-        let cron_job_name = format!("{}-daily", name);
-        let cron_job = cron_jobs_api.get(&cron_job_name).await.unwrap();
-
-        assert_eq!(
-            cron_job.spec.as_ref().unwrap().schedule,
-            String::from("0 0 * * *")
+        // Cleanup test buddy pod resource
+        pods_api
+            .delete(&test_pod_name, &Default::default())
+            .await
+            .unwrap();
+        println!("Waiting for test buddy pod to be deleted: {}", &test_pod_name);
+        let _assert_test_buddy_pod_deleted = tokio::time::timeout(
+            Duration::from_secs(TIMEOUT_SECONDS_POD_DELETED),
+            await_condition(pods_api.clone(), &test_pod_name, conditions::is_deleted("")),
         );
+
+        // Cleanup CoreDB resource
+        coredbs.delete(name, &Default::default()).await.unwrap();
+        println!("Waiting for CoreDB to be deleted: {}", &name);
+        let _assert_coredb_deleted = tokio::time::timeout(
+            Duration::from_secs(TIMEOUT_SECONDS_COREDB_DELETED),
+            await_condition(coredbs.clone(), name, conditions::is_deleted("")),
+        )
+        .await
+        .unwrap_or_else(|_| {
+            panic!(
+                "CoreDB {} was not deleted after waiting {} seconds",
+                name, TIMEOUT_SECONDS_COREDB_DELETED
+            )
+        });
+        println!("CoreDB resource deleted {}", name);
     }
 
     #[tokio::test]
     #[ignore]
-    async fn function_test_skip_reconciliation() {
+    async fn functional_test_skip_reconciliation() {
         // Initialize the Kubernetes client
         let client = kube_client().await;
         let state = State::default();
@@ -1523,6 +1307,22 @@ mod test {
         let expected_pod_name = format!("{}-{}", name, 0);
         let pod = pods.get(&expected_pod_name).await;
         assert!(pod.is_err());
+
+        // Cleanup CoreDB resource
+        coredbs.delete(name, &Default::default()).await.unwrap();
+        println!("Waiting for CoreDB to be deleted: {}", &name);
+        let _assert_coredb_deleted = tokio::time::timeout(
+            Duration::from_secs(TIMEOUT_SECONDS_COREDB_DELETED),
+            await_condition(coredbs.clone(), name, conditions::is_deleted("")),
+        )
+        .await
+        .unwrap_or_else(|_| {
+            panic!(
+                "CoreDB {} was not deleted after waiting {} seconds",
+                name, TIMEOUT_SECONDS_COREDB_DELETED
+            )
+        });
+        println!("CoreDB resource deleted {}", name);
     }
 
     #[tokio::test]
@@ -1622,166 +1422,6 @@ mod test {
 
     #[tokio::test]
     #[ignore]
-    async fn test_stop_instance() {
-        // Initialize the Kubernetes client
-        let client = kube_client().await;
-        let state = State::default();
-        let context = state.create_context(client.clone());
-
-        // Configurations
-        let mut rng = rand::thread_rng();
-        let name = &format!("test-stop-coredb-{}", rng.gen_range(0..100000));
-        let namespace = "default";
-        let kind = "CoreDB";
-
-        // Create a pod we can use to run commands in the cluster
-        let pods: Api<Pod> = Api::namespaced(client.clone(), namespace);
-        // let test_pod_name = create_test_buddy(pods.clone(), name.to_string()).await;
-
-        // Apply a basic configuration of CoreDB
-        println!("Creating CoreDB resource {}", name);
-        let coredbs: Api<CoreDB> = Api::namespaced(client.clone(), namespace);
-        let coredb_json = serde_json::json!({
-            "apiVersion": API_VERSION,
-            "kind": kind,
-            "metadata": {
-                "name": name
-            },
-            "spec": {
-                "stop": false
-            }
-        });
-        let params = PatchParams::apply("coredb-integration-test");
-        let patch = Patch::Apply(&coredb_json);
-        let coredb_resource = coredbs.patch(name, &params, &patch).await.unwrap();
-
-        // Wait for secret to be created
-        let secret_api: Api<Secret> = Api::namespaced(client.clone(), namespace);
-        let secret_name = format!("{}-connection", name);
-        println!("Waiting for secret to be created: {}", secret_name);
-        let establish = await_condition(secret_api.clone(), &secret_name, wait_for_secret());
-        let _ = tokio::time::timeout(Duration::from_secs(TIMEOUT_SECONDS_SECRET_PRESENT), establish)
-            .await
-            .unwrap_or_else(|_| {
-                panic!(
-                    "Did not find the secret {} present after waiting {} seconds",
-                    secret_name, TIMEOUT_SECONDS_SECRET_PRESENT
-                )
-            });
-        println!("Found secret: {}", secret_name);
-
-        // Wait for Pod to be created
-        let pod_name = format!("{}-0", name);
-
-        pod_ready_and_running(pods.clone(), pod_name.clone()).await;
-
-        // Assert default resource values are applied to postgres container
-        let default_resources: ResourceRequirements = default_resources();
-        let pg_pod = pods.get(&pod_name).await.unwrap();
-        let resources = pg_pod.spec.unwrap().containers[0].clone().resources;
-        assert_eq!(default_resources, resources.unwrap());
-
-        // Assert no tables found
-        let result = coredb_resource
-            .psql("\\dt".to_string(), "postgres".to_string(), context.clone())
-            .await
-            .unwrap();
-        println!("{}", result.stderr.clone().unwrap());
-        assert!(result
-            .stderr
-            .clone()
-            .unwrap()
-            .contains("Did not find any relations."));
-
-        // Create a table
-        let result = coredb_resource
-            .psql(
-                "
-                CREATE TABLE stop_test (
-                   id serial PRIMARY KEY,
-                   created_at TIMESTAMP DEFAULT NOW()
-                );
-                "
-                .to_string(),
-                "postgres".to_string(),
-                context.clone(),
-            )
-            .await
-            .unwrap();
-        println!("{}", result.stdout.clone().unwrap());
-        assert!(result.stdout.clone().unwrap().contains("CREATE TABLE"));
-
-        // Assert table exists
-        let result = coredb_resource
-            .psql("\\dt".to_string(), "postgres".to_string(), context.clone())
-            .await
-            .unwrap();
-        println!("{}", result.stdout.clone().unwrap());
-        assert!(result.stdout.clone().unwrap().contains("stop_test"));
-
-        // stop the instance
-        let coredb_json = serde_json::json!({
-            "apiVersion": API_VERSION,
-            "kind": kind,
-            "metadata": {
-                "name": name
-            },
-            "spec": {
-                "stop": true,
-            }
-        });
-
-        // Apply crd with stop flag enabled
-        let params = PatchParams::apply("coredb-integration-test");
-        let patch = Patch::Apply(&coredb_json);
-        let coredb_resource = coredbs.patch(name, &params, &patch).await.unwrap();
-
-        // give it time to stop
-        println!("Waiting for pod {} to be deleted", &pod_name);
-        let mut pod = pods.get(&pod_name).await;
-        for _ in 0..100 {
-            if pod.is_err() {
-                println!("Pod {} deleted", &pod_name);
-                break;
-            }
-            thread::sleep(Duration::from_millis(1000));
-            pod = pods.get(&pod_name).await;
-        }
-
-        // pod must not be ready
-        let res = coredb_resource.primary_pod_coredb(client.clone()).await;
-        assert!(res.is_err());
-
-        // start again
-        let coredb_json = serde_json::json!({
-            "apiVersion": API_VERSION,
-            "kind": kind,
-            "metadata": {
-                "name": name
-            },
-            "spec": {
-                "stop": false,
-            }
-        });
-        // Apply with stop flag disabled
-        let params = PatchParams::apply("coredb-integration-test");
-        let patch = Patch::Apply(&coredb_json);
-        let coredb_resource = coredbs.patch(name, &params, &patch).await.unwrap();
-
-        // give it time to start
-        pod_ready_and_running(pods.clone(), pod_name.clone()).await;
-
-        // assert table still exist
-        let result = coredb_resource
-            .psql("\\dt".to_string(), "postgres".to_string(), context.clone())
-            .await
-            .unwrap();
-        println!("{}", result.stdout.clone().unwrap());
-        assert!(result.stdout.unwrap().contains("stop_test"));
-    }
-
-    #[tokio::test]
-    #[ignore]
     async fn functional_test_ingress_route_tcp() {
         // Initialize the Kubernetes client
         let client = kube_client().await;
@@ -1844,6 +1484,22 @@ mod test {
         // Assert the ingress route tcp service points to coredb service
         // The coredb service is named the same as the coredb resource
         assert_eq!(&service_name, name);
+
+        // Cleanup CoreDB resource
+        coredbs.delete(name, &Default::default()).await.unwrap();
+        println!("Waiting for CoreDB to be deleted: {}", &name);
+        let _assert_coredb_deleted = tokio::time::timeout(
+            Duration::from_secs(TIMEOUT_SECONDS_COREDB_DELETED),
+            await_condition(coredbs.clone(), name, conditions::is_deleted("")),
+        )
+        .await
+        .unwrap_or_else(|_| {
+            panic!(
+                "CoreDB {} was not deleted after waiting {} seconds",
+                name, TIMEOUT_SECONDS_COREDB_DELETED
+            )
+        });
+        println!("CoreDB resource deleted {}", name);
     }
 
     #[tokio::test]
