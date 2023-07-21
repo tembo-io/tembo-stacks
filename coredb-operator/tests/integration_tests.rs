@@ -751,27 +751,7 @@ mod test {
         // Apply a basic configuration of CoreDB
         println!("Creating CoreDB resource {}", name);
         let coredbs: Api<CoreDB> = Api::namespaced(client.clone(), &namespace);
-        // Generate basic CoreDB resource to start with
-        let coredb_json = serde_json::json!({
-            "apiVersion": API_VERSION,
-            "kind": kind,
-            "metadata": {
-                "name": name
-            },
-            "spec": {
-                "replicas": replicas,
-            }
-        });
-        let params = PatchParams::apply("tembo-integration-test");
-        let patch = Patch::Apply(&coredb_json);
-        let _coredb_resource = coredbs.patch(name, &params, &patch).await.unwrap();
-
-        // Wait for CNPG Pod to be created
-        let pod_name = format!("{}-1", name);
-
-        pod_ready_and_running(pods.clone(), pod_name.clone()).await;
-
-        // Update CoreDB to include PGPARAMS
+        // Generate CoreDB resource with params
         let coredb_json = serde_json::json!({
             "apiVersion": API_VERSION,
             "kind": kind,
@@ -832,11 +812,14 @@ mod test {
                 ]
             }
         });
-
-        // Patch CoreDB with PGPARAMS
-        let params = PatchParams::apply("coredb-integration-test");
+        let params = PatchParams::apply("tembo-integration-test");
         let patch = Patch::Apply(&coredb_json);
         let coredb_resource = coredbs.patch(name, &params, &patch).await.unwrap();
+
+        // Wait for CNPG Pod to be created
+        let pod_name = format!("{}-1", name);
+
+        pod_ready_and_running(pods.clone(), pod_name.clone()).await;
 
         println!("Waiting to install extension pgmq");
 
