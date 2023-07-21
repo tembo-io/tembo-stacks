@@ -88,15 +88,11 @@ jobs:
           echo "=========="
           cat operator-output.txt
           echo "=========="
-          kubectl get pods --all-namespaces
+          kubectl get -o yaml svc --all-namespaces
           echo "=========="
-          kubectl get -o yaml sts
+          kubectl get -o yaml pods --all-namespaces
           echo "=========="
-          kubectl get -o yaml svc
+          kubectl get -o yaml coredb --all-namespaces
           echo "=========="
-          kubectl get -o yaml pods
-          echo "=========="
-          kubectl get -o yaml coredb
-          echo "=========="
-          kubectl get -o yaml clusters
+          kubectl get -o yaml clusters --all-namespaces
           echo "=========="
