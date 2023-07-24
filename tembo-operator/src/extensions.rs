@@ -10,7 +10,6 @@ use std::{
     collections::{HashMap, HashSet},
     sync::Arc,
 };
-use tokio::time::Duration;
 use tracing::{debug, error, info, warn};
 
 lazy_static! {
@@ -143,24 +142,6 @@ pub async fn install_extensions(
 
     let cnpg_enabled = cdb.cnpg_enabled(ctx.clone()).await;
 
-    let pod_name_coredb = cdb
-        .primary_pod_coredb(client.clone())
-        .await
-        .map_err(|_e| {
-            // It is normal to not find a pod
-            info!(
-                "CoreDB primary pod of {} is not available, trying again after a short duration",
-                cdb.metadata
-                    .name
-                    .clone()
-                    .expect("instance should always have a name")
-            );
-            Action::requeue(Duration::from_secs(5))
-        })?
-        .metadata
-        .name
-        .expect("Pod should always have a name");
-
     let pod_name_cnpg: Option<String> = match cnpg_enabled {
         true => {
             let name = cdb
@@ -192,14 +173,11 @@ pub async fn install_extensions(
             version,
         ];
 
-        let coredb_exec = cdb.exec(pod_name_coredb.clone(), client.clone(), &cmd);
-        let result = match pod_name_cnpg.is_some() {
-            true => {
-                let cnpg_exec = cdb.exec(pod_name_cnpg.clone().unwrap().clone(), client.clone(), &cmd);
-                let _ = coredb_exec.await;
-                cnpg_exec.await
-            }
-            false => coredb_exec.await,
+        let result = if let Some(pod_name) = pod_name_cnpg.clone() {
+            let cnpg_exec = cdb.exec(pod_name, client.clone(), &cmd);
+            cnpg_exec.await
+        } else {
+            continue;
         };
 
         match result {

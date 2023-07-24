@@ -26,7 +26,6 @@ mod psql;
 mod rbac;
 mod secret;
 mod service;
-mod statefulset;
 
 use thiserror::Error;
 
