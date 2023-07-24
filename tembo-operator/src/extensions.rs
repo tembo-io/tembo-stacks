@@ -10,6 +10,7 @@ use std::{
     collections::{HashMap, HashSet},
     sync::Arc,
 };
+use tokio::time::Duration;
 use tracing::{debug, error, info, warn};
 
 lazy_static! {
@@ -142,14 +143,14 @@ pub async fn install_extensions(
 
     let cnpg_enabled = cdb.cnpg_enabled(ctx.clone()).await;
 
-    let pod_name_cnpg: String = match cnpg_enabled {
-        true => cdb
-            .primary_pod_cnpg(client.clone())
+    let pod_name_cnpg = if cnpg_enabled {
+        cdb.primary_pod_cnpg(client.clone())
             .await?
             .metadata
             .name
-            .expect("Pod should always have a name"),
-        false => "".to_string(),
+            .expect("Pod should always have a name")
+    } else {
+        return Err(Action::requeue(Duration::from_secs(300)));
     };
 
     let mut errors: Vec<Error> = Vec::new();
