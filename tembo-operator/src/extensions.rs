@@ -142,23 +142,24 @@ pub async fn install_extensions(
 
     let cnpg_enabled = cdb.cnpg_enabled(ctx.clone()).await;
 
-    let pod_name_cnpg: Option<String> = match cnpg_enabled {
-        true => {
-            let name = cdb
-                .primary_pod_cnpg(client.clone())
-                .await?
-                .metadata
-                .name
-                .expect("Pod should always have a name");
-            Some(name)
-        }
-        false => None,
+    let pod_name_cnpg: String = match cnpg_enabled {
+        true => cdb
+            .primary_pod_cnpg(client.clone())
+            .await?
+            .metadata
+            .name
+            .expect("Pod should always have a name"),
+        false => "".to_string(),
     };
 
     let mut errors: Vec<Error> = Vec::new();
     let num_to_install = extensions.len();
     for ext in extensions.iter() {
-        let version = ext.locations[0].version.clone().unwrap();
+        let version = ext.locations[0].version.clone().unwrap_or_else(|| {
+            let err = Error::InvalidErr("Missing version for extension".to_string());
+            error!("{}", err);
+            err.to_string()
+        });
         if !ext.locations[0].enabled {
             // If the extension is not enabled, don't bother trying to install it
             continue;
@@ -173,8 +174,8 @@ pub async fn install_extensions(
             version,
         ];
 
-        let result = if let Some(pod_name) = pod_name_cnpg.clone() {
-            let cnpg_exec = cdb.exec(pod_name, client.clone(), &cmd);
+        let result = if !pod_name_cnpg.is_empty() {
+            let cnpg_exec = cdb.exec(pod_name_cnpg.clone(), client.clone(), &cmd);
             cnpg_exec.await
         } else {
             continue;
@@ -235,11 +236,14 @@ pub async fn toggle_extensions(
                             );
                             continue;
                         }
-                        format!("CREATE EXTENSION IF NOT EXISTS \"{ext_name}\" SCHEMA {schema_name} cascade;")
+                        format!(
+                            "CREATE EXTENSION IF NOT EXISTS \"{}\" SCHEMA {} CASCADE;",
+                            ext_name, schema_name
+                        )
                     }
                     false => {
                         info!("Dropping extension: {}, database {}", ext_name, database_name);
-                        format!("DROP EXTENSION IF EXISTS \"{ext_name}\" CASCADE;")
+                        format!("DROP EXTENSION IF EXISTS \"{}\" CASCADE;", ext_name)
                     }
                 };
 
@@ -249,17 +253,18 @@ pub async fn toggle_extensions(
 
                 match result {
                     Ok(_) => {}
-                    Err(_) => {
+                    Err(e) => {
                         // Even if one extension has failed to reconcile, we should
                         // still try to create the other extensions.
                         // It will retry on the next reconcile.
                         error!(
-                            "Failed to reconcile extension {}, in {}. Ignoring.",
+                            "Failed to reconcile extension {}, in {}. Error: {:?}. Ignoring.",
                             &ext_name,
                             cdb.metadata
                                 .name
                                 .clone()
-                                .expect("instance should always have a name")
+                                .expect("instance should always have a name"),
+                            e
                         );
                     }
                 }

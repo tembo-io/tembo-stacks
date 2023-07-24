@@ -50,6 +50,9 @@ pub enum Error {
 
     #[error("Missing Secret Error: {0}")]
     MissingSecretError(String),
+
+    #[error("Invalid Data: {0}")]
+    InvalidErr(String),
 }
 pub type Result<T, E = Error> = std::result::Result<T, E>;
 
