@@ -23,3 +23,9 @@ extensions:
         schema: public
         enabled: true
         version: 1.10.0
+  - name: pg_later
+    locations:
+      - database: postgres
+        schema: pglater
+        enabled: true
+        version: 0.0.5        
