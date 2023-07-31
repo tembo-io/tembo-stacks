@@ -8,7 +8,7 @@ use crate::{
             ClusterBackupBarmanObjectStoreWal, ClusterBackupBarmanObjectStoreWalCompression,
             ClusterBackupBarmanObjectStoreWalEncryption, ClusterBootstrap, ClusterBootstrapInitdb,
             ClusterExternalClusters, ClusterExternalClustersPassword, ClusterLogLevel, ClusterMonitoring,
-            ClusterMonitoringCustomQueriesConfigMap, ClusterPostgresql,
+            ClusterMonitoringCustomQueriesConfigMap, ClusterNodeMaintenanceWindow, ClusterPostgresql,
             ClusterPostgresqlSyncReplicaElectionConstraint, ClusterPrimaryUpdateMethod,
             ClusterPrimaryUpdateStrategy, ClusterResources, ClusterServiceAccountTemplate,
             ClusterServiceAccountTemplateMetadata, ClusterSpec, ClusterStorage, ClusterSuperuserSecret,
@@ -30,7 +30,6 @@ use kube::{
 use std::{collections::BTreeMap, sync::Arc};
 use tokio::time::Duration;
 use tracing::{debug, error, info, warn};
-use crate::cloudnativepg::clusters::ClusterNodeMaintenanceWindow;
 
 pub struct PostgresConfig {
     pub postgres_parameters: Option<BTreeMap<String, String>>,
@@ -325,7 +324,7 @@ pub fn cnpg_cluster_from_cdb(cdb: &CoreDB) -> Cluster {
             // to gracefully shutdown during a switchover
             switchover_delay: Some(60),
             // Set this to match when the cluster consolidation happens
-            node_maintenance_window: Some(ClusterNodeMaintenanceWindow{
+            node_maintenance_window: Some(ClusterNodeMaintenanceWindow {
                 // TODO TEM-1407: Make this configurable and aligned with cluster scale down
                 // default to in_progress: true - otherwise single-instance CNPG clusters
                 // prevent cluster scale down.
