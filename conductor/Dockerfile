@@ -6,10 +6,11 @@ RUN apt-get update && \
 
 COPY tembo-operator ./tembo-operator
 WORKDIR /build
-COPY Cargo.toml Cargo.lock ./
-COPY src ./src
-RUN cargo build --release && \
-    cargo clean -p conductor
+
+COPY Cargo.toml .
+COPY Cargo.lock .
+COPY ./src ./src
+
 RUN cargo install --path .
 
 FROM quay.io/coredb/debian:11.6-slim
