@@ -773,7 +773,7 @@
         "overrides": []
       },
       "gridPos": {
-        "h": 9,
+        "h": 51,
         "w": 24,
         "x": 0,
         "y": 36
@@ -802,8 +802,8 @@
             "uid": "prometheus"
           },
           "editorMode": "code",
-          "expr": "sum((sum by (namespace) (pg_up{namespace=~\"org-coredb-inst-control-plane-.*\"})) OR on() vector(0))",
-          "legendFormat": "up",
+          "expr": "avg by (namespace) (kube_pod_container_status_ready{container=\"postgres\"})",
+          "legendFormat": "{{namespace}}",
           "range": true,
           "refId": "A"
         }
@@ -970,7 +970,7 @@
     ]
   },
   "time": {
-    "from": "now-7d",
+    "from": "now-2d",
     "to": "now"
   },
   "timepicker": {
