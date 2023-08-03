@@ -26,7 +26,7 @@ install-tembo-pod-init:
 	  --namespace cert-manager \
 	  --create-namespace \
 	  --set installCRDs=true && \
-	helm upgrade --install --namespace=tembo-pod-init --set logLevel=debug --set image.tag=latest tembo-pod-init ../charts/tembo-pod-init
+	helm upgrade --install --namespace=tembo-pod-init --values=./testdata/pod-init.yaml tembo-pod-init ../charts/tembo-pod-init
 
 install-cnpg:
 	helm upgrade --install cnpg \
