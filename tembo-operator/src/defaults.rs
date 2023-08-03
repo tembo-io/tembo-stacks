@@ -5,6 +5,7 @@ use crate::{
     apis::coredb_types::{Backup, ServiceAccountTemplate},
     extensions::Extension,
 };
+use crate::extensions::TrunkInstall;
 
 pub fn default_replicas() -> i32 {
     1
@@ -62,6 +63,10 @@ pub fn default_postgres_exporter_image() -> String {
 }
 
 pub fn default_extensions() -> Vec<Extension> {
+    vec![]
+}
+
+pub fn default_trunk_installs() -> Vec<TrunkInstall> {
     vec![]
 }
 

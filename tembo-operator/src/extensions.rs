@@ -18,6 +18,12 @@ lazy_static! {
 }
 
 #[derive(Clone, Debug, Deserialize, Eq, Hash, JsonSchema, Serialize, PartialEq)]
+pub struct TrunkInstall {
+    pub name: String,
+    pub version: Option<String>,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, Hash, JsonSchema, Serialize, PartialEq)]
 pub struct Extension {
     pub name: String,
     #[serde(default = "defaults::default_description")]

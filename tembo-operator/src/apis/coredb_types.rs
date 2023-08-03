@@ -1,4 +1,4 @@
-use crate::extensions::Extension;
+use crate::extensions::{Extension, TrunkInstall};
 use k8s_openapi::{
     api::core::v1::ResourceRequirements,
     apimachinery::pkg::{api::resource::Quantity, apis::meta::v1::ObjectMeta},
@@ -76,6 +76,9 @@ pub struct CoreDBSpec {
 
     #[serde(default = "defaults::default_extensions")]
     pub extensions: Vec<Extension>,
+
+    #[serde(default = "defaults::default_trunk_installs")]
+    pub trunk_installs: Vec<TrunkInstall>,
 
     #[serde(default = "defaults::default_stop")]
     pub stop: bool,
