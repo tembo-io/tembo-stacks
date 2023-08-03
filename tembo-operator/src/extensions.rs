@@ -228,32 +228,25 @@ pub async fn toggle_extensions(
                 }
                 // only specify the schema if it provided
                 let command = match ext_loc.enabled {
-                    true => {
-                        info!("Creating extension: {}, database {}", ext_name, database_name);
-                        // let schema_name = ext_loc.schema.to_owned();
-                        let create_stmt = match ext_loc.schema.as_ref() {
-                            Some(schema) => {
-                                if !check_input(&schema) {
-                                    warn!(
+                    true => match ext_loc.schema.as_ref() {
+                        Some(schema) => {
+                            if !check_input(&schema) {
+                                warn!(
                                         "Extension.Database.Schema {}.{}.{} is not formatted properly. Skipping operation.",
                                         ext_name, database_name, schema
                                     );
-                                    continue;
-                                }
-                                format!(
-                                    "CREATE EXTENSION IF NOT EXISTS \"{}\" SCHEMA {} CASCADE;",
-                                    ext_name, schema
-                                )
+                                continue;
                             }
-                            None => format!("CREATE EXTENSION IF NOT EXISTS \"{}\" CASCADE;", ext_name),
-                        };
-                        create_stmt
-                    }
-                    false => {
-                        info!("Dropping extension: {}, database {}", ext_name, database_name);
-                        format!("DROP EXTENSION IF EXISTS \"{}\" CASCADE;", ext_name)
-                    }
+                            format!(
+                                "CREATE EXTENSION IF NOT EXISTS \"{}\" SCHEMA {} CASCADE;",
+                                ext_name, schema
+                            )
+                        }
+                        None => format!("CREATE EXTENSION IF NOT EXISTS \"{}\" CASCADE;", ext_name),
+                    },
+                    false => format!("DROP EXTENSION IF EXISTS \"{}\" CASCADE;", ext_name),
                 };
+                info!("Handling extension: {command}");
 
                 let result = cdb
                     .psql(command.clone(), database_name.clone(), ctx.clone())
