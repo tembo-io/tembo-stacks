@@ -26,7 +26,7 @@ lazy_static! {
         m.insert("embedding", "pg_embedding");
         m.insert("pgml", "postgresml");
         m.insert("columnar", "hydra_columnar");
-        m.insert("pg_currency", "pgcurrency");
+        m.insert("currency", "pg_currency");
         m
     };
 }
