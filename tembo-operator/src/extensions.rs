@@ -24,6 +24,20 @@ pub struct TrunkInstall {
 }
 
 #[derive(Clone, Debug, Deserialize, Eq, Hash, JsonSchema, Serialize, PartialEq)]
+pub struct TrunkInstallStatus {
+    pub name: String,
+    pub version: Option<String>,
+    pub status: InstallStatus,
+    pub error_message: Option<String>,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, Hash, JsonSchema, Serialize, PartialEq)]
+pub enum InstallStatus {
+    Installed,
+    Error,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, Hash, JsonSchema, Serialize, PartialEq)]
 pub struct Extension {
     pub name: String,
     #[serde(default = "defaults::default_description")]
