@@ -569,6 +569,16 @@ mod tests {
             "CREATE EXTENSION IF NOT EXISTS \"my_ext\" SCHEMA public CASCADE;"
         );
 
+        // drop extension
+        let loc2 = ExtensionInstallLocation {
+            database: "postgres".to_string(),
+            enabled: false,
+            schema: Some("public".to_string()),
+            version: Some("1.0.0".to_string()),
+        };
+        let cmd = generate_extension_enable_cmd("my_ext", &loc2);
+        assert_eq!(cmd.unwrap(), "DROP EXTENSION IF EXISTS \"my_ext\" CASCADE;");
+
         // error mode: malformed database name
         let loc2 = ExtensionInstallLocation {
             database: "postgres; --".to_string(),
