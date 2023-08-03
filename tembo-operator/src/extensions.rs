@@ -217,36 +217,17 @@ pub async fn toggle_extensions(
         } else {
             // extensions can be installed in multiple databases but only a single schema
             for ext_loc in ext.locations.iter() {
-                let database_name = ext_loc.database.to_owned();
-
-                if !check_input(&database_name) {
-                    warn!(
-                        "Extension.Database {}.{} is not formatted properly. Skipping operation.",
-                        ext_name, database_name
-                    );
-                    continue;
-                }
-                // only specify the schema if it provided
-                let command = match ext_loc.enabled {
-                    true => match ext_loc.schema.as_ref() {
-                        Some(schema) => {
-                            if !check_input(&schema) {
-                                warn!(
-                                        "Extension.Database.Schema {}.{}.{} is not formatted properly. Skipping operation.",
-                                        ext_name, database_name, schema
-                                    );
-                                continue;
-                            }
-                            format!(
-                                "CREATE EXTENSION IF NOT EXISTS \"{}\" SCHEMA {} CASCADE;",
-                                ext_name, schema
-                            )
-                        }
-                        None => format!("CREATE EXTENSION IF NOT EXISTS \"{}\" CASCADE;", ext_name),
-                    },
-                    false => format!("DROP EXTENSION IF EXISTS \"{}\" CASCADE;", ext_name),
+                let database_name = ext_loc.database.clone();
+                let command = match generate_extension_enable_cmd(ext_name, ext_loc) {
+                    Ok(cmd) => cmd,
+                    Err(e) => {
+                        warn!(
+                            "Failed to generate command for extension {}. Error: {:?}. Continuing.",
+                            ext_name, e
+                        );
+                        continue;
+                    }
                 };
-                info!("Handling extension: {command}");
 
                 let result = cdb
                     .psql(command.clone(), database_name.clone(), ctx.clone())
@@ -273,6 +254,41 @@ pub async fn toggle_extensions(
         }
     }
     Ok(())
+}
+
+/// generates the CREATE or DROP EXTENSION command for a given extension
+/// handles schema specification in the command
+fn generate_extension_enable_cmd(
+    ext_name: &str,
+    ext_loc: &ExtensionInstallLocation,
+) -> Result<String, Error> {
+    let database_name = ext_loc.database.to_owned();
+    if !check_input(&database_name) {
+        return Err(Error::InvalidErr(format!(
+            "Extension.Database {}.{} is not formatted properly. Skipping operation.",
+            ext_name, database_name
+        )));
+    }
+    // only specify the schema if it provided
+    let command = match ext_loc.enabled {
+        true => {
+            match ext_loc.schema.as_ref() {
+                Some(schema) => {
+                    if !check_input(&schema) {
+                        return Err(Error::InvalidErr( format!("Extension.Database.Schema {}.{}.{} is not formatted properly. Skipping operation.",
+                        ext_name, database_name, schema)));
+                    }
+                    format!(
+                        "CREATE EXTENSION IF NOT EXISTS \"{}\" SCHEMA {} CASCADE;",
+                        ext_name, schema
+                    )
+                }
+                None => format!("CREATE EXTENSION IF NOT EXISTS \"{}\" CASCADE;", ext_name),
+            }
+        }
+        false => format!("DROP EXTENSION IF EXISTS \"{}\" CASCADE;", ext_name),
+    };
+    Ok(command)
 }
 
 pub fn check_input(input: &str) -> bool {
@@ -527,6 +543,52 @@ pub async fn reconcile_extensions(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn test_generate_extension_enable_cmd() {
+        // schema not specified
+        let loc1 = ExtensionInstallLocation {
+            database: "postgres".to_string(),
+            enabled: true,
+            schema: None,
+            version: Some("1.0.0".to_string()),
+        };
+        let cmd = generate_extension_enable_cmd("my_ext", &loc1);
+        assert_eq!(cmd.unwrap(), "CREATE EXTENSION IF NOT EXISTS \"my_ext\" CASCADE;");
+
+        // schema specified
+        let loc2 = ExtensionInstallLocation {
+            database: "postgres".to_string(),
+            enabled: true,
+            schema: Some("public".to_string()),
+            version: Some("1.0.0".to_string()),
+        };
+        let cmd = generate_extension_enable_cmd("my_ext", &loc2);
+        assert_eq!(
+            cmd.unwrap(),
+            "CREATE EXTENSION IF NOT EXISTS \"my_ext\" SCHEMA public CASCADE;"
+        );
+
+        // error mode: malformed database name
+        let loc2 = ExtensionInstallLocation {
+            database: "postgres; --".to_string(),
+            enabled: true,
+            schema: Some("public".to_string()),
+            version: Some("1.0.0".to_string()),
+        };
+        let cmd = generate_extension_enable_cmd("my_ext", &loc2);
+        assert!(cmd.is_err());
+
+        // error mode: malformed schema name
+        let loc2 = ExtensionInstallLocation {
+            database: "postgres".to_string(),
+            enabled: true,
+            schema: Some("public; --".to_string()),
+            version: Some("1.0.0".to_string()),
+        };
+        let cmd = generate_extension_enable_cmd("my_ext", &loc2);
+        assert!(cmd.is_err());
+    }
 
     #[test]
     fn test_extension_plan() {
