@@ -41,7 +41,6 @@ mod test {
     use std::collections::BTreeMap;
     use std::{thread, time, time::Duration};
 
-    const API_VERSION: &str = "coredb.io/v1alpha1";
     // Timeout settings while waiting for an event
     const TIMEOUT_SECONDS_START_POD: u64 = 600;
     const TIMEOUT_SECONDS_POD_READY: u64 = 600;
@@ -137,7 +136,7 @@ mod test {
                 locations: vec![ExtensionInstallLocation {
                     enabled: true,
                     version: Some("1.3.0".to_owned()),
-                    schema: "public".to_owned(),
+                    schema: Some("public".to_owned()),
                     database: "postgres".to_owned(),
                 }],
             }]),
@@ -260,7 +259,7 @@ mod test {
             locations: vec![ExtensionInstallLocation {
                 enabled: true,
                 version: Some("0.1.4".to_owned()),
-                schema: "public".to_owned(),
+                schema: Some("public".to_owned()),
                 database: "postgres".to_owned(),
             }],
         });
