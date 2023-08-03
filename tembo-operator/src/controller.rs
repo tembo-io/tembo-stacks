@@ -39,6 +39,7 @@ use kube::{
     Resource,
 };
 
+use crate::extensions::TrunkInstallStatus;
 use serde::Serialize;
 use serde_json::json;
 use std::sync::Arc;
@@ -343,7 +344,7 @@ impl CoreDB {
             "status": new_status
         });
 
-        patch_cdb_status_force(&coredbs, &name, patch_status).await?;
+        apply_status_force(&coredbs, &name, patch_status).await?;
 
         // Check back every 5 minutes
         Ok(Action::requeue(Duration::from_secs(300)))
@@ -487,7 +488,7 @@ pub fn is_postgres_ready() -> impl Condition<Pod> + 'static {
     }
 }
 
-pub async fn patch_cdb_status_force(
+pub async fn apply_status_force(
     cdb: &Api<CoreDB>,
     name: &str,
     patch: serde_json::Value,
@@ -498,6 +499,111 @@ pub async fn patch_cdb_status_force(
         error!("Error updating CoreDB status: {:?}", e);
         Action::requeue(Duration::from_secs(10))
     })?;
+    Ok(())
+}
+
+pub async fn remove_trunk_installs_from_status(
+    cdb: &Api<CoreDB>,
+    name: &str,
+    trunk_install_names: Vec<String>,
+) -> Result<(), Action> {
+    if trunk_install_names.is_empty() {
+        return Ok(());
+    }
+    let current_coredb = cdb.get(name).await.map_err(|e| {
+        error!("Error getting CoreDB: {:?}", e);
+        Action::requeue(Duration::from_secs(10))
+    })?;
+    let current_status = match current_coredb.status {
+        None => CoreDBStatus::default(),
+        Some(status) => status,
+    };
+    let current_trunk_installs = match current_status.trunk_installs {
+        None => {
+            warn!(
+                "No trunk installs in status on {}, but we are trying remove from status {:?}",
+                name, trunk_install_names
+            );
+            return Ok(());
+        }
+        Some(trunk_installs) => trunk_installs,
+    };
+    let mut new_trunk_installs_status = current_trunk_installs.clone();
+
+    // Remove the trunk installs from the status
+    for trunk_install_name in trunk_install_names {
+        new_trunk_installs_status.retain(|t| t.name != trunk_install_name);
+    }
+
+    // sort alphabetically by name
+    new_trunk_installs_status.sort_by(|a, b| a.name.cmp(&b.name));
+    // remove duplicates
+    new_trunk_installs_status.dedup_by(|a, b| a.name == b.name);
+
+    let new_status = CoreDBStatus {
+        trunk_installs: Some(new_trunk_installs_status),
+        ..current_status
+    };
+    let patch_status = json!({
+        "apiVersion": "coredb.io/v1alpha1",
+        "kind": "CoreDB",
+        "status": new_status
+    });
+    patch_cdb_status_merge(cdb, name, patch_status).await?;
+    Ok(())
+}
+
+pub async fn add_trunk_install_to_status(
+    cdb: &Api<CoreDB>,
+    name: &str,
+    trunk_install: &TrunkInstallStatus,
+) -> Result<(), Action> {
+    let current_coredb = cdb.get(name).await.map_err(|e| {
+        error!("Error getting CoreDB: {:?}", e);
+        Action::requeue(Duration::from_secs(10))
+    })?;
+    let current_status = match current_coredb.status {
+        None => CoreDBStatus::default(),
+        Some(status) => status,
+    };
+    let current_trunk_installs = match current_status.trunk_installs {
+        None => {
+            vec![]
+        }
+        Some(trunk_installs) => trunk_installs,
+    };
+    let mut new_trunk_installs_status = current_trunk_installs.clone();
+    let mut trunk_install_found = false;
+    // Check if the trunk install is already in the list
+    for (_i, ti) in current_trunk_installs.iter().enumerate() {
+        if ti.name == trunk_install.clone().name {
+            warn!(
+                "Trunk install {} already in status on {}, replacing.",
+                &trunk_install.name, name
+            );
+            new_trunk_installs_status.push(trunk_install.clone());
+            trunk_install_found = true;
+        } else {
+            new_trunk_installs_status.push(ti.clone());
+        }
+    }
+    if !trunk_install_found {
+        new_trunk_installs_status.push(trunk_install.clone());
+    }
+    // sort alphabetically by name
+    new_trunk_installs_status.sort_by(|a, b| a.name.cmp(&b.name));
+    // remove duplicates
+    new_trunk_installs_status.dedup_by(|a, b| a.name == b.name);
+    let new_status = CoreDBStatus {
+        trunk_installs: Some(new_trunk_installs_status),
+        ..current_status
+    };
+    let patch_status = json!({
+        "apiVersion": "coredb.io/v1alpha1",
+        "kind": "CoreDB",
+        "status": new_status
+    });
+    patch_cdb_status_merge(cdb, name, patch_status).await?;
     Ok(())
 }
 
