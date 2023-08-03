@@ -10,7 +10,7 @@ use controller::{
     apis::coredb_types::{CoreDB, CoreDBSpec},
     cloudnativepg::clusters::Cluster,
 };
-use errors::ConductorError;
+use errors::ConductorError;  // test
 use k8s_openapi::api::apps::v1::StatefulSet;
 use k8s_openapi::api::core::v1::{Namespace, Secret};
 use k8s_openapi::api::networking::v1::NetworkPolicy;
