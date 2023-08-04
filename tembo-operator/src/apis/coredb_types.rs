@@ -1,4 +1,4 @@
-use crate::extensions::{Extension, TrunkInstall, TrunkInstallStatus};
+use crate::extensions::{Extension, ExtensionStatus, TrunkInstall, TrunkInstallStatus};
 use k8s_openapi::{
     api::core::v1::ResourceRequirements,
     apimachinery::pkg::{api::resource::Quantity, apis::meta::v1::ObjectMeta},
@@ -167,7 +167,7 @@ pub struct CoreDBStatus {
     pub running: bool,
     #[serde(default = "defaults::default_extensions_updating")]
     pub extensionsUpdating: bool,
-    pub extensions: Option<Vec<Extension>>,
+    pub extensions: Option<Vec<ExtensionStatus>>,
     pub trunk_installs: Option<Vec<TrunkInstallStatus>>,
     #[serde(default = "defaults::default_storage")]
     pub storage: Quantity,

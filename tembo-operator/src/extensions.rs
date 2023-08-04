@@ -1,18 +1,18 @@
 use crate::{
     add_trunk_install_to_status, apis::coredb_types::CoreDB, controller::patch_cdb_status_merge, defaults,
-    remove_trunk_installs_from_status, Context,
+    get_current_coredb_resource, remove_trunk_installs_from_status, Context,
 };
+
 
 use kube::{api::Api, runtime::controller::Action};
 use lazy_static::lazy_static;
 use regex::Regex;
 use schemars::JsonSchema;
-use semver::Comparator;
+
 use serde::{Deserialize, Serialize};
-use std::{
-    collections::{HashMap, HashSet},
-    sync::Arc,
-};
+use serde_json::json;
+use std::{collections::HashMap, sync::Arc};
+
 use tokio::time::Duration;
 use tracing::{debug, error, info, warn};
 
@@ -81,6 +81,27 @@ impl Default for ExtensionInstallLocation {
             version: Some("1.9".to_owned()),
         }
     }
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, Hash, JsonSchema, Serialize, PartialEq)]
+pub struct ExtensionStatus {
+    pub name: String,
+    #[serde(default = "defaults::default_description")]
+    pub description: Option<String>,
+    pub locations: Vec<ExtensionInstallLocationStatus>,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, Hash, JsonSchema, Serialize, PartialEq)]
+pub struct ExtensionInstallLocationStatus {
+    #[serde(default = "defaults::default_database")]
+    pub database: String,
+    #[serde(default = "defaults::default_schema")]
+    pub schema: String,
+    pub version: Option<String>,
+    // None means this is not actually installed
+    pub enabled: Option<bool>,
+    pub error: bool,
+    pub error_message: Option<String>,
 }
 
 #[derive(Debug)]
@@ -156,7 +177,10 @@ name asc,
 enabled desc
 "#;
 
-pub async fn reconcile_trunk_installs(cdb: &CoreDB, ctx: Arc<Context>) -> Result<(), Action> {
+pub async fn reconcile_trunk_installs(
+    cdb: &CoreDB,
+    ctx: Arc<Context>,
+) -> Result<Vec<TrunkInstallStatus>, Action> {
     let coredb_api: Api<CoreDB> = Api::namespaced(
         ctx.client.clone(),
         &cdb.metadata
@@ -217,8 +241,7 @@ pub async fn reconcile_trunk_installs(cdb: &CoreDB, ctx: Arc<Context>) -> Result
                 .any(|ext_status| ext.name == ext_status.name)
         })
         .collect::<Vec<_>>();
-    install_extensions(cdb, trunk_installs, ctx.clone()).await?;
-    Ok(())
+    install_extensions(cdb, trunk_installs, ctx.clone()).await
 }
 
 /// handles installing extensions
@@ -226,7 +249,8 @@ pub async fn install_extensions(
     cdb: &CoreDB,
     trunk_installs: Vec<&TrunkInstall>,
     ctx: Arc<Context>,
-) -> Result<(), Action> {
+) -> Result<Vec<TrunkInstallStatus>, Action> {
+    let mut current_trunk_install_statuses: Vec<TrunkInstallStatus> = vec![];
     let coredb_name = cdb.metadata.name.clone().expect("CoreDB should have a name");
     info!("Installing extensions into {}: {:?}", coredb_name, trunk_installs);
     let client = ctx.client.clone();
@@ -259,7 +283,8 @@ pub async fn install_extensions(
                     status: InstallStatus::Error,
                     error_message: Some("Missing version".to_string()),
                 };
-                add_trunk_install_to_status(&coredb_api, &coredb_name, &trunk_install_status).await?;
+                current_trunk_install_statuses =
+                    add_trunk_install_to_status(&coredb_api, &coredb_name, &trunk_install_status).await?;
                 continue;
             }
             Some(version) => version,
@@ -293,7 +318,9 @@ pub async fn install_extensions(
                             status: InstallStatus::Installed,
                             error_message: None,
                         };
-                        add_trunk_install_to_status(&coredb_api, &coredb_name, &trunk_install_status).await?
+                        current_trunk_install_statuses =
+                            add_trunk_install_to_status(&coredb_api, &coredb_name, &trunk_install_status)
+                                .await?
                     }
                     false => {
                         error!(
@@ -308,7 +335,9 @@ pub async fn install_extensions(
                             status: InstallStatus::Error,
                             error_message: Some(output),
                         };
-                        add_trunk_install_to_status(&coredb_api, &coredb_name, &trunk_install_status).await?
+                        current_trunk_install_statuses =
+                            add_trunk_install_to_status(&coredb_api, &coredb_name, &trunk_install_status)
+                                .await?
                     }
                 }
             }
@@ -327,79 +356,98 @@ pub async fn install_extensions(
     if requeue {
         return Err(Action::requeue(Duration::from_secs(10)));
     }
-    Ok(())
+    Ok(current_trunk_install_statuses)
 }
 
-/// handles create/drop extensions
-pub async fn toggle_extensions(
+/// Handles create/drop an extension location
+/// On failure, returns an error message
+pub async fn toggle_extension(
     cdb: &CoreDB,
-    extensions: &[Extension],
+    ext_name: &str,
+    ext_loc: ExtensionInstallLocation,
     ctx: Arc<Context>,
-) -> Result<(), Action> {
-    // iterate through list of extensions and run CREATE EXTENSION <extension-name> for each
-    for ext in extensions {
-        let ext_name = ext.name.as_str();
-        if !check_input(ext_name) {
-            warn!(
-                "Extension {} is not formatted properly. Skipping operation.",
-                ext_name
+) -> Result<(), String> {
+    let coredb_name = cdb.metadata.name.clone().expect("CoreDB should have a name");
+    if !check_input(ext_name) {
+        warn!(
+            "Extension is not formatted properly. Skipping operation. {}",
+            &coredb_name
+        );
+        return Err("Extension name is not formatted properly".to_string());
+    }
+    let database_name = ext_loc.database.to_owned();
+    if !check_input(&database_name) {
+        warn!(
+            "Database name is not formatted properly. Skipping operation. {}",
+            &coredb_name
+        );
+        return Err("Database name is not formatted properly".to_string());
+    }
+    let schema_name = ext_loc.schema.to_owned();
+    if !check_input(&schema_name) {
+        warn!(
+            "Extension.Database.Schema {}.{}.{} is not formatted properly. Skipping operation. {}",
+            ext_name, database_name, schema_name, &coredb_name
+        );
+        return Err("Schema name is not formatted properly".to_string());
+    }
+    let command = match ext_loc.enabled {
+        true => {
+            info!(
+                "Creating extension: {}, database {}, instance {}",
+                ext_name, database_name, &coredb_name
+            );
+
+            format!(
+                "CREATE EXTENSION IF NOT EXISTS \"{}\" SCHEMA {} CASCADE;",
+                ext_name, schema_name
             )
-        } else {
-            // extensions can be installed in multiple databases but only a single schema
-            for ext_loc in ext.locations.iter() {
-                let database_name = ext_loc.database.to_owned();
+        }
+        false => {
+            info!(
+                "Dropping extension: {}, database {}, instance {}",
+                ext_name, database_name, &coredb_name
+            );
+            format!("DROP EXTENSION IF EXISTS \"{}\" CASCADE;", ext_name)
+        }
+    };
 
-                if !check_input(&database_name) {
-                    warn!(
-                        "Extension.Database {}.{} is not formatted properly. Skipping operation.",
-                        ext_name, database_name
-                    );
-                    continue;
-                }
-                let command = match ext_loc.enabled {
-                    true => {
-                        info!("Creating extension: {}, database {}", ext_name, database_name);
-                        let schema_name = ext_loc.schema.to_owned();
-                        if !check_input(&schema_name) {
-                            warn!(
-                                "Extension.Database.Schema {}.{}.{} is not formatted properly. Skipping operation.",
-                                ext_name, database_name, schema_name
-                            );
-                            continue;
-                        }
-                        format!(
-                            "CREATE EXTENSION IF NOT EXISTS \"{}\" SCHEMA {} CASCADE;",
-                            ext_name, schema_name
-                        )
+    let result = cdb
+        .psql(command.clone(), database_name.clone(), ctx.clone())
+        .await;
+
+    match result {
+        Ok(psql_output) => match psql_output.success {
+            true => {
+                info!(
+                    "Successfully toggled extension {} in database {}, instance {}",
+                    ext_name, database_name, &coredb_name
+                );
+            }
+            false => {
+                warn!(
+                    "Failed to toggle extension {} in database {}, instance {}",
+                    ext_name, database_name, &coredb_name
+                );
+                match psql_output.stdout {
+                    Some(stdout) => {
+                        return Err(stdout);
                     }
-                    false => {
-                        info!("Dropping extension: {}, database {}", ext_name, database_name);
-                        format!("DROP EXTENSION IF EXISTS \"{}\" CASCADE;", ext_name)
-                    }
-                };
-
-                let result = cdb
-                    .psql(command.clone(), database_name.clone(), ctx.clone())
-                    .await;
-
-                match result {
-                    Ok(_) => {}
-                    Err(e) => {
-                        // Even if one extension has failed to reconcile, we should
-                        // still try to create the other extensions.
-                        // It will retry on the next reconcile.
-                        error!(
-                            "Failed to reconcile extension {}, in {}. Error: {:?}. Ignoring.",
-                            &ext_name,
-                            cdb.metadata
-                                .name
-                                .clone()
-                                .expect("instance should always have a name"),
-                            e
-                        );
+                    None => {
+                        return Err("Failed to enable extension, and found no output. Please try again. If this issue persists, contact support.".to_string());
                     }
                 }
             }
+        },
+        Err(e) => {
+            error!(
+                "Failed to reconcile extension because of kube exec error: {:?}",
+                e
+            );
+            return Err(
+                "Could not connect to database, try again. If problem persists, please contact support."
+                    .to_string(),
+            );
         }
     }
     Ok(())
@@ -469,6 +517,322 @@ fn parse_extensions(psql_str: &str) -> Vec<ExtRow> {
     extensions
 }
 
+fn get_location_status(
+    cdb: &CoreDB,
+    extension_name: &str,
+    location_database: &str,
+    location_schema: &str,
+) -> Option<ExtensionInstallLocationStatus> {
+    match &cdb.status {
+        None => None,
+        Some(status) => match &status.extensions {
+            None => None,
+            Some(extensions) => {
+                for extension in extensions {
+                    if extension.name == extension_name {
+                        for location in &extension.locations {
+                            if location.database == location_database && location.schema == location_schema {
+                                return Some(location.clone());
+                            }
+                        }
+                        return None;
+                    }
+                }
+                None
+            }
+        },
+    }
+}
+
+fn get_location_spec(
+    cdb: &CoreDB,
+    extension_name: &str,
+    location_database: &str,
+    location_schema: &str,
+) -> Option<ExtensionInstallLocation> {
+    for extension in &cdb.spec.extensions {
+        if extension.name == extension_name {
+            for location in &extension.locations {
+                if location.database == location_database && location.schema == location_schema {
+                    return Some(location.clone());
+                }
+            }
+            return None;
+        }
+    }
+    None
+}
+
+fn determine_extension_locations_to_toggle(cdb: &CoreDB) -> Vec<Extension> {
+    let mut extensions_to_toggle: Vec<Extension> = vec![];
+    for desired_extension in &cdb.spec.extensions {
+        let mut needs_toggle = false;
+        let mut extension_to_toggle = desired_extension.clone();
+        for desired_location in &desired_extension.locations {
+            match get_location_status(
+                cdb,
+                &desired_extension.name,
+                &desired_location.database,
+                &desired_location.schema,
+            ) {
+                None => {
+                    error!("When determining extensions to toggle, there should always be a location status for the desired location, because that should be included by determine_updated_extensions_status.");
+                }
+                Some(actual_status) => {
+                    // If we don't have an error already, the extension exists, and the desired does not match the actual
+                    if !actual_status.error
+                        && actual_status.enabled.is_some()
+                        && actual_status.enabled.unwrap() != desired_location.enabled
+                    {
+                        needs_toggle = true;
+                        extension_to_toggle.locations.push(desired_location.clone());
+                    }
+                }
+            }
+        }
+        if needs_toggle {
+            extensions_to_toggle.push(extension_to_toggle);
+        }
+    }
+    extensions_to_toggle
+}
+fn determine_updated_extensions_status(
+    cdb: &CoreDB,
+    all_actually_installed_extensions: Vec<Extension>,
+) -> Vec<ExtensionStatus> {
+    // Our results - what we will update the status to
+    let mut ext_status_updates: Vec<ExtensionStatus> = vec![];
+    // For every actually installed extension
+    for actual_extension in all_actually_installed_extensions {
+        let mut extension_status = ExtensionStatus {
+            name: actual_extension.name.clone(),
+            description: actual_extension.description.clone(),
+            locations: vec![],
+        };
+        // For every location of an actually installed extension
+        for actual_location in actual_extension.locations {
+            // Create a location status
+            let mut location_status = ExtensionInstallLocationStatus {
+                enabled: Some(actual_location.enabled),
+                database: actual_location.database.clone(),
+                schema: actual_location.schema.clone(),
+                version: actual_location.version.clone(),
+                error: false,
+                error_message: None,
+            };
+            // If there is a current status, retain the error and error message
+            match get_location_status(
+                cdb,
+                &actual_extension.name.clone(),
+                &actual_location.database.clone(),
+                &actual_location.schema.clone(),
+            ) {
+                None => {}
+                Some(current_status) => {
+                    location_status.error = current_status.error;
+                    location_status.error_message = current_status.error_message;
+                }
+            }
+            // If the desired state matches the actual state, unset the error and error message
+            match get_location_spec(
+                cdb,
+                &actual_extension.name,
+                &actual_location.database,
+                &actual_location.schema,
+            ) {
+                None => {}
+                Some(desired_location) => {
+                    if actual_location.enabled == desired_location.enabled {
+                        location_status.error = false;
+                        location_status.error_message = None;
+                    }
+                }
+            }
+            extension_status.locations.push(location_status);
+        }
+        // sort locations by database and schema so the order is deterministic
+        extension_status
+            .locations
+            .sort_by(|a, b| a.database.cmp(&b.database).then(a.schema.cmp(&b.schema)));
+        ext_status_updates.push(extension_status);
+    }
+    // We also want to include unavailable extensions if they are being requested
+    for desired_extension in &cdb.spec.extensions {
+        // If this extension is not in ext_status_updates
+        if !ext_status_updates
+            .iter()
+            .any(|e| e.name == desired_extension.name)
+        {
+            // Create a new extension status
+            let mut extension_status = ExtensionStatus {
+                name: desired_extension.name.clone(),
+                description: desired_extension.description.clone(),
+                locations: vec![],
+            };
+            // For every location of the desired extension
+            for desired_location in &desired_extension.locations {
+                if desired_location.enabled {
+                    let location_status = ExtensionInstallLocationStatus {
+                        enabled: None,
+                        database: desired_location.database.clone(),
+                        schema: desired_location.schema.clone(),
+                        version: desired_location.version.clone(),
+                        error: true,
+                        error_message: Some("Extension is not installed".to_string()),
+                    };
+                    extension_status.locations.push(location_status);
+                }
+            }
+            // sort locations by database and schema so the order is deterministic
+            extension_status
+                .locations
+                .sort_by(|a, b| a.database.cmp(&b.database).then(a.schema.cmp(&b.schema)));
+            // If there are more than zero locations, add the extension status
+            if !extension_status.locations.is_empty() {
+                ext_status_updates.push(extension_status);
+            }
+        }
+    }
+    // sort by extension name so the order is deterministic
+    ext_status_updates.sort_by(|a, b| a.name.cmp(&b.name));
+    ext_status_updates
+}
+
+async fn update_extension_location_in_coredb_status(
+    cdb: &CoreDB,
+    ctx: Arc<Context>,
+    extension_name: &str,
+    new_location_status: &ExtensionInstallLocationStatus,
+) -> Result<Vec<ExtensionStatus>, Action> {
+    let cdb = get_current_coredb_resource(cdb, ctx.clone()).await?;
+    let mut current_extensions_status = match &cdb.status {
+        None => {
+            error!("status should always already be present when merging one extension location into existing status");
+            return Err(Action::requeue(Duration::from_secs(300)));
+        }
+        Some(status) => match &status.extensions {
+            None => {
+                error!("status.extensions should always already be present when merging one extension location into existing status");
+                return Err(Action::requeue(Duration::from_secs(300)));
+            }
+            Some(extensions) => extensions.clone(),
+        },
+    };
+    for extension in &mut current_extensions_status {
+        if extension.name == extension_name {
+            for location in &mut extension.locations {
+                if location.database == new_location_status.database
+                    && location.schema == new_location_status.schema
+                {
+                    *location = new_location_status.clone();
+                    break;
+                }
+            }
+            break;
+        }
+    }
+    let patch_status = json!({
+        "apiVersion": "coredb.io/v1alpha1",
+        "kind": "CoreDB",
+        "status": {
+            "extensions": current_extensions_status
+        }
+    });
+    let coredb_api: Api<CoreDB> = Api::namespaced(
+        ctx.client.clone(),
+        &cdb.metadata
+            .namespace
+            .clone()
+            .expect("CoreDB should have a namespace"),
+    );
+    patch_cdb_status_merge(
+        &coredb_api,
+        &cdb.metadata
+            .name
+            .clone()
+            .expect("CoreDB should always have a name"),
+        patch_status,
+    )
+    .await?;
+    Ok(current_extensions_status.clone())
+}
+
+async fn create_or_drop_extensions(cdb: &CoreDB, ctx: Arc<Context>) -> Result<Vec<ExtensionStatus>, Action> {
+    let all_actually_installed_extensions = get_all_extensions(cdb, ctx.clone()).await?;
+    let mut ext_status_updates = determine_updated_extensions_status(cdb, all_actually_installed_extensions);
+    let patch_status = json!({
+        "apiVersion": "coredb.io/v1alpha1",
+        "kind": "CoreDB",
+        "status": {
+            "extensions": ext_status_updates
+        }
+    });
+    let coredb_api: Api<CoreDB> = Api::namespaced(
+        ctx.client.clone(),
+        &cdb.metadata
+            .namespace
+            .clone()
+            .expect("CoreDB should have a namespace"),
+    );
+    patch_cdb_status_merge(
+        &coredb_api,
+        &cdb.metadata
+            .name
+            .clone()
+            .expect("CoreDB should always have a name"),
+        patch_status,
+    )
+    .await?;
+    let cdb = get_current_coredb_resource(cdb, ctx.clone()).await?;
+    let toggle_these_extensions = determine_extension_locations_to_toggle(&cdb);
+    // TODO move this into separate function toggle_extensions
+    for extension_to_toggle in toggle_these_extensions {
+        for location_to_toggle in extension_to_toggle.locations {
+            match toggle_extension(
+                &cdb,
+                &extension_to_toggle.name,
+                location_to_toggle.clone(),
+                ctx.clone(),
+            )
+            .await
+            {
+                Ok(_) => {}
+                Err(error_message) => {
+                    let mut location_status = match get_location_status(
+                        &cdb,
+                        &extension_to_toggle.name,
+                        &location_to_toggle.database,
+                        &location_to_toggle.schema,
+                    ) {
+                        None => {
+                            error!("There should always be an extension status for a location before attempting to toggle an extension for that location");
+                            ExtensionInstallLocationStatus {
+                                database: location_to_toggle.database.clone(),
+                                schema: location_to_toggle.schema.clone(),
+                                version: None,
+                                enabled: None,
+                                error: true,
+                                error_message: None,
+                            }
+                        }
+                        Some(location_status) => location_status,
+                    };
+                    location_status.error = true;
+                    location_status.error_message = Some(error_message);
+                    ext_status_updates = update_extension_location_in_coredb_status(
+                        &cdb,
+                        ctx.clone(),
+                        &extension_to_toggle.name,
+                        &location_status,
+                    )
+                    .await?;
+                }
+            }
+        }
+    }
+    Ok(ext_status_updates)
+}
+
 /// list databases then get all extensions from each database
 pub async fn get_all_extensions(cdb: &CoreDB, ctx: Arc<Context>) -> Result<Vec<Extension>, Action> {
     let databases = list_databases(cdb, ctx.clone()).await?;
@@ -506,422 +870,21 @@ pub async fn get_all_extensions(cdb: &CoreDB, ctx: Arc<Context>) -> Result<Vec<E
     Ok(ext_spec)
 }
 
-// returns any elements that are in the desired, and not in actual
-// any Extensions returned by this function need either create or drop extension
-// cheap way to determine if there have been any sort of changes to extensions
-fn diff_extensions(desired: &[Extension], actual: &[Extension]) -> Vec<Extension> {
-    let set_desired: HashSet<_> = desired.iter().cloned().collect();
-    let set_actual: HashSet<_> = actual.iter().cloned().collect();
-    let mut diff: Vec<Extension> = set_desired.difference(&set_actual).cloned().collect();
-    diff.sort_by_key(|e| e.name.clone());
-    debug!("Extensions diff: {:?}", diff);
-    diff
-}
-
-/// determines which extensions need create/drop and which need to be trunk installed
-/// this is intended to be called after diff_extensions()
-fn extension_plan(have_changed: &[Extension], actual: &[Extension]) -> (Vec<Extension>, Vec<Extension>) {
-    let mut changed = Vec::new();
-    let mut to_install = Vec::new();
-
-    // have_changed is unlikely to ever be >10s of extensions
-    for extension_desired in have_changed {
-        // check if the extension name exists in the actual list
-        let mut found = false;
-        // actual unlikely to be > 100s of extensions
-        for extension_actual in actual {
-            if extension_desired.name == extension_actual.name {
-                found = true;
-                // extension exists, therefore has been installed
-                // determine if the `enabled` toggle has changed
-                'loc: for loc_desired in extension_desired.locations.clone() {
-                    for loc_actual in extension_actual.locations.clone() {
-                        if loc_desired.database == loc_actual.database {
-                            if loc_desired.enabled != loc_actual.enabled {
-                                debug!("desired: {:?}, actual: {:?}", extension_desired, extension_actual);
-                                changed.push(extension_desired.clone());
-                                break 'loc;
-                            }
-
-                            // Never need to install disabled extensions
-                            if !loc_desired.enabled {
-                                debug!("desired: {:?}, actual: {:?}", extension_desired, extension_actual);
-                                break 'loc;
-                            }
-
-                            if loc_desired.version.is_some() {
-                                let desired_version = Comparator::parse(
-                                    &loc_desired
-                                        .version
-                                        .clone()
-                                        .expect("Expected to find desired version"),
-                                )
-                                .expect("Failed to parse version into semver");
-                                if loc_actual.version.is_some() {
-                                    let actual_version = Comparator::parse(
-                                        &loc_actual
-                                            .version
-                                            .clone()
-                                            .expect("Expected to find desired version"),
-                                    )
-                                    .expect("Failed to parse version into semver");
-                                    // If the major and minor versions do not match, then we need to install the extension
-                                    if desired_version.major != actual_version.major
-                                        || desired_version.minor != actual_version.minor
-                                    {
-                                        debug!(
-                                            "desired: {:?}, actual: {:?}",
-                                            extension_desired, extension_actual
-                                        );
-                                        to_install.push(extension_desired.clone());
-                                        break 'loc;
-                                    }
-                                    // If the patch version exists on both and does not match, then we need to install the extension
-                                    if desired_version.patch.is_some()
-                                        && actual_version.patch.is_some()
-                                        && desired_version.patch != actual_version.patch
-                                    {
-                                        debug!(
-                                            "desired: {:?}, actual: {:?}",
-                                            extension_desired, extension_actual
-                                        );
-                                        to_install.push(extension_desired.clone());
-                                        break 'loc;
-                                    }
-                                } else {
-                                    warn!("We desire a specific version of an extension {}, but the actual extension is not versioned. Skipping.", extension_desired.name);
-                                }
-                            } // Else, if the desired does not have a version and we already detected matching name, then do nothing
-                        }
-                    }
-                }
-            }
-        }
-        // if it doesn't exist, it needs to be installed
-        if !found {
-            to_install.push(extension_desired.clone());
-        }
-    }
-    debug!(
-        "extension to create/drop: {:?}, extensions to install: {:?}",
-        changed, to_install
-    );
-    (changed, to_install)
-}
-
 /// reconcile extensions between the spec and the database
 pub async fn reconcile_extensions(
     coredb: &CoreDB,
     ctx: Arc<Context>,
-    cdb_api: &Api<CoreDB>,
-    name: &str,
-) -> Result<Vec<Extension>, Action> {
-    reconcile_trunk_installs(coredb, ctx.clone()).await?;
-
-    // always get the current state of extensions in the database
-    // this is due to out of band changes - manual create/drop extension
-    let actual_extensions = get_all_extensions(coredb, ctx.clone()).await?;
-    let mut desired_extensions = coredb.spec.extensions.clone();
-    desired_extensions.sort_by_key(|e| e.name.clone());
-
-    // most of the time there will be no changes
-    let extensions_changed = diff_extensions(&desired_extensions, &actual_extensions);
-
-    if extensions_changed.is_empty() {
-        // no further work when no changes
-        return Ok(actual_extensions);
-    }
-
-    // otherwise, need to determine the plan to apply
-    let (changed_extensions, _unavailable_extensions) =
-        extension_plan(&extensions_changed, &actual_extensions);
-    // TODO: before merge, set status to unavailable for extensions not installed
-
-    if !changed_extensions.is_empty() {
-        let status = serde_json::json!({
-            "status": {"extensionsUpdating": true}
-        });
-        patch_cdb_status_merge(cdb_api, name, status).await?;
-        if !changed_extensions.is_empty() {
-            toggle_extensions(coredb, &changed_extensions, ctx.clone()).await?;
-        }
-        let status = serde_json::json!({
-            "status": {"extensionsUpdating": false}
-        });
-        patch_cdb_status_merge(cdb_api, name, status).await?;
-    }
-    // return final state of extensions
-    get_all_extensions(coredb, ctx.clone()).await
+    _cdb_api: &Api<CoreDB>,
+    _name: &str,
+) -> Result<(Vec<TrunkInstallStatus>, Vec<ExtensionStatus>), Action> {
+    let trunk_installs = reconcile_trunk_installs(coredb, ctx.clone()).await?;
+    let extension_statuses = create_or_drop_extensions(coredb, ctx.clone()).await?;
+    Ok((trunk_installs, extension_statuses))
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    #[test]
-    fn test_extension_plan() {
-        let aggs_for_vecs_disabled = Extension {
-            name: "aggs_for_vecs".to_owned(),
-            description: Some("my description".to_owned()),
-            locations: vec![ExtensionInstallLocation {
-                enabled: false,
-                database: "postgres".to_owned(),
-                schema: "public".to_owned(),
-                version: Some("1.3.0".to_owned()),
-            }],
-        };
-
-        let pgmq_disabled = Extension {
-            name: "pgmq".to_owned(),
-            description: Some("my description".to_owned()),
-            locations: vec![ExtensionInstallLocation {
-                enabled: false,
-                database: "postgres".to_owned(),
-                schema: "public".to_owned(),
-                version: Some("0.9.0".to_owned()),
-            }],
-        };
-        let diff = vec![pgmq_disabled.clone()];
-        let actual = vec![aggs_for_vecs_disabled];
-        let (changed, to_install) = extension_plan(&diff, &actual);
-        assert!(changed.is_empty());
-        assert!(to_install.len() == 1);
-
-        let diff = vec![pgmq_disabled.clone()];
-        let actual = vec![pgmq_disabled];
-        let (changed, to_install) = extension_plan(&diff, &actual);
-        assert!(changed.is_empty());
-        assert!(to_install.is_empty());
-    }
-
-    #[test]
-    fn test_extension_version_compare() {
-        let pg_stat_statements_no_patch = Extension {
-            name: "pg_stat_statements".to_owned(),
-            description: Some("my description".to_owned()),
-            locations: vec![ExtensionInstallLocation {
-                enabled: true,
-                database: "postgres".to_owned(),
-                schema: "public".to_owned(),
-                version: Some("1.10".to_owned()),
-            }],
-        };
-
-        let pg_stat_statements_with_patch = Extension {
-            name: "pg_stat_statements".to_owned(),
-            description: Some("my description".to_owned()),
-            locations: vec![ExtensionInstallLocation {
-                enabled: true,
-                database: "postgres".to_owned(),
-                schema: "public".to_owned(),
-                version: Some("1.10.0".to_owned()),
-            }],
-        };
-        let diff = vec![pg_stat_statements_with_patch];
-        let actual = vec![pg_stat_statements_no_patch];
-        let (changed, to_install) = extension_plan(&diff, &actual);
-        assert!(changed.is_empty());
-        assert!(to_install.is_empty());
-    }
-
-    #[test]
-    fn test_diff_and_plan() {
-        let postgis_disabled = Extension {
-            name: "postgis".to_owned(),
-            description: Some("my description".to_owned()),
-            locations: vec![ExtensionInstallLocation {
-                enabled: false,
-                database: "postgres".to_owned(),
-                schema: "public".to_owned(),
-                version: Some("1.1.1".to_owned()),
-            }],
-        };
-        let postgis_enabled = Extension {
-            name: "postgis".to_owned(),
-            description: Some("my description".to_owned()),
-            locations: vec![ExtensionInstallLocation {
-                enabled: true,
-                database: "postgres".to_owned(),
-                schema: "public".to_owned(),
-                version: Some("1.1.1".to_owned()),
-            }],
-        };
-        let pgmq_disabled = Extension {
-            name: "pgmq".to_owned(),
-            description: Some("my description".to_owned()),
-            locations: vec![ExtensionInstallLocation {
-                enabled: false,
-                database: "postgres".to_owned(),
-                schema: "public".to_owned(),
-                version: Some("1.1.1".to_owned()),
-            }],
-        };
-        let pg_stat_enabled = Extension {
-            name: "pg_stat_statements".to_owned(),
-            description: Some("my description".to_owned()),
-            locations: vec![ExtensionInstallLocation {
-                enabled: true,
-                database: "postgres".to_owned(),
-                schema: "public".to_owned(),
-                version: Some("1.1.1".to_owned()),
-            }],
-        };
-        // three desired
-        let desired = vec![
-            postgis_disabled.clone(),
-            pgmq_disabled.clone(),
-            pg_stat_enabled.clone(),
-        ];
-        // two currently installed
-        let actual = vec![postgis_enabled, pgmq_disabled];
-        // postgis changed from enabled to disabled, and pg_stat is added
-        // no change to pgmq
-
-        // determine which extensions have changed or are new
-        let diff = diff_extensions(&desired, &actual);
-        assert!(
-            diff.len() == 2,
-            "expected two changed extensions, found extensions {:?}",
-            diff
-        );
-        // should be postgis and pg_stat that are the diff
-        assert_eq!(diff[0], pg_stat_enabled, "expected pg_stat, found {:?}", diff[0]);
-        assert_eq!(diff[1], postgis_disabled, "expected postgis, found {:?}", diff[1]);
-        // determine which of these are is a change and which is an install op
-        let (changed, to_install) = extension_plan(&diff, &actual);
-        assert_eq!(changed.len(), 1);
-        assert!(
-            changed[0] == postgis_disabled,
-            "expected postgis changed to disabled, found {:?}",
-            changed[0]
-        );
-
-        assert_eq!(to_install.len(), 1, "expected 1 install, found {:?}", to_install);
-        assert!(
-            to_install[0] == pg_stat_enabled,
-            "expected pg_stat to install, found {:?}",
-            to_install[0]
-        );
-    }
-
-    #[test]
-    fn test_upgrade_ext_vers() {
-        let pgmq_05 = Extension {
-            name: "pgmq".to_owned(),
-            description: Some("my description".to_owned()),
-            locations: vec![ExtensionInstallLocation {
-                enabled: true,
-                database: "postgres".to_owned(),
-                schema: "public".to_owned(),
-                version: Some("0.5.0".to_owned()),
-            }],
-        };
-
-        let pgmq_06 = Extension {
-            name: "pgmq".to_owned(),
-            description: Some("my description".to_owned()),
-            locations: vec![ExtensionInstallLocation {
-                enabled: true,
-                database: "postgres".to_owned(),
-                schema: "public".to_owned(),
-                version: Some("0.6.0".to_owned()),
-            }],
-        };
-        let desired = vec![pgmq_06.clone()];
-        let actual = vec![pgmq_05];
-        // diff should be that we need to upgrade pgmq
-        let diff = diff_extensions(&desired, &actual);
-        assert_eq!(diff.len(), 1);
-        assert_eq!(diff[0], pgmq_06);
-
-        // validate extension plan, should also be pgmq06
-        let (changed, to_install) = extension_plan(&diff, &actual);
-        assert_eq!(
-            changed.len(),
-            0,
-            "expected no changed extensions, found {:?}",
-            changed
-        );
-        assert_eq!(to_install.len(), 1, "expected 1 install, found {:?}", to_install);
-    }
-
-    #[test]
-    fn test_diff() {
-        let aggs_for_vecs_disabled = Extension {
-            name: "aggs_for_vecs".to_owned(),
-            description: Some("my description".to_owned()),
-            locations: vec![ExtensionInstallLocation {
-                enabled: false,
-                database: "postgres".to_owned(),
-                schema: "public".to_owned(),
-                version: Some("1.5.2".to_owned()),
-            }],
-        };
-
-        let pgmq_enabled = Extension {
-            name: "pgmq".to_owned(),
-            description: Some("my description".to_owned()),
-            locations: vec![ExtensionInstallLocation {
-                enabled: true,
-                database: "postgres".to_owned(),
-                schema: "public".to_owned(),
-                version: Some("0.9.0".to_owned()),
-            }],
-        };
-
-        let pgmq_disabled = Extension {
-            name: "pgmq".to_owned(),
-            description: Some("my description".to_owned()),
-            locations: vec![ExtensionInstallLocation {
-                enabled: false,
-                database: "postgres".to_owned(),
-                schema: "public".to_owned(),
-                version: Some("0.9.0".to_owned()),
-            }],
-        };
-
-        // case where there are extensions in db but not on spec
-        // happens on startup, for example
-        let desired = vec![];
-        let actual = vec![aggs_for_vecs_disabled.clone(), pgmq_enabled.clone()];
-        // diff should be that we need to enable pgmq
-        let diff = diff_extensions(&desired, &actual);
-        assert!(diff.is_empty());
-
-        let desired = vec![aggs_for_vecs_disabled.clone(), pgmq_enabled.clone()];
-        let actual = vec![aggs_for_vecs_disabled.clone(), pgmq_disabled.clone()];
-        // diff should be that we need to enable pgmq
-        let diff = diff_extensions(&desired, &actual);
-        assert_eq!(diff.len(), 1);
-        assert_eq!(diff[0], pgmq_enabled);
-
-        // order does not matter
-        let desired = vec![pgmq_enabled.clone(), aggs_for_vecs_disabled.clone()];
-        let actual = vec![aggs_for_vecs_disabled.clone(), pgmq_disabled.clone()];
-        // diff will still be to enable pgmq
-        let diff = diff_extensions(&desired, &actual);
-        assert_eq!(diff.len(), 1);
-        assert_eq!(diff[0], pgmq_enabled);
-
-        let desired = vec![aggs_for_vecs_disabled.clone(), pgmq_enabled.clone()];
-        let actual = vec![aggs_for_vecs_disabled.clone(), pgmq_disabled];
-        // diff should be that we need to enable pgmq
-        let diff = diff_extensions(&desired, &actual);
-        assert_eq!(diff.len(), 1);
-        assert_eq!(diff[0], pgmq_enabled);
-
-        let desired = vec![aggs_for_vecs_disabled.clone(), pgmq_enabled.clone()];
-        let actual = vec![aggs_for_vecs_disabled.clone(), pgmq_enabled.clone()];
-        // diff == actual, so diff should be empty
-        let diff = diff_extensions(&desired, &actual);
-        assert_eq!(diff.len(), 0);
-
-        let desired = vec![aggs_for_vecs_disabled.clone()];
-        let actual = vec![aggs_for_vecs_disabled, pgmq_enabled];
-        // less extensions desired than exist - should be a no op
-        let diff = diff_extensions(&desired, &actual);
-        assert_eq!(diff.len(), 0);
-    }
 
     #[test]
     fn test_parse_databases() {

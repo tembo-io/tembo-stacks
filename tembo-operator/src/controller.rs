@@ -10,7 +10,7 @@ use crate::{
     config::Config,
     deployment_postgres_exporter::reconcile_prometheus_exporter,
     exec::{ExecCommand, ExecOutput},
-    extensions::{reconcile_extensions, Extension},
+    extensions::reconcile_extensions,
     ingress::reconcile_postgres_ing_route_tcp,
     postgres_exporter::{create_postgres_exporter_role, reconcile_prom_configmap},
     psql::{PsqlCommand, PsqlOutput},
@@ -273,11 +273,9 @@ impl CoreDB {
                 Action::requeue(Duration::from_secs(300))
             })?;
 
-        if cnpg_enabled {
-            reconcile_cnpg(self, ctx.clone()).await?;
-            if cfg.enable_backup {
-                reconcile_cnpg_scheduled_backup(self, ctx.clone()).await?;
-            }
+        reconcile_cnpg(self, ctx.clone()).await?;
+        if cfg.enable_backup {
+            reconcile_cnpg_scheduled_backup(self, ctx.clone()).await?;
         }
 
         // reconcile prometheus exporter deployment if enabled
@@ -310,7 +308,7 @@ impl CoreDB {
                     return Ok(Action::requeue(Duration::from_secs(5)));
                 }
 
-                let extensions: Vec<Extension> =
+                let (trunk_installs, extensions) =
                     reconcile_extensions(self, ctx.clone(), &coredbs, &name).await?;
 
                 create_postgres_exporter_role(self, ctx.clone(), secret_data).await?;
@@ -322,8 +320,7 @@ impl CoreDB {
                     sharedirStorage: self.spec.sharedirStorage.clone(),
                     pkglibdirStorage: self.spec.pkglibdirStorage.clone(),
                     extensions: Some(extensions),
-                    // TODO: before merge
-                    trunk_installs: None,
+                    trunk_installs: Some(trunk_installs),
                 }
             }
             true => CoreDBStatus {
@@ -488,6 +485,22 @@ pub fn is_postgres_ready() -> impl Condition<Pod> + 'static {
     }
 }
 
+pub async fn get_current_coredb_resource(cdb: &CoreDB, ctx: Arc<Context>) -> Result<CoreDB, Action> {
+    let coredb_api: Api<CoreDB> = Api::namespaced(
+        ctx.client.clone(),
+        &cdb.metadata
+            .namespace
+            .clone()
+            .expect("CoreDB should have a namespace"),
+    );
+    let coredb_name = cdb.metadata.name.clone().expect("CoreDB should have a name");
+    let coredb = coredb_api.get(&coredb_name).await.map_err(|e| {
+        error!("Error getting CoreDB resource: {:?}", e);
+        Action::requeue(Duration::from_secs(10))
+    })?;
+    Ok(coredb.clone())
+}
+
 pub async fn apply_status_force(
     cdb: &Api<CoreDB>,
     name: &str,
@@ -557,7 +570,7 @@ pub async fn add_trunk_install_to_status(
     cdb: &Api<CoreDB>,
     name: &str,
     trunk_install: &TrunkInstallStatus,
-) -> Result<(), Action> {
+) -> Result<Vec<TrunkInstallStatus>, Action> {
     let current_coredb = cdb.get(name).await.map_err(|e| {
         error!("Error getting CoreDB: {:?}", e);
         Action::requeue(Duration::from_secs(10))
@@ -595,7 +608,7 @@ pub async fn add_trunk_install_to_status(
     // remove duplicates
     new_trunk_installs_status.dedup_by(|a, b| a.name == b.name);
     let new_status = CoreDBStatus {
-        trunk_installs: Some(new_trunk_installs_status),
+        trunk_installs: Some(new_trunk_installs_status.clone()),
         ..current_status
     };
     let patch_status = json!({
@@ -604,7 +617,7 @@ pub async fn add_trunk_install_to_status(
         "status": new_status
     });
     patch_cdb_status_merge(cdb, name, patch_status).await?;
-    Ok(())
+    Ok(new_trunk_installs_status.clone())
 }
 
 pub async fn patch_cdb_status_merge(
