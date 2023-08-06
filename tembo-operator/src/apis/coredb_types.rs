@@ -1,4 +1,4 @@
-use crate::extensions::{Extension, ExtensionStatus, TrunkInstall, TrunkInstallStatus};
+use crate::extensions::types::ExtensionStatus;
 use k8s_openapi::{
     api::core::v1::ResourceRequirements,
     apimachinery::pkg::{api::resource::Quantity, apis::meta::v1::ObjectMeta},
@@ -13,6 +13,7 @@ use crate::{
 };
 use kube::CustomResource;
 
+use crate::extensions::types::{Extension, TrunkInstall, TrunkInstallStatus};
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;

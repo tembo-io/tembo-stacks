@@ -1,107 +1,28 @@
+pub mod types;
+
 use crate::{
-    add_trunk_install_to_status, apis::coredb_types::CoreDB, controller::patch_cdb_status_merge, defaults,
+    add_trunk_install_to_status, apis::coredb_types::CoreDB, controller::patch_cdb_status_merge,
     get_current_coredb_resource, remove_trunk_installs_from_status, Context,
 };
-
 
 use kube::{api::Api, runtime::controller::Action};
 use lazy_static::lazy_static;
 use regex::Regex;
-use schemars::JsonSchema;
 
-use serde::{Deserialize, Serialize};
+
 use serde_json::json;
 use std::{collections::HashMap, sync::Arc};
 
 use tokio::time::Duration;
 use tracing::{debug, error, info, warn};
+use types::{
+    Extension, ExtensionInstallLocation, ExtensionInstallLocationStatus, ExtensionStatus, InstallStatus,
+    TrunkInstall, TrunkInstallStatus,
+};
 
 
 lazy_static! {
     static ref VALID_INPUT: Regex = Regex::new(r"^[a-zA-Z]([a-zA-Z0-9]*[-_]?)*[a-zA-Z0-9]+$").unwrap();
-}
-
-#[derive(Clone, Debug, Deserialize, Eq, Hash, JsonSchema, Serialize, PartialEq)]
-pub struct TrunkInstall {
-    pub name: String,
-    pub version: Option<String>,
-}
-
-#[derive(Clone, Debug, Deserialize, Eq, Hash, JsonSchema, Serialize, PartialEq)]
-pub struct TrunkInstallStatus {
-    pub name: String,
-    pub version: Option<String>,
-    pub status: InstallStatus,
-    pub error_message: Option<String>,
-}
-
-#[derive(Clone, Debug, Deserialize, Eq, Hash, JsonSchema, Serialize, PartialEq)]
-pub enum InstallStatus {
-    Installed,
-    Error,
-}
-
-#[derive(Clone, Debug, Deserialize, Eq, Hash, JsonSchema, Serialize, PartialEq)]
-pub struct Extension {
-    pub name: String,
-    #[serde(default = "defaults::default_description")]
-    pub description: Option<String>,
-    pub locations: Vec<ExtensionInstallLocation>,
-}
-
-impl Default for Extension {
-    fn default() -> Self {
-        Extension {
-            name: "pg_stat_statements".to_owned(),
-            description: Some(
-                " track planning and execution statistics of all SQL statements executed".to_owned(),
-            ),
-            locations: vec![ExtensionInstallLocation::default()],
-        }
-    }
-}
-
-#[derive(Clone, Debug, Deserialize, Eq, Hash, JsonSchema, Serialize, PartialEq)]
-pub struct ExtensionInstallLocation {
-    pub enabled: bool,
-    // no database or schema when disabled
-    #[serde(default = "defaults::default_database")]
-    pub database: String,
-    #[serde(default = "defaults::default_schema")]
-    pub schema: String,
-    pub version: Option<String>,
-}
-
-impl Default for ExtensionInstallLocation {
-    fn default() -> Self {
-        ExtensionInstallLocation {
-            schema: "public".to_owned(),
-            database: "postgres".to_owned(),
-            enabled: true,
-            version: Some("1.9".to_owned()),
-        }
-    }
-}
-
-#[derive(Clone, Debug, Deserialize, Eq, Hash, JsonSchema, Serialize, PartialEq)]
-pub struct ExtensionStatus {
-    pub name: String,
-    #[serde(default = "defaults::default_description")]
-    pub description: Option<String>,
-    pub locations: Vec<ExtensionInstallLocationStatus>,
-}
-
-#[derive(Clone, Debug, Deserialize, Eq, Hash, JsonSchema, Serialize, PartialEq)]
-pub struct ExtensionInstallLocationStatus {
-    #[serde(default = "defaults::default_database")]
-    pub database: String,
-    #[serde(default = "defaults::default_schema")]
-    pub schema: String,
-    pub version: Option<String>,
-    // None means this is not actually installed
-    pub enabled: Option<bool>,
-    pub error: bool,
-    pub error_message: Option<String>,
 }
 
 #[derive(Debug)]

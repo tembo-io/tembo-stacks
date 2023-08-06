@@ -39,7 +39,7 @@ use kube::{
     Resource,
 };
 
-use crate::extensions::TrunkInstallStatus;
+use crate::extensions::types::TrunkInstallStatus;
 use serde::Serialize;
 use serde_json::json;
 use std::sync::Arc;

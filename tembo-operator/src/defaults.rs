@@ -3,7 +3,7 @@ use std::collections::BTreeMap;
 
 use crate::{
     apis::coredb_types::{Backup, ServiceAccountTemplate},
-    extensions::{Extension, TrunkInstall},
+    extensions::types::{Extension, TrunkInstall},
 };
 
 pub fn default_replicas() -> i32 {
