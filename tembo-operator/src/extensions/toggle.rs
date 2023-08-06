@@ -1,58 +1,41 @@
-use std::sync::Arc;
-use kube::Api;
+use crate::{
+    apis::coredb_types::CoreDB,
+    extensions::{
+        database_queries, kubernetes_queries, types,
+        types::{Extension, ExtensionInstallLocationStatus, ExtensionStatus},
+    },
+    get_current_coredb_resource, Context,
+};
 use kube::runtime::controller::Action;
-use serde_json::json;
+
+use std::sync::Arc;
 use tracing::error;
-use crate::apis::coredb_types::CoreDB;
-use crate::{Context, extensions, get_current_coredb_resource, patch_cdb_status_merge};
-use crate::extensions::{database_queries, kubernetes_queries, trunk, types};
-use crate::extensions::types::{Extension, ExtensionInstallLocationStatus, ExtensionStatus, TrunkInstallStatus};
 
-/// reconcile extensions between the spec and the database
-pub async fn reconcile_extensions(
-    coredb: &CoreDB,
+pub async fn reconcile_extension_toggle_state(
+    cdb: &CoreDB,
     ctx: Arc<Context>,
-    _cdb_api: &Api<CoreDB>,
-    _name: &str,
-) -> Result<(Vec<TrunkInstallStatus>, Vec<ExtensionStatus>), Action> {
-    let trunk_installs = trunk::reconcile_trunk_installs(coredb, ctx.clone()).await?;
-    let extension_statuses = create_or_drop_extensions(coredb, ctx.clone()).await?;
-    Ok((trunk_installs, extension_statuses))
-}
-
-async fn create_or_drop_extensions(cdb: &CoreDB, ctx: Arc<Context>) -> Result<Vec<ExtensionStatus>, Action> {
+) -> Result<Vec<ExtensionStatus>, Action> {
     let all_actually_installed_extensions = database_queries::get_all_extensions(cdb, ctx.clone()).await?;
-    let mut ext_status_updates = determine_updated_extensions_status(cdb, all_actually_installed_extensions);
-    let patch_status = json!({
-        "apiVersion": "coredb.io/v1alpha1",
-        "kind": "CoreDB",
-        "status": {
-            "extensions": ext_status_updates
-        }
-    });
-    let coredb_api: Api<CoreDB> = Api::namespaced(
-        ctx.client.clone(),
-        &cdb.metadata
-            .namespace
-            .clone()
-            .expect("CoreDB should have a namespace"),
-    );
-    patch_cdb_status_merge(
-        &coredb_api,
-        &cdb.metadata
-            .name
-            .clone()
-            .expect("CoreDB should always have a name"),
-        patch_status,
-    )
-    .await?;
+    let ext_status_updates = determine_updated_extensions_status(cdb, all_actually_installed_extensions);
+    kubernetes_queries::update_extensions_status(cdb, ext_status_updates.clone(), &ctx).await?;
     let cdb = get_current_coredb_resource(cdb, ctx.clone()).await?;
     let toggle_these_extensions = determine_extension_locations_to_toggle(&cdb);
-    // TODO move this into separate function toggle_extensions
+    let ext_status_updates =
+        toggle_extensions(ctx, ext_status_updates, &cdb, toggle_these_extensions).await?;
+    Ok(ext_status_updates)
+}
+
+async fn toggle_extensions(
+    ctx: Arc<Context>,
+    ext_status_updates: Vec<ExtensionStatus>,
+    cdb: &CoreDB,
+    toggle_these_extensions: Vec<Extension>,
+) -> Result<Vec<ExtensionStatus>, Action> {
+    let mut ext_status_updates = ext_status_updates.clone();
     for extension_to_toggle in toggle_these_extensions {
         for location_to_toggle in extension_to_toggle.locations {
             match database_queries::toggle_extension(
-                &cdb,
+                cdb,
                 &extension_to_toggle.name,
                 location_to_toggle.clone(),
                 ctx.clone(),
@@ -62,7 +45,7 @@ async fn create_or_drop_extensions(cdb: &CoreDB, ctx: Arc<Context>) -> Result<Ve
                 Ok(_) => {}
                 Err(error_message) => {
                     let mut location_status = match types::get_location_status(
-                        &cdb,
+                        cdb,
                         &extension_to_toggle.name,
                         &location_to_toggle.database,
                         &location_to_toggle.schema,
@@ -82,8 +65,8 @@ async fn create_or_drop_extensions(cdb: &CoreDB, ctx: Arc<Context>) -> Result<Ve
                     };
                     location_status.error = true;
                     location_status.error_message = Some(error_message);
-                    ext_status_updates = kubernetes_queries::update_extension_location_in_coredb_status(
-                        &cdb,
+                    ext_status_updates = kubernetes_queries::update_extension_location_in_status(
+                        cdb,
                         ctx.clone(),
                         &extension_to_toggle.name,
                         &location_status,

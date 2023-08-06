@@ -1,8 +1,10 @@
 use crate::{
-    add_trunk_install_to_status,
     apis::coredb_types::CoreDB,
-    extensions::types::{InstallStatus, TrunkInstall, TrunkInstallStatus},
-    remove_trunk_installs_from_status, Context,
+    extensions::{
+        kubernetes_queries::{add_trunk_install_to_status, remove_trunk_installs_from_status},
+        types::{InstallStatus, TrunkInstall, TrunkInstallStatus},
+    },
+    Context,
 };
 use kube::{runtime::controller::Action, Api};
 use std::{sync::Arc, time::Duration};

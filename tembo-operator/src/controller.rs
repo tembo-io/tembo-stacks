@@ -9,14 +9,14 @@ use crate::{
     cloudnativepg::cnpg::{cnpg_cluster_from_cdb, reconcile_cnpg, reconcile_cnpg_scheduled_backup},
     config::Config,
     deployment_postgres_exporter::reconcile_prometheus_exporter,
-    Error,
     exec::{ExecCommand, ExecOutput},
     ingress::reconcile_postgres_ing_route_tcp,
-    Metrics,
     postgres_exporter::{create_postgres_exporter_role, reconcile_prom_configmap},
     psql::{PsqlCommand, PsqlOutput},
     rbac::reconcile_rbac,
-    Result, secret::{PrometheusExporterSecretData, reconcile_postgres_exporter_secret, reconcile_secret}, service::reconcile_svc, telemetry,
+    secret::{reconcile_postgres_exporter_secret, reconcile_secret, PrometheusExporterSecretData},
+    service::reconcile_svc,
+    telemetry, Error, Metrics, Result,
 };
 use k8s_openapi::{
     api::{
@@ -28,23 +28,22 @@ use k8s_openapi::{
 use kube::{
     api::{Api, ListParams, Patch, PatchParams, ResourceExt},
     client::Client,
-    Resource,
     runtime::{
         controller::{Action, Controller},
         events::{Event, EventType, Recorder, Reporter},
-        finalizer::{Event as Finalizer, finalizer},
+        finalizer::{finalizer, Event as Finalizer},
         wait::Condition,
         watcher::Config as watcherConfig,
     },
+    Resource,
 };
 
-use crate::extensions::types::TrunkInstallStatus;
+use crate::extensions::reconcile_extensions;
 use serde::Serialize;
 use serde_json::json;
 use std::sync::Arc;
 use tokio::{sync::RwLock, time::Duration};
 use tracing::*;
-use crate::extensions::extensions::reconcile_extensions;
 
 pub static COREDB_FINALIZER: &str = "coredbs.coredb.io";
 pub static COREDB_ANNOTATION: &str = "coredbs.coredb.io/watch";
@@ -515,111 +514,6 @@ pub async fn apply_status_force(
     Ok(())
 }
 
-pub async fn remove_trunk_installs_from_status(
-    cdb: &Api<CoreDB>,
-    name: &str,
-    trunk_install_names: Vec<String>,
-) -> Result<(), Action> {
-    if trunk_install_names.is_empty() {
-        return Ok(());
-    }
-    let current_coredb = cdb.get(name).await.map_err(|e| {
-        error!("Error getting CoreDB: {:?}", e);
-        Action::requeue(Duration::from_secs(10))
-    })?;
-    let current_status = match current_coredb.status {
-        None => CoreDBStatus::default(),
-        Some(status) => status,
-    };
-    let current_trunk_installs = match current_status.trunk_installs {
-        None => {
-            warn!(
-                "No trunk installs in status on {}, but we are trying remove from status {:?}",
-                name, trunk_install_names
-            );
-            return Ok(());
-        }
-        Some(trunk_installs) => trunk_installs,
-    };
-    let mut new_trunk_installs_status = current_trunk_installs.clone();
-
-    // Remove the trunk installs from the status
-    for trunk_install_name in trunk_install_names {
-        new_trunk_installs_status.retain(|t| t.name != trunk_install_name);
-    }
-
-    // sort alphabetically by name
-    new_trunk_installs_status.sort_by(|a, b| a.name.cmp(&b.name));
-    // remove duplicates
-    new_trunk_installs_status.dedup_by(|a, b| a.name == b.name);
-
-    let new_status = CoreDBStatus {
-        trunk_installs: Some(new_trunk_installs_status),
-        ..current_status
-    };
-    let patch_status = json!({
-        "apiVersion": "coredb.io/v1alpha1",
-        "kind": "CoreDB",
-        "status": new_status
-    });
-    patch_cdb_status_merge(cdb, name, patch_status).await?;
-    Ok(())
-}
-
-pub async fn add_trunk_install_to_status(
-    cdb: &Api<CoreDB>,
-    name: &str,
-    trunk_install: &TrunkInstallStatus,
-) -> Result<Vec<TrunkInstallStatus>, Action> {
-    let current_coredb = cdb.get(name).await.map_err(|e| {
-        error!("Error getting CoreDB: {:?}", e);
-        Action::requeue(Duration::from_secs(10))
-    })?;
-    let current_status = match current_coredb.status {
-        None => CoreDBStatus::default(),
-        Some(status) => status,
-    };
-    let current_trunk_installs = match current_status.trunk_installs {
-        None => {
-            vec![]
-        }
-        Some(trunk_installs) => trunk_installs,
-    };
-    let mut new_trunk_installs_status = current_trunk_installs.clone();
-    let mut trunk_install_found = false;
-    // Check if the trunk install is already in the list
-    for (_i, ti) in current_trunk_installs.iter().enumerate() {
-        if ti.name == trunk_install.clone().name {
-            warn!(
-                "Trunk install {} already in status on {}, replacing.",
-                &trunk_install.name, name
-            );
-            new_trunk_installs_status.push(trunk_install.clone());
-            trunk_install_found = true;
-        } else {
-            new_trunk_installs_status.push(ti.clone());
-        }
-    }
-    if !trunk_install_found {
-        new_trunk_installs_status.push(trunk_install.clone());
-    }
-    // sort alphabetically by name
-    new_trunk_installs_status.sort_by(|a, b| a.name.cmp(&b.name));
-    // remove duplicates
-    new_trunk_installs_status.dedup_by(|a, b| a.name == b.name);
-    let new_status = CoreDBStatus {
-        trunk_installs: Some(new_trunk_installs_status.clone()),
-        ..current_status
-    };
-    let patch_status = json!({
-        "apiVersion": "coredb.io/v1alpha1",
-        "kind": "CoreDB",
-        "status": new_status
-    });
-    patch_cdb_status_merge(cdb, name, patch_status).await?;
-    Ok(new_trunk_installs_status.clone())
-}
-
 pub async fn patch_cdb_status_merge(
     cdb: &Api<CoreDB>,
     name: &str,
@@ -713,7 +607,7 @@ pub async fn run(state: State) {
 // Tests rely on fixtures.rs
 #[cfg(test)]
 mod test {
-    use super::{Context, CoreDB, reconcile};
+    use super::{reconcile, Context, CoreDB};
     use std::sync::Arc;
 
     #[tokio::test]
