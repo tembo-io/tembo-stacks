@@ -1,4 +1,5 @@
 pub mod database_queries;
+pub mod kubernetes_queries;
 pub mod trunk;
 pub mod types;
 
@@ -7,74 +8,16 @@ use crate::{
 };
 
 use kube::{api::Api, runtime::controller::Action};
-use lazy_static::lazy_static;
-use regex::Regex;
 
 
 use serde_json::json;
 use std::sync::Arc;
 
-use tokio::time::Duration;
+
 use tracing::error;
 
-use types::{
-    Extension, ExtensionInstallLocation, ExtensionInstallLocationStatus, ExtensionStatus, TrunkInstallStatus,
-};
+use types::{Extension, ExtensionInstallLocationStatus, ExtensionStatus, TrunkInstallStatus};
 
-
-lazy_static! {
-    static ref VALID_INPUT: Regex = Regex::new(r"^[a-zA-Z]([a-zA-Z0-9]*[-_]?)*[a-zA-Z0-9]+$").unwrap();
-}
-
-pub fn check_input(input: &str) -> bool {
-    VALID_INPUT.is_match(input)
-}
-
-fn get_location_status(
-    cdb: &CoreDB,
-    extension_name: &str,
-    location_database: &str,
-    location_schema: &str,
-) -> Option<ExtensionInstallLocationStatus> {
-    match &cdb.status {
-        None => None,
-        Some(status) => match &status.extensions {
-            None => None,
-            Some(extensions) => {
-                for extension in extensions {
-                    if extension.name == extension_name {
-                        for location in &extension.locations {
-                            if location.database == location_database && location.schema == location_schema {
-                                return Some(location.clone());
-                            }
-                        }
-                        return None;
-                    }
-                }
-                None
-            }
-        },
-    }
-}
-
-fn get_location_spec(
-    cdb: &CoreDB,
-    extension_name: &str,
-    location_database: &str,
-    location_schema: &str,
-) -> Option<ExtensionInstallLocation> {
-    for extension in &cdb.spec.extensions {
-        if extension.name == extension_name {
-            for location in &extension.locations {
-                if location.database == location_database && location.schema == location_schema {
-                    return Some(location.clone());
-                }
-            }
-            return None;
-        }
-    }
-    None
-}
 
 fn determine_extension_locations_to_toggle(cdb: &CoreDB) -> Vec<Extension> {
     let mut extensions_to_toggle: Vec<Extension> = vec![];
@@ -82,7 +25,7 @@ fn determine_extension_locations_to_toggle(cdb: &CoreDB) -> Vec<Extension> {
         let mut needs_toggle = false;
         let mut extension_to_toggle = desired_extension.clone();
         for desired_location in &desired_extension.locations {
-            match get_location_status(
+            match types::get_location_status(
                 cdb,
                 &desired_extension.name,
                 &desired_location.database,
@@ -109,6 +52,7 @@ fn determine_extension_locations_to_toggle(cdb: &CoreDB) -> Vec<Extension> {
     }
     extensions_to_toggle
 }
+
 fn determine_updated_extensions_status(
     cdb: &CoreDB,
     all_actually_installed_extensions: Vec<Extension>,
@@ -134,7 +78,7 @@ fn determine_updated_extensions_status(
                 error_message: None,
             };
             // If there is a current status, retain the error and error message
-            match get_location_status(
+            match types::get_location_status(
                 cdb,
                 &actual_extension.name.clone(),
                 &actual_location.database.clone(),
@@ -147,7 +91,7 @@ fn determine_updated_extensions_status(
                 }
             }
             // If the desired state matches the actual state, unset the error and error message
-            match get_location_spec(
+            match types::get_location_spec(
                 cdb,
                 &actual_extension.name,
                 &actual_location.database,
@@ -211,65 +155,6 @@ fn determine_updated_extensions_status(
     ext_status_updates
 }
 
-async fn update_extension_location_in_coredb_status(
-    cdb: &CoreDB,
-    ctx: Arc<Context>,
-    extension_name: &str,
-    new_location_status: &ExtensionInstallLocationStatus,
-) -> Result<Vec<ExtensionStatus>, Action> {
-    let cdb = get_current_coredb_resource(cdb, ctx.clone()).await?;
-    let mut current_extensions_status = match &cdb.status {
-        None => {
-            error!("status should always already be present when merging one extension location into existing status");
-            return Err(Action::requeue(Duration::from_secs(300)));
-        }
-        Some(status) => match &status.extensions {
-            None => {
-                error!("status.extensions should always already be present when merging one extension location into existing status");
-                return Err(Action::requeue(Duration::from_secs(300)));
-            }
-            Some(extensions) => extensions.clone(),
-        },
-    };
-    for extension in &mut current_extensions_status {
-        if extension.name == extension_name {
-            for location in &mut extension.locations {
-                if location.database == new_location_status.database
-                    && location.schema == new_location_status.schema
-                {
-                    *location = new_location_status.clone();
-                    break;
-                }
-            }
-            break;
-        }
-    }
-    let patch_status = json!({
-        "apiVersion": "coredb.io/v1alpha1",
-        "kind": "CoreDB",
-        "status": {
-            "extensions": current_extensions_status
-        }
-    });
-    let coredb_api: Api<CoreDB> = Api::namespaced(
-        ctx.client.clone(),
-        &cdb.metadata
-            .namespace
-            .clone()
-            .expect("CoreDB should have a namespace"),
-    );
-    patch_cdb_status_merge(
-        &coredb_api,
-        &cdb.metadata
-            .name
-            .clone()
-            .expect("CoreDB should always have a name"),
-        patch_status,
-    )
-    .await?;
-    Ok(current_extensions_status.clone())
-}
-
 async fn create_or_drop_extensions(cdb: &CoreDB, ctx: Arc<Context>) -> Result<Vec<ExtensionStatus>, Action> {
     let all_actually_installed_extensions = database_queries::get_all_extensions(cdb, ctx.clone()).await?;
     let mut ext_status_updates = determine_updated_extensions_status(cdb, all_actually_installed_extensions);
@@ -311,7 +196,7 @@ async fn create_or_drop_extensions(cdb: &CoreDB, ctx: Arc<Context>) -> Result<Ve
             {
                 Ok(_) => {}
                 Err(error_message) => {
-                    let mut location_status = match get_location_status(
+                    let mut location_status = match types::get_location_status(
                         &cdb,
                         &extension_to_toggle.name,
                         &location_to_toggle.database,
@@ -332,7 +217,7 @@ async fn create_or_drop_extensions(cdb: &CoreDB, ctx: Arc<Context>) -> Result<Ve
                     };
                     location_status.error = true;
                     location_status.error_message = Some(error_message);
-                    ext_status_updates = update_extension_location_in_coredb_status(
+                    ext_status_updates = kubernetes_queries::update_extension_location_in_coredb_status(
                         &cdb,
                         ctx.clone(),
                         &extension_to_toggle.name,
@@ -360,8 +245,8 @@ pub async fn reconcile_extensions(
 
 #[cfg(test)]
 mod tests {
-    use super::*;
-    use crate::extensions::database_queries::{parse_databases, parse_extensions};
+
+    use crate::extensions::database_queries::{check_input, parse_databases, parse_extensions};
 
     #[test]
     fn test_parse_databases() {

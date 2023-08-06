@@ -1,12 +1,17 @@
 use crate::{
     apis::coredb_types::CoreDB,
-    extensions,
     extensions::types::{Extension, ExtensionInstallLocation},
     Context,
 };
 use kube::runtime::controller::Action;
+use lazy_static::lazy_static;
+use regex::Regex;
 use std::{collections::HashMap, sync::Arc};
 use tracing::{debug, error, info, warn};
+
+lazy_static! {
+    static ref VALID_INPUT: Regex = Regex::new(r"^[a-zA-Z]([a-zA-Z0-9]*[-_]?)*[a-zA-Z0-9]+$").unwrap();
+}
 
 pub const LIST_DATABASES_QUERY: &str = r#"SELECT datname FROM pg_database WHERE datistemplate = false;"#;
 
@@ -188,7 +193,7 @@ pub async fn toggle_extension(
     ctx: Arc<Context>,
 ) -> Result<(), String> {
     let coredb_name = cdb.metadata.name.clone().expect("CoreDB should have a name");
-    if !extensions::check_input(ext_name) {
+    if !check_input(ext_name) {
         warn!(
             "Extension is not formatted properly. Skipping operation. {}",
             &coredb_name
@@ -196,7 +201,7 @@ pub async fn toggle_extension(
         return Err("Extension name is not formatted properly".to_string());
     }
     let database_name = ext_loc.database.to_owned();
-    if !extensions::check_input(&database_name) {
+    if !check_input(&database_name) {
         warn!(
             "Database name is not formatted properly. Skipping operation. {}",
             &coredb_name
@@ -204,7 +209,7 @@ pub async fn toggle_extension(
         return Err("Database name is not formatted properly".to_string());
     }
     let schema_name = ext_loc.schema.to_owned();
-    if !extensions::check_input(&schema_name) {
+    if !check_input(&schema_name) {
         warn!(
             "Extension.Database.Schema {}.{}.{} is not formatted properly. Skipping operation. {}",
             ext_name, database_name, schema_name, &coredb_name
@@ -271,4 +276,8 @@ pub async fn toggle_extension(
         }
     }
     Ok(())
+}
+
+pub fn check_input(input: &str) -> bool {
+    VALID_INPUT.is_match(input)
 }

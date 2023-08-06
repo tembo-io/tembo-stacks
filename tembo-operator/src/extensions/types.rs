@@ -1,4 +1,4 @@
-use crate::defaults;
+use crate::{apis::coredb_types::CoreDB, defaults};
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 
@@ -84,4 +84,50 @@ pub struct ExtensionInstallLocationStatus {
     pub enabled: Option<bool>,
     pub error: bool,
     pub error_message: Option<String>,
+}
+
+pub fn get_location_status(
+    cdb: &CoreDB,
+    extension_name: &str,
+    location_database: &str,
+    location_schema: &str,
+) -> Option<ExtensionInstallLocationStatus> {
+    match &cdb.status {
+        None => None,
+        Some(status) => match &status.extensions {
+            None => None,
+            Some(extensions) => {
+                for extension in extensions {
+                    if extension.name == extension_name {
+                        for location in &extension.locations {
+                            if location.database == location_database && location.schema == location_schema {
+                                return Some(location.clone());
+                            }
+                        }
+                        return None;
+                    }
+                }
+                None
+            }
+        },
+    }
+}
+
+pub fn get_location_spec(
+    cdb: &CoreDB,
+    extension_name: &str,
+    location_database: &str,
+    location_schema: &str,
+) -> Option<ExtensionInstallLocation> {
+    for extension in &cdb.spec.extensions {
+        if extension.name == extension_name {
+            for location in &extension.locations {
+                if location.database == location_database && location.schema == location_schema {
+                    return Some(location.clone());
+                }
+            }
+            return None;
+        }
+    }
+    None
 }
