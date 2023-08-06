@@ -9,15 +9,14 @@ use crate::{
     cloudnativepg::cnpg::{cnpg_cluster_from_cdb, reconcile_cnpg, reconcile_cnpg_scheduled_backup},
     config::Config,
     deployment_postgres_exporter::reconcile_prometheus_exporter,
+    Error,
     exec::{ExecCommand, ExecOutput},
-    extensions::reconcile_extensions,
     ingress::reconcile_postgres_ing_route_tcp,
+    Metrics,
     postgres_exporter::{create_postgres_exporter_role, reconcile_prom_configmap},
     psql::{PsqlCommand, PsqlOutput},
     rbac::reconcile_rbac,
-    secret::{reconcile_postgres_exporter_secret, reconcile_secret, PrometheusExporterSecretData},
-    service::reconcile_svc,
-    telemetry, Error, Metrics, Result,
+    Result, secret::{PrometheusExporterSecretData, reconcile_postgres_exporter_secret, reconcile_secret}, service::reconcile_svc, telemetry,
 };
 use k8s_openapi::{
     api::{
@@ -29,14 +28,14 @@ use k8s_openapi::{
 use kube::{
     api::{Api, ListParams, Patch, PatchParams, ResourceExt},
     client::Client,
+    Resource,
     runtime::{
         controller::{Action, Controller},
         events::{Event, EventType, Recorder, Reporter},
-        finalizer::{finalizer, Event as Finalizer},
+        finalizer::{Event as Finalizer, finalizer},
         wait::Condition,
         watcher::Config as watcherConfig,
     },
-    Resource,
 };
 
 use crate::extensions::types::TrunkInstallStatus;
@@ -45,6 +44,7 @@ use serde_json::json;
 use std::sync::Arc;
 use tokio::{sync::RwLock, time::Duration};
 use tracing::*;
+use crate::extensions::extensions::reconcile_extensions;
 
 pub static COREDB_FINALIZER: &str = "coredbs.coredb.io";
 pub static COREDB_ANNOTATION: &str = "coredbs.coredb.io/watch";
@@ -713,7 +713,7 @@ pub async fn run(state: State) {
 // Tests rely on fixtures.rs
 #[cfg(test)]
 mod test {
-    use super::{reconcile, Context, CoreDB};
+    use super::{Context, CoreDB, reconcile};
     use std::sync::Arc;
 
     #[tokio::test]
