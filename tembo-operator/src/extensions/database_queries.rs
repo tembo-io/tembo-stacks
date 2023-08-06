@@ -1,11 +1,12 @@
 use crate::{
     apis::coredb_types::CoreDB,
+    extensions,
     extensions::types::{Extension, ExtensionInstallLocation},
     Context,
 };
 use kube::runtime::controller::Action;
 use std::{collections::HashMap, sync::Arc};
-use tracing::{debug, info};
+use tracing::{debug, error, info, warn};
 
 pub const LIST_DATABASES_QUERY: &str = r#"SELECT datname FROM pg_database WHERE datistemplate = false;"#;
 
@@ -176,4 +177,98 @@ pub async fn get_all_extensions(cdb: &CoreDB, ctx: Arc<Context>) -> Result<Vec<E
     // put them in order
     ext_spec.sort_by_key(|e| e.name.clone());
     Ok(ext_spec)
+}
+
+/// Handles create/drop an extension location
+/// On failure, returns an error message
+pub async fn toggle_extension(
+    cdb: &CoreDB,
+    ext_name: &str,
+    ext_loc: ExtensionInstallLocation,
+    ctx: Arc<Context>,
+) -> Result<(), String> {
+    let coredb_name = cdb.metadata.name.clone().expect("CoreDB should have a name");
+    if !extensions::check_input(ext_name) {
+        warn!(
+            "Extension is not formatted properly. Skipping operation. {}",
+            &coredb_name
+        );
+        return Err("Extension name is not formatted properly".to_string());
+    }
+    let database_name = ext_loc.database.to_owned();
+    if !extensions::check_input(&database_name) {
+        warn!(
+            "Database name is not formatted properly. Skipping operation. {}",
+            &coredb_name
+        );
+        return Err("Database name is not formatted properly".to_string());
+    }
+    let schema_name = ext_loc.schema.to_owned();
+    if !extensions::check_input(&schema_name) {
+        warn!(
+            "Extension.Database.Schema {}.{}.{} is not formatted properly. Skipping operation. {}",
+            ext_name, database_name, schema_name, &coredb_name
+        );
+        return Err("Schema name is not formatted properly".to_string());
+    }
+    let command = match ext_loc.enabled {
+        true => {
+            info!(
+                "Creating extension: {}, database {}, instance {}",
+                ext_name, database_name, &coredb_name
+            );
+
+            format!(
+                "CREATE EXTENSION IF NOT EXISTS \"{}\" SCHEMA {} CASCADE;",
+                ext_name, schema_name
+            )
+        }
+        false => {
+            info!(
+                "Dropping extension: {}, database {}, instance {}",
+                ext_name, database_name, &coredb_name
+            );
+            format!("DROP EXTENSION IF EXISTS \"{}\" CASCADE;", ext_name)
+        }
+    };
+
+    let result = cdb
+        .psql(command.clone(), database_name.clone(), ctx.clone())
+        .await;
+
+    match result {
+        Ok(psql_output) => match psql_output.success {
+            true => {
+                info!(
+                    "Successfully toggled extension {} in database {}, instance {}",
+                    ext_name, database_name, &coredb_name
+                );
+            }
+            false => {
+                warn!(
+                    "Failed to toggle extension {} in database {}, instance {}",
+                    ext_name, database_name, &coredb_name
+                );
+                match psql_output.stdout {
+                    Some(stdout) => {
+                        return Err(stdout);
+                    }
+                    None => {
+                        return Err("Failed to enable extension, and found no output. Please try again. If this issue persists, contact support.".to_string());
+                    }
+                }
+            }
+        },
+        Err(e) => {
+            error!(
+                "Failed to reconcile extension because of kube exec error: {:?}",
+                e
+            );
+            return Err(
+                "Could not connect to database, try again. If problem persists, please contact support."
+                    .to_string(),
+            );
+        }
+    }
+    Ok(())
 }

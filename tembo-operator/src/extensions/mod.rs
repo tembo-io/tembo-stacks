@@ -15,7 +15,7 @@ use serde_json::json;
 use std::sync::Arc;
 
 use tokio::time::Duration;
-use tracing::{error, info, warn};
+use tracing::error;
 
 use types::{
     Extension, ExtensionInstallLocation, ExtensionInstallLocationStatus, ExtensionStatus, TrunkInstallStatus,
@@ -24,100 +24,6 @@ use types::{
 
 lazy_static! {
     static ref VALID_INPUT: Regex = Regex::new(r"^[a-zA-Z]([a-zA-Z0-9]*[-_]?)*[a-zA-Z0-9]+$").unwrap();
-}
-
-/// Handles create/drop an extension location
-/// On failure, returns an error message
-pub async fn toggle_extension(
-    cdb: &CoreDB,
-    ext_name: &str,
-    ext_loc: ExtensionInstallLocation,
-    ctx: Arc<Context>,
-) -> Result<(), String> {
-    let coredb_name = cdb.metadata.name.clone().expect("CoreDB should have a name");
-    if !check_input(ext_name) {
-        warn!(
-            "Extension is not formatted properly. Skipping operation. {}",
-            &coredb_name
-        );
-        return Err("Extension name is not formatted properly".to_string());
-    }
-    let database_name = ext_loc.database.to_owned();
-    if !check_input(&database_name) {
-        warn!(
-            "Database name is not formatted properly. Skipping operation. {}",
-            &coredb_name
-        );
-        return Err("Database name is not formatted properly".to_string());
-    }
-    let schema_name = ext_loc.schema.to_owned();
-    if !check_input(&schema_name) {
-        warn!(
-            "Extension.Database.Schema {}.{}.{} is not formatted properly. Skipping operation. {}",
-            ext_name, database_name, schema_name, &coredb_name
-        );
-        return Err("Schema name is not formatted properly".to_string());
-    }
-    let command = match ext_loc.enabled {
-        true => {
-            info!(
-                "Creating extension: {}, database {}, instance {}",
-                ext_name, database_name, &coredb_name
-            );
-
-            format!(
-                "CREATE EXTENSION IF NOT EXISTS \"{}\" SCHEMA {} CASCADE;",
-                ext_name, schema_name
-            )
-        }
-        false => {
-            info!(
-                "Dropping extension: {}, database {}, instance {}",
-                ext_name, database_name, &coredb_name
-            );
-            format!("DROP EXTENSION IF EXISTS \"{}\" CASCADE;", ext_name)
-        }
-    };
-
-    let result = cdb
-        .psql(command.clone(), database_name.clone(), ctx.clone())
-        .await;
-
-    match result {
-        Ok(psql_output) => match psql_output.success {
-            true => {
-                info!(
-                    "Successfully toggled extension {} in database {}, instance {}",
-                    ext_name, database_name, &coredb_name
-                );
-            }
-            false => {
-                warn!(
-                    "Failed to toggle extension {} in database {}, instance {}",
-                    ext_name, database_name, &coredb_name
-                );
-                match psql_output.stdout {
-                    Some(stdout) => {
-                        return Err(stdout);
-                    }
-                    None => {
-                        return Err("Failed to enable extension, and found no output. Please try again. If this issue persists, contact support.".to_string());
-                    }
-                }
-            }
-        },
-        Err(e) => {
-            error!(
-                "Failed to reconcile extension because of kube exec error: {:?}",
-                e
-            );
-            return Err(
-                "Could not connect to database, try again. If problem persists, please contact support."
-                    .to_string(),
-            );
-        }
-    }
-    Ok(())
 }
 
 pub fn check_input(input: &str) -> bool {
@@ -395,7 +301,7 @@ async fn create_or_drop_extensions(cdb: &CoreDB, ctx: Arc<Context>) -> Result<Ve
     // TODO move this into separate function toggle_extensions
     for extension_to_toggle in toggle_these_extensions {
         for location_to_toggle in extension_to_toggle.locations {
-            match toggle_extension(
+            match database_queries::toggle_extension(
                 &cdb,
                 &extension_to_toggle.name,
                 location_to_toggle.clone(),
