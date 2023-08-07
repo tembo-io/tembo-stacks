@@ -80,7 +80,6 @@ impl ExecCommand {
             }
         };
 
-        // let status = attached_process.take_status().unwrap().await.unwrap_or_default();
         let status = match attached_process.take_status() {
             None => {
                 return Err(Error::KubeExecError(format!(
