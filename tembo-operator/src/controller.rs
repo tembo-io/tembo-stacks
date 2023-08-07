@@ -307,6 +307,15 @@ impl CoreDB {
                     return Ok(Action::requeue(Duration::from_secs(5)));
                 }
 
+                let patch_status = json!({
+                    "apiVersion": "coredb.io/v1alpha1",
+                    "kind": "CoreDB",
+                    "status": {
+                        "running": true
+                    }
+                });
+                patch_cdb_status_merge(&coredbs, &name, patch_status).await?;
+
                 let (trunk_installs, extensions) =
                     reconcile_extensions(self, ctx.clone(), &coredbs, &name).await?;
 
