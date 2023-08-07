@@ -329,8 +329,7 @@ impl CoreDB {
                 sharedirStorage: self.spec.sharedirStorage.clone(),
                 pkglibdirStorage: self.spec.pkglibdirStorage.clone(),
                 extensions: self.status.clone().and_then(|f| f.extensions),
-                // TODO: before merge
-                trunk_installs: None,
+                trunk_installs: self.status.clone().and_then(|f| f.trunk_installs),
             },
         };
 
