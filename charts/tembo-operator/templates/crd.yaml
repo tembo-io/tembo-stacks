@@ -374,7 +374,13 @@ spec:
                             default: postrgres
                             type: string
                           enabled:
+                            nullable: true
                             type: boolean
+                          error:
+                            type: boolean
+                          error_message:
+                            nullable: true
+                            type: string
                           schema:
                             default: public
                             type: string
@@ -382,7 +388,7 @@ spec:
                             nullable: true
                             type: string
                         required:
-                        - enabled
+                        - error
                         type: object
                       type: array
                     name:
