@@ -131,3 +131,72 @@ pub fn get_location_spec(
     }
     None
 }
+
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::apis::coredb_types::{CoreDB, CoreDBSpec, CoreDBStatus};
+
+    #[test]
+    fn test_get_location_status() {
+        let location_database = "postgres";
+        let location_schema = "public";
+        let extension_name = "extension1";
+        let location = ExtensionInstallLocationStatus {
+            database: location_database.to_owned(),
+            schema: location_schema.to_owned(),
+            version: Some("1.9".to_owned()),
+            enabled: Some(true),
+            error: false,
+            error_message: None,
+        };
+        let cdb = CoreDB {
+            metadata: Default::default(),
+            spec: Default::default(),
+            status: Some(CoreDBStatus {
+                extensions: Some(vec![ExtensionStatus {
+                    name: extension_name.to_owned(),
+                    description: None,
+                    locations: vec![location.clone()],
+                }]),
+                ..CoreDBStatus::default()
+            }),
+        };
+
+        assert_eq!(
+            get_location_status(&cdb, extension_name, location_database, location_schema),
+            Some(location)
+        );
+    }
+
+    #[test]
+    fn test_get_location_spec() {
+        let location_database = "postgres";
+        let location_schema = "public";
+        let extension_name = "extension1";
+        let location = ExtensionInstallLocation {
+            enabled: true,
+            database: location_database.to_owned(),
+            schema: location_schema.to_owned(),
+            version: Some("1.9".to_owned()),
+        };
+        let cdb = CoreDB {
+            metadata: Default::default(),
+            spec: CoreDBSpec {
+                extensions: vec![Extension {
+                    name: extension_name.to_owned(),
+                    description: None,
+                    locations: vec![location.clone()],
+                }],
+                ..CoreDBSpec::default()
+            },
+            status: None,
+        };
+
+        assert_eq!(
+            get_location_spec(&cdb, extension_name, location_database, location_schema),
+            Some(location)
+        );
+    }
+}

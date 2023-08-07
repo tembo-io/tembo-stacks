@@ -15,7 +15,7 @@ pub async fn update_extension_location_in_status(
     new_location_status: &ExtensionInstallLocationStatus,
 ) -> Result<Vec<ExtensionStatus>, Action> {
     let cdb = get_current_coredb_resource(cdb, ctx.clone()).await?;
-    let mut current_extensions_status = match &cdb.status {
+    let current_extensions_status = match &cdb.status {
         None => {
             error!("status should always already be present when merging one extension location into existing status");
             return Err(Action::requeue(Duration::from_secs(300)));
@@ -28,21 +28,56 @@ pub async fn update_extension_location_in_status(
             Some(extensions) => extensions.clone(),
         },
     };
-    for extension in &mut current_extensions_status {
+    let new_extensions_status = merge_location_status_into_extension_status_list(
+        extension_name,
+        new_location_status,
+        current_extensions_status,
+    );
+    update_extensions_status(&cdb, new_extensions_status.clone(), &ctx).await?;
+    Ok(new_extensions_status.clone())
+}
+
+// Given a location status, set it in a provided list of extension statuses,
+// replacing the current value if found, or creating the location and / or extension
+// if not found.
+pub fn merge_location_status_into_extension_status_list(
+    extension_name: &str,
+    new_location_status: &ExtensionInstallLocationStatus,
+    current_extensions_status: Vec<ExtensionStatus>,
+) -> Vec<ExtensionStatus> {
+    let mut new_extensions_status = current_extensions_status.clone();
+    for extension in &mut new_extensions_status {
+        // If the extension is already in the status list
         if extension.name == extension_name {
             for location in &mut extension.locations {
+                // If the location is already in the status list
                 if location.database == new_location_status.database
                     && location.schema == new_location_status.schema
                 {
+                    // Then replace it
                     *location = new_location_status.clone();
-                    break;
+                    return new_extensions_status;
                 }
             }
-            break;
+            // If we never found the location, append it to existing extension status
+            extension.locations.push(new_location_status.clone());
+            // Then sort the locations alphabetically by database and schema
+            // sort locations by database and schema so the order is deterministic
+            extension
+                .locations
+                .sort_by(|a, b| a.database.cmp(&b.database).then(a.schema.cmp(&b.schema)));
+            return new_extensions_status;
         }
     }
-    update_extensions_status(&cdb, current_extensions_status.clone(), &ctx).await?;
-    Ok(current_extensions_status.clone())
+    // If we never found the extension status, append it
+    new_extensions_status.push(ExtensionStatus {
+        name: extension_name.to_string(),
+        description: None,
+        locations: vec![new_location_status.clone()],
+    });
+    // Then sort alphabetically by name
+    new_extensions_status.sort_by(|a, b| a.name.cmp(&b.name));
+    new_extensions_status
 }
 
 pub async fn update_extensions_status(
@@ -179,4 +214,129 @@ pub async fn add_trunk_install_to_status(
     });
     patch_cdb_status_merge(cdb, name, patch_status).await?;
     Ok(new_trunk_installs_status.clone())
+}
+
+
+#[cfg(test)]
+mod tests {
+    use crate::extensions::{
+        kubernetes_queries::merge_location_status_into_extension_status_list,
+        types::{ExtensionInstallLocationStatus, ExtensionStatus},
+    };
+
+    #[test]
+    fn test_merge_existing_extension_and_location() {
+        let current_extensions_status = vec![ExtensionStatus {
+            name: "ext1".to_string(),
+            description: None,
+            locations: vec![ExtensionInstallLocationStatus {
+                enabled: Some(false),
+                database: "db1".to_string(),
+                schema: "schema1".to_string(),
+                version: None,
+                error: false,
+                error_message: None,
+            }],
+        }];
+        let new_location_status = ExtensionInstallLocationStatus {
+            enabled: Some(true),
+            database: "db1".to_string(),
+            schema: "schema1".to_string(),
+            version: None,
+            error: false,
+            error_message: None,
+        };
+
+        // Try updating existing from disabled to enabled
+        let result = merge_location_status_into_extension_status_list(
+            "ext1",
+            &new_location_status,
+            current_extensions_status,
+        );
+
+        assert_eq!(result.len(), 1);
+        assert_eq!(result[0].locations.len(), 1);
+        assert_eq!(result[0].locations[0].enabled, Some(true));
+    }
+
+    #[test]
+    fn test_merge_existing_extension_new_location() {
+        let current_extensions_status = vec![ExtensionStatus {
+            name: "ext1".to_string(),
+            description: None,
+            locations: vec![ExtensionInstallLocationStatus {
+                enabled: Some(false),
+                database: "db1".to_string(),
+                schema: "schema2".to_string(),
+                version: None,
+                error: false,
+                error_message: None,
+            }],
+        }];
+        let new_location_status = ExtensionInstallLocationStatus {
+            enabled: Some(true),
+            database: "db1".to_string(),
+            schema: "schema1".to_string(),
+            version: None,
+            error: false,
+            error_message: None,
+        };
+
+        let result = merge_location_status_into_extension_status_list(
+            "ext1",
+            &new_location_status,
+            current_extensions_status,
+        );
+
+        assert_eq!(result.len(), 1);
+        assert_eq!(result[0].locations.len(), 2);
+        assert_eq!(result[0].locations[0].database, "db1".to_string());
+        assert_eq!(result[0].locations[0].schema, "schema1".to_string());
+        assert_eq!(result[0].locations[0].enabled, Some(true));
+        assert_eq!(result[0].locations[1].database, "db1".to_string());
+        assert_eq!(result[0].locations[1].schema, "schema2".to_string());
+        assert_eq!(result[0].locations[1].enabled, Some(false));
+    }
+
+    #[test]
+    fn test_merge_new_extension_new_location() {
+        let current_extensions_status = vec![ExtensionStatus {
+            name: "ext2".to_string(),
+            description: None,
+            locations: vec![ExtensionInstallLocationStatus {
+                enabled: Some(false),
+                database: "db1".to_string(),
+                schema: "schema1".to_string(),
+                version: None,
+                error: false,
+                error_message: None,
+            }],
+        }];
+        let new_location_status = ExtensionInstallLocationStatus {
+            enabled: Some(true),
+            database: "db1".to_string(),
+            schema: "schema1".to_string(),
+            version: None,
+            error: false,
+            error_message: None,
+        };
+
+        let result = merge_location_status_into_extension_status_list(
+            "ext1",
+            &new_location_status,
+            current_extensions_status,
+        );
+
+        assert_eq!(result.len(), 2);
+        assert_eq!(result[0].locations.len(), 1);
+        assert_eq!(result[1].locations.len(), 1);
+        assert_eq!(result[0].name, "ext1".to_string());
+        assert_eq!(result[0].locations[0].database, "db1".to_string());
+        assert_eq!(result[0].locations[0].schema, "schema1".to_string());
+        assert_eq!(result[0].locations[0].enabled, Some(true));
+        assert_eq!(result[1].name, "ext2".to_string());
+        assert_eq!(result[1].locations[0].database, "db1".to_string());
+        assert_eq!(result[1].locations[0].schema, "schema1".to_string());
+        assert_eq!(result[1].locations[0].enabled, Some(false));
+    }
 }
