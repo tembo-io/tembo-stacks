@@ -192,6 +192,7 @@ fn determine_extension_locations_to_toggle(cdb: &CoreDB) -> Vec<Extension> {
     for desired_extension in &cdb.spec.extensions {
         let mut needs_toggle = false;
         let mut extension_to_toggle = desired_extension.clone();
+        extension_to_toggle.locations = vec![];
         for desired_location in &desired_extension.locations {
             match types::get_location_status(
                 cdb,
@@ -227,8 +228,8 @@ mod tests {
     use crate::{
         apis::coredb_types::{CoreDB, CoreDBSpec, CoreDBStatus},
         extensions::types::{
-            get_location_status, Extension, ExtensionInstallLocation, ExtensionInstallLocationStatus,
-            ExtensionStatus,
+            get_location_spec, get_location_status, Extension, ExtensionInstallLocation,
+            ExtensionInstallLocationStatus, ExtensionStatus,
         },
     };
 
@@ -528,5 +529,82 @@ mod tests {
         assert_eq!(location_status.enabled, None);
         assert!(location_status.error);
         assert!(location_status.error_message.is_some());
+
+        let extension_locations_to_toggle = determine_extension_locations_to_toggle(&cdb);
+        // We just make this CDB so that we can use our getter function to
+        // search through the extension results from determine_extension_locations_to_toggle
+        let cdb_spec_check = CoreDB {
+            spec: CoreDBSpec {
+                extensions: extension_locations_to_toggle,
+                ..CoreDBSpec::default()
+            },
+            ..cdb
+        };
+
+        // When available and disabled, requesting to enable, we should try to toggle it
+        let location = get_location_spec(
+            &cdb_spec_check,
+            "ext1",
+            "db_where_its_available_and_disabled",
+            "public",
+        )
+        .unwrap();
+        assert!(location.enabled);
+        // When available and enabled, requesting to disable, we should try to toggle it
+        let location = get_location_spec(
+            &cdb_spec_check,
+            "ext1",
+            "db_where_its_available_and_enabled",
+            "public",
+        )
+        .unwrap();
+        assert!(!location.enabled);
+        // When available and disabled, requesting to enable, we should try to toggle it
+        let location = get_location_spec(
+            &cdb_spec_check,
+            "ext1",
+            "db_where_its_available_and_disabled_missing_from_status",
+            "public",
+        )
+        .unwrap();
+        assert!(location.enabled);
+        // When available and enabled, requesting to disable, we should try to toggle it
+        let location = get_location_spec(
+            &cdb_spec_check,
+            "ext1",
+            "db_where_its_available_and_enabled_missing_from_status",
+            "public",
+        )
+        .unwrap();
+        assert!(!location.enabled);
+
+        // If we toggled an extension to True, but it failed to enable
+        // and then we toggle it back to false, then it does not need a toggle
+        // because it's already in the desired state as disabled
+        let location = get_location_spec(
+            &cdb_spec_check,
+            "ext1",
+            "db_where_it_is_currently_in_error_having_tried_to_enable_and_failed",
+            "public",
+        );
+        assert!(location.is_none());
+        // If we toggled an extension to True, but it failed to enable because missing
+        // and then we toggle it back to false, then it does not need a toggle
+        // because it's already in the desired state as disabled
+        let location = get_location_spec(
+            &cdb_spec_check,
+            "ext1",
+            "db_where_it_is_currently_in_error_having_tried_to_enable_and_failed_because_missing",
+            "public",
+        );
+        assert!(location.is_none());
+        // If we request to enable an extension that is not installed,
+        // we should not try to toggle it
+        let location = get_location_spec(&cdb_spec_check, "ext1", "db_where_its_not_available", "public");
+        assert!(location.is_none());
+        // If we request to enable an extension that has previously failed to enable,
+        // we should not try to toggle it again
+        let location = get_location_spec(&cdb_spec_check, "ext1", "db_where_enable_failed", "public");
+        assert!(location.is_none());
     }
 }
