@@ -23,7 +23,6 @@ impl PsqlOutput {
     }
 }
 
-// TODO: cleanup unused attributes
 pub struct PsqlCommand {
     pod_name: String,
     namespace: String,
