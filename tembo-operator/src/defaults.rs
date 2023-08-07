@@ -70,7 +70,11 @@ pub fn default_trunk_installs() -> Vec<TrunkInstall> {
 }
 
 pub fn default_database() -> String {
-    "postrgres".to_owned()
+    "postgres".to_owned()
+}
+
+pub fn default_schema() -> String {
+    "public".to_owned()
 }
 
 pub fn default_description() -> Option<String> {
