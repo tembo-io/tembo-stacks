@@ -11,13 +11,15 @@ pub struct CustomLevelRootSpanBuilder;
 
 impl RootSpanBuilder for CustomLevelRootSpanBuilder {
     fn on_request_start(request: &ServiceRequest) -> Span {
-        if ["/health/liveness", "/health/readiness"].contains(&request.path()) {
-            // Don't create a span for the specified paths
-            return Span::none();
+        // If the path matches our excluded routes, do not generate a span.
+        match request.path() {
+            "/health/liveness" | "/health/readiness" => {
+                // This is the crucial part: returning a non-recording span
+                // effectively "turns off" tracing for this request.
+                Span::none()
+            }
+            _ => tracing_actix_web::root_span!(level = Level::INFO, request),
         }
-
-        // For all other paths, create a span with INFO level
-        tracing_actix_web::root_span!(level = Level::INFO, request)
     }
 
     fn on_request_end<B: MessageBody>(span: Span, outcome: &Result<ServiceResponse<B>, Error>) {
