@@ -11,7 +11,7 @@ pub struct Config {
     pub init_container_name: String,
     pub tls_cert: String,
     pub tls_key: String,
-    pub opentelemetry_endpoint_url: String,
+    pub opentelemetry_endpoint_url: Option<String>,
 }
 
 impl Default for Config {
@@ -42,9 +42,14 @@ impl Default for Config {
             tls_key: from_env_or_default("TLS_KEY", "/certs/tls.key")
                 .parse()
                 .unwrap(),
-            opentelemetry_endpoint_url: from_env_or_default("OPENTELEMETRY_ENDPOINT_URL", "")
-                .parse()
-                .unwrap(),
+            opentelemetry_endpoint_url: {
+                let url = std::env::var("OPENTELEMETRY_ENDPOINT_URL").unwrap_or_default();
+                if url.is_empty() {
+                    None
+                } else {
+                    Some(url)
+                }
+            },
         }
     }
 }

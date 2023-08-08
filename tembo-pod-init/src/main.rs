@@ -17,11 +17,11 @@ async fn main() -> std::io::Result<()> {
     let config = Config::default();
 
     // Initialize logging
-    let otlp_endpoint_url = std::env::var("OPENTELEMETRY_ENDPOINT_URL").is_ok();
+    let otlp_endpoint_url = &config.opentelemetry_endpoint_url;
     let telemetry_config = TelemetryConfig {
         app_name: "tembo-pod-init".to_string(),
         env: std::env::var("ENV").unwrap_or_else(|_| "production".to_string()),
-        endpoint_url: Some(otlp_endpoint_url.to_string()),
+        endpoint_url: otlp_endpoint_url.clone(),
         tracer_id: Some(TRACER_NAME.to_string()),
     };
 
