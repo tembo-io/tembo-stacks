@@ -170,7 +170,7 @@ pub struct CoreDBStatus {
     pub extensionsUpdating: bool,
     pub extensions: Option<Vec<ExtensionStatus>>,
     pub trunk_installs: Option<Vec<TrunkInstallStatus>>,
-    pub storage: Quantity,
+    pub storage: Option<Quantity>,
     pub resources: Option<ResourceRequirements>,
     pub runtime_config: Option<Vec<PgConfig>>,
 }

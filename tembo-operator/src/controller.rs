@@ -324,7 +324,7 @@ impl CoreDB {
                 CoreDBStatus {
                     running: true,
                     extensionsUpdating: false,
-                    storage: self.spec.storage.clone(),
+                    storage: Some(self.spec.storage.clone()),
                     extensions: Some(extensions),
                     trunk_installs: Some(trunk_installs),
                     resources: Some(self.spec.resources.clone()),
@@ -334,7 +334,7 @@ impl CoreDB {
             true => CoreDBStatus {
                 running: false,
                 extensionsUpdating: false,
-                storage: self.spec.storage.clone(),
+                storage: Some(self.spec.storage.clone()),
                 extensions: self.status.clone().and_then(|f| f.extensions),
                 trunk_installs: self.status.clone().and_then(|f| f.trunk_installs),
                 resources: Some(self.spec.resources.clone()),
