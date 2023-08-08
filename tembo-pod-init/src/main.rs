@@ -1,10 +1,13 @@
-use actix_web::{dev::ServerHandle, middleware, web, App, HttpServer};
+use actix_web::{dev::ServerHandle, web, App, HttpServer};
 use kube::Client;
 use openssl::ssl::{SslAcceptor, SslFiletype, SslMethod};
 use opentelemetry::global;
 use parking_lot::Mutex;
 use std::sync::Arc;
-use tembo_pod_init::{config::Config, health::*, mutate::mutate, watcher::NamespaceWatcher};
+use tembo_pod_init::{
+    config::Config, health::*, middleware::CustomLevelRootSpanBuilder, mutate::mutate,
+    watcher::NamespaceWatcher,
+};
 use tembo_telemetry::{TelemetryConfig, TelemetryInit};
 use tracing::*;
 use tracing_actix_web::TracingLogger;
@@ -56,6 +59,9 @@ async fn main() -> std::io::Result<()> {
         .unwrap();
     let server_bind_address = format!("{}:{}", config.server_host, config.server_port);
 
+    // Set logging middleware
+    let logging_middleware = TracingLogger::<CustomLevelRootSpanBuilder>::new();
+
     let server = HttpServer::new({
         let config_data = web::Data::new(config.clone());
         let kube_data = web::Data::new(Arc::new(kube_client.clone()));
@@ -70,12 +76,7 @@ async fn main() -> std::io::Result<()> {
                     .app_data(namespace_watcher_data.clone())
                     .app_data(stop_handle.clone())
                     .app_data(tc.clone())
-                    .wrap(
-                        middleware::Logger::default()
-                            .exclude("/health/liveness")
-                            .exclude("/health/readiness"),
-                    )
-                    .wrap(TracingLogger::default())
+                    .wrap(logging_middleware.clone())
                     .service(liveness)
                     .service(readiness)
                     .service(mutate)
