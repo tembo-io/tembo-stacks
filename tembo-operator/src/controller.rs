@@ -527,7 +527,8 @@ pub async fn patch_cdb_status_merge(
     name: &str,
     patch: serde_json::Value,
 ) -> Result<(), Action> {
-    let pp = PatchParams::default();
+    let mut pp = PatchParams::default();
+    pp.field_manager = Some("cntrlr".to_string());
     let patch_status = Patch::Merge(patch);
     let _o = cdb.patch_status(name, &pp, &patch_status).await.map_err(|e| {
         error!("Error updating CoreDB status: {:?}", e);
