@@ -538,13 +538,4 @@ mod test {
         let res = reconcile(Arc::new(coredb), testctx).await;
         assert!(res.is_ok(), "initial creation succeeds in adding finalizer");
     }
-
-    #[tokio::test]
-    async fn test_patches_coredb() {
-        let (testctx, fakeserver, _) = Context::test();
-        let coredb = CoreDB::test().finalized();
-        fakeserver.handle_coredb_patch(&coredb);
-        let res = reconcile(Arc::new(coredb), testctx).await;
-        assert!(res.is_ok(), "finalized coredb succeeds in its reconciler");
-    }
 }

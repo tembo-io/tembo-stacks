@@ -22,6 +22,7 @@ use kube::{
 };
 use std::{collections::BTreeMap, sync::Arc};
 
+
 const PROM_CFG_DIR: &str = "/prometheus";
 
 pub async fn reconcile_prometheus_exporter_deployment(cdb: &CoreDB, ctx: Arc<Context>) -> Result<(), Error> {
@@ -125,25 +126,35 @@ pub async fn reconcile_prometheus_exporter_deployment(cdb: &CoreDB, ctx: Arc<Con
     ];
 
     // Generate VolumeMounts for the Container
-    let exporter_vol_mounts = vec![VolumeMount {
-        name: EXPORTER_VOLUME.to_owned(),
-        mount_path: PROM_CFG_DIR.to_string(),
-        ..VolumeMount::default()
-    }];
+    let exporter_vol_mounts = match cdb.spec.metrics {
+        None => {
+            vec![]
+        }
+        Some(_) => {
+            vec![VolumeMount {
+                name: EXPORTER_VOLUME.to_owned(),
+                mount_path: PROM_CFG_DIR.to_string(),
+                ..VolumeMount::default()
+            }]
+        }
+    };
 
     // Generate Volumes for the PodSpec
-    let exporter_volumes = vec![Volume {
-        config_map: Some(ConfigMapVolumeSource {
-            name: Some(format!(
-                "{}-{}",
-                EXPORTER_CONFIGMAP_PREFIX.to_owned(),
-                coredb_name
-            )),
-            ..ConfigMapVolumeSource::default()
-        }),
-        name: EXPORTER_VOLUME.to_owned(),
-        ..Volume::default()
-    }];
+    let exporter_volumes = match cdb.spec.metrics {
+        None => {
+            vec![]
+        }
+        Some(_) => {
+            vec![Volume {
+                config_map: Some(ConfigMapVolumeSource {
+                    name: Some(format!("{}{}", EXPORTER_CONFIGMAP_PREFIX.to_owned(), coredb_name)),
+                    ..ConfigMapVolumeSource::default()
+                }),
+                name: EXPORTER_VOLUME.to_owned(),
+                ..Volume::default()
+            }]
+        }
+    };
 
     // Generate the PodSpec for the PodTemplateSpec
     let pod_spec = PodSpec {

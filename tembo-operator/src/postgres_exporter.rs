@@ -163,7 +163,7 @@ pub async fn reconcile_prom_configmap(cdb: &CoreDB, client: Client, ns: &str) ->
             apply_configmap(
                 client.clone(),
                 ns,
-                &format!("{}-{}", EXPORTER_CONFIGMAP_PREFIX, coredb_name),
+                &format!("{}{}", EXPORTER_CONFIGMAP_PREFIX, coredb_name),
                 d,
             )
             .await?
