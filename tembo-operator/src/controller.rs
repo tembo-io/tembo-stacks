@@ -263,7 +263,7 @@ impl CoreDB {
             "status": new_status
         });
 
-        apply_status_force(&coredbs, &name, patch_status).await?;
+        patch_cdb_status_merge(&coredbs, &name, patch_status).await?;
 
         info!("Fully reconciled {}", self.name_any());
         // Check back every 5 minutes
