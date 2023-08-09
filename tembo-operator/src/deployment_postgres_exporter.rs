@@ -1,7 +1,7 @@
 use crate::{
     apis::coredb_types::CoreDB,
     defaults::default_postgres_exporter_image,
-    postgres_exporter::{EXPORTER_CONFIGMAP, EXPORTER_VOLUME, QUERIES_YAML},
+    postgres_exporter::{EXPORTER_CONFIGMAP_PREFIX, EXPORTER_VOLUME, QUERIES_YAML},
     rbac::reconcile_rbac,
     Context, Error, Result,
 };
@@ -24,11 +24,7 @@ use std::{collections::BTreeMap, sync::Arc};
 
 const PROM_CFG_DIR: &str = "/prometheus";
 
-pub async fn reconcile_prometheus_exporter(
-    cdb: &CoreDB,
-    ctx: Arc<Context>,
-    cnpg_enabled: bool,
-) -> Result<(), Error> {
+pub async fn reconcile_prometheus_exporter_deployment(cdb: &CoreDB, ctx: Arc<Context>) -> Result<(), Error> {
     let client = ctx.client.clone();
     let ns = cdb.namespace().unwrap();
     let name = format!("{}-metrics", cdb.name_any());
@@ -42,11 +38,7 @@ pub async fn reconcile_prometheus_exporter(
     // Format the postgres-exporter connection URI
     // Check if cnpg is enabled, if so then set the URI to the cnpg service
     // Otherwise, use the old coredb service
-    let psql_uri: String = if !cnpg_enabled {
-        format!("{}.{}.svc.cluster.local:5432/postgres", cdb.name_any(), ns)
-    } else {
-        format!("{}-rw.{}.svc.cluster.local:5432/postgres", cdb.name_any(), ns)
-    };
+    let psql_uri: String = format!("{}-rw.{}.svc.cluster.local:5432/postgres", cdb.name_any(), ns);
 
     // reconcile rbac(service account, role, role binding) for the postgres-exporter
     let rbac = reconcile_rbac(
@@ -141,10 +133,10 @@ pub async fn reconcile_prometheus_exporter(
     // Generate Volumes for the PodSpec
     let exporter_volumes = vec![Volume {
         config_map: Some(ConfigMapVolumeSource {
-            name: Some(EXPORTER_VOLUME.to_owned()),
+            name: Some(format!("{}-{}", EXPORTER_CONFIGMAP_PREFIX.to_owned(), ns)),
             ..ConfigMapVolumeSource::default()
         }),
-        name: EXPORTER_CONFIGMAP.to_owned(),
+        name: EXPORTER_VOLUME.to_owned(),
         ..Volume::default()
     }];
 
