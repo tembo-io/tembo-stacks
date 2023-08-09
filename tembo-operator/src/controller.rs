@@ -423,20 +423,6 @@ pub async fn get_current_coredb_resource(cdb: &CoreDB, ctx: Arc<Context>) -> Res
     Ok(coredb.clone())
 }
 
-pub async fn apply_status_force(
-    cdb: &Api<CoreDB>,
-    name: &str,
-    patch: serde_json::Value,
-) -> Result<(), Action> {
-    let ps = PatchParams::apply("cntrlr").force();
-    let patch_status = Patch::Apply(patch);
-    let _o = cdb.patch_status(name, &ps, &patch_status).await.map_err(|e| {
-        error!("Error updating CoreDB status: {:?}", e);
-        Action::requeue(Duration::from_secs(10))
-    })?;
-    Ok(())
-}
-
 pub async fn patch_cdb_status_merge(
     cdb: &Api<CoreDB>,
     name: &str,
