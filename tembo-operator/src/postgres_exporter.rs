@@ -151,6 +151,11 @@ pub async fn create_postgres_exporter_role(
 
 pub async fn reconcile_prom_configmap(cdb: &CoreDB, client: Client, ns: &str) -> Result<(), Error> {
     // set custom pg-prom metrics in configmap values if they are specified
+    let coredb_name = cdb
+        .metadata
+        .name
+        .clone()
+        .expect("instance should always have a name");
     match cdb.spec.metrics.clone().and_then(|m| m.queries) {
         Some(queries) => {
             let qdata = serde_yaml::to_string(&queries).unwrap();
@@ -158,7 +163,7 @@ pub async fn reconcile_prom_configmap(cdb: &CoreDB, client: Client, ns: &str) ->
             apply_configmap(
                 client.clone(),
                 ns,
-                &format!("{}-{}", EXPORTER_CONFIGMAP_PREFIX, ns),
+                &format!("{}-{}", EXPORTER_CONFIGMAP_PREFIX, coredb_name),
                 d,
             )
             .await?

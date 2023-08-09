@@ -26,6 +26,7 @@ const PROM_CFG_DIR: &str = "/prometheus";
 
 pub async fn reconcile_prometheus_exporter_deployment(cdb: &CoreDB, ctx: Arc<Context>) -> Result<(), Error> {
     let client = ctx.client.clone();
+    let coredb_name = cdb.metadata.name.clone().expect("should always have a name");
     let ns = cdb.namespace().unwrap();
     let name = format!("{}-metrics", cdb.name_any());
     let mut labels: BTreeMap<String, String> = BTreeMap::new();
@@ -133,7 +134,11 @@ pub async fn reconcile_prometheus_exporter_deployment(cdb: &CoreDB, ctx: Arc<Con
     // Generate Volumes for the PodSpec
     let exporter_volumes = vec![Volume {
         config_map: Some(ConfigMapVolumeSource {
-            name: Some(format!("{}-{}", EXPORTER_CONFIGMAP_PREFIX.to_owned(), ns)),
+            name: Some(format!(
+                "{}-{}",
+                EXPORTER_CONFIGMAP_PREFIX.to_owned(),
+                coredb_name
+            )),
             ..ConfigMapVolumeSource::default()
         }),
         name: EXPORTER_VOLUME.to_owned(),
