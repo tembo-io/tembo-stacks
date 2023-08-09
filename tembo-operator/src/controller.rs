@@ -259,6 +259,7 @@ impl CoreDB {
 
         apply_status_force(&coredbs, &name, patch_status).await?;
 
+        info!("Fully reconciled {}", self.name_any());
         // Check back every 5 minutes
         Ok(Action::requeue(Duration::from_secs(300)))
     }
