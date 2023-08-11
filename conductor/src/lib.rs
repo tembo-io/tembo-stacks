@@ -51,15 +51,18 @@ pub async fn generate_spec(
     })
 }
 pub fn get_data_plane_id_from_coredb(coredb: &CoreDB) -> Result<String, Box<ConductorError>> {
-    let annotations = coredb
-        .metadata
-        .annotations
-        .as_ref()
-        .ok_or(ConductorError::EventIDFormat)?;
-    let data_plane_id = annotations
-        .get("tembo.io/data_plane_id")
-        .ok_or(ConductorError::EventIDFormat)?
-        .to_string();
+    let annotations = match coredb.metadata.annotations.as_ref() {
+        None => {
+            return Err(Box::new(ConductorError::EventIDFormat));
+        }
+        Some(annotations) => annotations,
+    };
+    let data_plane_id = match annotations.get("tembo.io/data_plane_id") {
+        Some(data_plane_id) => data_plane_id.to_string(),
+        None => {
+            return Err(Box::new(ConductorError::EventIDFormat));
+        }
+    };
     Ok(data_plane_id)
 }
 
