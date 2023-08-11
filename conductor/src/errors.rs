@@ -17,8 +17,8 @@ pub enum ConductorError {
     #[error("no status reported")]
     NoStatusReported,
 
-    #[error("Error parsing event ID")]
-    EventIDParsing,
+    #[error("Error parsing event ID {0}")]
+    EventIDParsing(String),
 
     #[error("Error formatting event ID")]
     EventIDFormat,

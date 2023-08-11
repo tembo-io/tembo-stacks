@@ -107,7 +107,9 @@ pub fn parse_event_id(
     let event_id_split = event_id.split('.').collect::<Vec<&str>>();
 
     if event_id_split.len() < 4 {
-        return Err(Box::new(ConductorError::EventIDParsing));
+        return Err(Box::new(ConductorError::EventIDParsing(
+            event_id.to_string(),
+        )));
     }
     // "<workspace>.<organization>.<entity>.<instance>"
     let workspace_id = event_id_split[0].to_string();

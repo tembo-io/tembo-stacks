@@ -100,7 +100,7 @@ async fn send_status_update(
     let conn_info = match get_pg_conn(client, &namespace, &data_plane_basedomain).await {
         Ok(conn_info) => conn_info,
         Err(_) => {
-            warn!("Could not get connection info for CoreDB {}, skipping status update. This can be normal for a few seconds when the resource is initially created.", coredb_name);
+            info!("Could not get connection info for CoreDB {}, skipping status update. This can be normal for a few seconds when the resource is initially created, and when the instance is being deleted.", coredb_name);
             return Ok(());
         }
     };

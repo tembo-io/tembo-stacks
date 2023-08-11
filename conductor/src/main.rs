@@ -559,6 +559,7 @@ async fn main() -> std::io::Result<()> {
     HttpServer::new(move || {
         App::new()
             .app_data(web::Data::new(custom_metrics.clone()))
+            .app_data(web::Data::new(background_threads.clone()))
             .wrap(RequestTracing::new())
             .route(
                 "/metrics",
