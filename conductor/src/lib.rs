@@ -50,7 +50,7 @@ pub async fn generate_spec(
         "spec": spec,
     })
 }
-pub fn get_data_plane_id_from_coredb(coredb: &CoreDB) -> Result<String, ConductorError> {
+pub fn get_data_plane_id_from_coredb(coredb: &CoreDB) -> Result<String, Box<ConductorError>> {
     let annotations = coredb
         .metadata
         .annotations
@@ -63,37 +63,48 @@ pub fn get_data_plane_id_from_coredb(coredb: &CoreDB) -> Result<String, Conducto
     Ok(data_plane_id)
 }
 
-pub fn get_event_id_from_coredb(coredb: &CoreDB) -> Result<String, ConductorError> {
-    let annotations = coredb
-        .metadata
-        .annotations
-        .as_ref()
-        .ok_or(ConductorError::EventIDFormat)?;
-    let org_id = annotations
-        .get("tembo.io/org_id")
-        .ok_or(ConductorError::EventIDFormat)?
-        .to_string();
-    let instance_id = annotations
-        .get("tembo.io/instance_id")
-        .ok_or(ConductorError::EventIDFormat)?
-        .to_string();
-    let workspace_id = annotations
-        .get("tembo.io/workspace_id")
-        .ok_or(ConductorError::EventIDFormat)?
-        .to_string();
-    let entity_name = annotations
-        .get("tembo.io/entity_name")
-        .ok_or(ConductorError::EventIDFormat)?
-        .to_string();
+pub fn get_event_id_from_coredb(coredb: &CoreDB) -> Result<String, Box<ConductorError>> {
+    let annotations = match coredb.metadata.annotations.as_ref() {
+        None => {
+            return Err(Box::new(ConductorError::EventIDFormat));
+        }
+        Some(annotations) => annotations,
+    };
+    let org_id = match annotations.get("tembo.io/org_id") {
+        Some(org_id) => org_id.to_string(),
+        None => {
+            return Err(Box::new(ConductorError::EventIDFormat));
+        }
+    };
+    let instance_id = match annotations.get("tembo.io/instance_id") {
+        Some(instance_id) => instance_id.to_string(),
+        None => {
+            return Err(Box::new(ConductorError::EventIDFormat));
+        }
+    };
+    let workspace_id = match annotations.get("tembo.io/workspace_id") {
+        Some(workspace_id) => workspace_id.to_string(),
+        None => {
+            return Err(Box::new(ConductorError::EventIDFormat));
+        }
+    };
+    let entity_name = match annotations.get("tembo.io/entity_name") {
+        Some(entity_name) => entity_name.to_string(),
+        None => {
+            return Err(Box::new(ConductorError::EventIDFormat));
+        }
+    };
     let event_id = [workspace_id, org_id, entity_name, instance_id].join(".");
     Ok(event_id)
 }
 
-pub fn parse_event_id(event_id: &str) -> Result<(String, String, String, String), ConductorError> {
+pub fn parse_event_id(
+    event_id: &str,
+) -> Result<(String, String, String, String), Box<ConductorError>> {
     let event_id_split = event_id.split('.').collect::<Vec<&str>>();
 
     if event_id_split.len() < 4 {
-        return Err(ConductorError::EventIDParsing);
+        return Err(Box::new(ConductorError::EventIDParsing));
     }
     // "<workspace>.<organization>.<entity>.<instance>"
     let workspace_id = event_id_split[0].to_string();
