@@ -6,10 +6,11 @@ use conductor::monitoring::CustomMetrics;
 use conductor::{
     create_cloudformation, create_namespace, create_networkpolicy, create_or_update, delete,
     delete_cloudformation, delete_namespace, generate_rand_schedule, generate_spec,
-    get_coredb_error_without_status, get_one, get_pg_conn, lookup_role_arn, restart_cnpg,
-    restart_statefulset, types,
+    get_coredb_error_without_status, get_data_plane_id_from_coredb, get_event_id_from_coredb,
+    get_one, get_pg_conn, lookup_role_arn, parse_event_id, restart_cnpg, restart_statefulset,
+    types,
 };
-use controller::apis::coredb_types::{Backup, CoreDBSpec, ServiceAccountTemplate};
+use controller::apis::coredb_types::{Backup, CoreDB, CoreDBSpec, ServiceAccountTemplate};
 use k8s_openapi::apimachinery::pkg::apis::meta::v1::ObjectMeta;
 use kube::Client;
 use log::{debug, error, info, warn};
@@ -19,6 +20,7 @@ use opentelemetry::{global, KeyValue};
 use pgmq::{Message, PGMQueueExt};
 use std::env;
 use std::{thread, time};
+
 use tokio_retry::strategy::FixedInterval;
 use tokio_retry::Retry;
 use types::{CRUDevent, Event};
@@ -255,7 +257,18 @@ async fn run(metrics: CustomMetrics) -> Result<(), Box<dyn std::error::Error>> {
 
                 info!("{}: Generating spec", read_msg.msg_id);
                 // generate CoreDB spec based on values in body
-                let spec = generate_spec(&namespace, &coredb_spec).await;
+                let (workspace_id, org_id, entity_name, instance_id) =
+                    parse_event_id(read_msg.message.event_id.as_str())?;
+                let spec = generate_spec(
+                    &workspace_id,
+                    &org_id,
+                    &entity_name,
+                    &instance_id,
+                    &read_msg.message.data_plane_id,
+                    &namespace,
+                    &coredb_spec,
+                )
+                .await;
 
                 info!("{}: Creating or updating spec", read_msg.msg_id);
                 // create or update CoreDB
@@ -464,6 +477,77 @@ async fn run(metrics: CustomMetrics) -> Result<(), Box<dyn std::error::Error>> {
 
         info!("{}: archived: {:?}", read_msg.msg_id, archived);
     }
+}
+
+// Used for sending ad-hoc status updates to the control plane.
+// This can be triggered when a change in a CoreDB's status is detected.
+async fn send_status_update(
+    client: Client,
+    response_queue: &PGMQueueExt,
+    coredb: &CoreDB,
+) -> Result<(), ConductorError> {
+    let coredb_name = coredb
+        .metadata
+        .name
+        .clone()
+        .expect("CoreDB should always have a name");
+    let namespace = coredb
+        .metadata
+        .namespace
+        .clone()
+        .expect("CoreDB should always have a namespace");
+    // Could be nice to move these env reads into a config struct
+    let data_plane_basedomain = match env::var("DATA_PLANE_BASEDOMAIN") {
+        Ok(domain) => domain,
+        Err(_) => {
+            error!("DATA_PLANE_BASEDOMAIN is not set, skipping status update");
+            return Ok(());
+        }
+    };
+    let data_plane_events_queue = match env::var("DATA_PLANE_EVENTS_QUEUE") {
+        Ok(data_plane_events_queue) => data_plane_events_queue,
+        Err(_) => {
+            error!("DATA_PLANE_EVENTS_QUEUE is not set, skipping status update");
+            return Ok(());
+        }
+    };
+    let event_id = match get_event_id_from_coredb(coredb) {
+        Ok(event_id) => event_id,
+        Err(_) => {
+            warn!("Could not get event_id from CoreDB {}, needs to be updated with annotations, which will happen on the next update from control plane, skipping", coredb_name);
+            return Ok(());
+        }
+    };
+    let data_plane_id = match get_data_plane_id_from_coredb(coredb) {
+        Ok(event_id) => event_id,
+        Err(_) => {
+            warn!("Could not get data_plane_id from CoreDB {}, needs to be updated with annotations, which will happen on the next update from control plane, skipping", coredb_name);
+            return Ok(());
+        }
+    };
+    let conn_info = match get_pg_conn(client, &namespace, &data_plane_basedomain).await {
+        Ok(conn_info) => conn_info,
+        Err(_) => {
+            warn!("Could not get connection info for CoreDB {}, skipping status update. This can be normal for a few seconds when the resource is initially created.", coredb_name);
+            return Ok(());
+        }
+    };
+    let response = types::StateToControlPlane {
+        data_plane_id,
+        event_id: event_id.clone(),
+        event_type: Event::Update,
+        spec: Some(coredb.spec.clone()),
+        status: coredb.status.clone(),
+        connection: Some(conn_info),
+    };
+    let msg_id = response_queue
+        .send(&data_plane_events_queue, &response)
+        .await?;
+    info!(
+        "{}: Sent ad hoc update to control plane, message_id: {}",
+        event_id, msg_id
+    );
+    Ok(())
 }
 
 #[actix_web::main]
