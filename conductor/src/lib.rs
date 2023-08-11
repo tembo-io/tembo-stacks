@@ -55,10 +55,10 @@ pub fn get_data_plane_id_from_coredb(coredb: &CoreDB) -> Result<String, Conducto
         .metadata
         .annotations
         .as_ref()
-        .ok_or(ConductorError::EventIDParsing)?;
+        .ok_or(ConductorError::EventIDFormat)?;
     let data_plane_id = annotations
         .get("tembo.io/data_plane_id")
-        .ok_or(ConductorError::EventIDParsing)?
+        .ok_or(ConductorError::EventIDFormat)?
         .to_string();
     Ok(data_plane_id)
 }
