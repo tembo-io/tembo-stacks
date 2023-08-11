@@ -19,8 +19,10 @@ use opentelemetry::sdk::metrics::{controllers, processors, selectors};
 use opentelemetry::{global, KeyValue};
 use pgmq::{Message, PGMQueueExt};
 use std::env;
+use std::sync::{Arc, Mutex};
 use std::{thread, time};
 
+use conductor::routes::health::background_threads_running;
 use tokio_retry::strategy::FixedInterval;
 use tokio_retry::Retry;
 use types::{CRUDevent, Event};
@@ -568,9 +570,16 @@ async fn main() -> std::io::Result<()> {
     let custom_metrics = CustomMetrics::new(&meter);
     let custom_metrics_copy = custom_metrics.clone();
 
+    let background_threads: Arc<Mutex<Vec<tokio::task::JoinHandle<()>>>> =
+        Arc::new(Mutex::new(Vec::new()));
+
+    let mut background_threads_locked = background_threads
+        .lock()
+        .expect("Failed to remember our background threads");
+
     info!("Starting conductor");
 
-    tokio::spawn(async move {
+    background_threads_locked.push(tokio::spawn(async move {
         loop {
             match run(custom_metrics_copy.clone()).await {
                 Ok(_) => {}
@@ -584,7 +593,9 @@ async fn main() -> std::io::Result<()> {
                 }
             }
         }
-    });
+    }));
+
+    std::mem::drop(background_threads_locked);
 
     HttpServer::new(move || {
         App::new()
@@ -594,6 +605,7 @@ async fn main() -> std::io::Result<()> {
                 "/metrics",
                 web::get().to(PrometheusMetricsHandler::new(exporter.clone())),
             )
+            .service(web::scope("/health").service(background_threads_running))
     })
     .workers(1)
     .bind(("0.0.0.0", 8080))?

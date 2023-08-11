@@ -2,6 +2,7 @@ pub mod aws;
 pub mod errors;
 pub mod extensions;
 pub mod monitoring;
+pub mod routes;
 pub mod types;
 
 use crate::aws::cloudformation::{AWSConfigState, CloudFormationParams};
