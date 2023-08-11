@@ -6,11 +6,10 @@ use conductor::monitoring::CustomMetrics;
 use conductor::{
     create_cloudformation, create_namespace, create_networkpolicy, create_or_update, delete,
     delete_cloudformation, delete_namespace, generate_rand_schedule, generate_spec,
-    get_coredb_error_without_status, get_data_plane_id_from_coredb, get_event_id_from_coredb,
-    get_one, get_pg_conn, lookup_role_arn, parse_event_id, restart_cnpg, restart_statefulset,
-    types,
+    get_coredb_error_without_status, get_one, get_pg_conn, lookup_role_arn, parse_event_id,
+    restart_cnpg, restart_statefulset, types,
 };
-use controller::apis::coredb_types::{Backup, CoreDB, CoreDBSpec, ServiceAccountTemplate};
+use controller::apis::coredb_types::{Backup, CoreDBSpec, ServiceAccountTemplate};
 use k8s_openapi::apimachinery::pkg::apis::meta::v1::ObjectMeta;
 use kube::Client;
 use log::{debug, error, info, warn};
@@ -22,10 +21,13 @@ use std::env;
 use std::sync::{Arc, Mutex};
 use std::{thread, time};
 
+use crate::status_reporter::run_status_reporter;
 use conductor::routes::health::background_threads_running;
 use tokio_retry::strategy::FixedInterval;
 use tokio_retry::Retry;
 use types::{CRUDevent, Event};
+
+mod status_reporter;
 
 async fn run(metrics: CustomMetrics) -> Result<(), Box<dyn std::error::Error>> {
     // Read connection info from environment variable
@@ -481,77 +483,9 @@ async fn run(metrics: CustomMetrics) -> Result<(), Box<dyn std::error::Error>> {
     }
 }
 
-// Used for sending ad-hoc status updates to the control plane.
-// This can be triggered when a change in a CoreDB's status is detected.
-async fn send_status_update(
-    client: Client,
-    response_queue: &PGMQueueExt,
-    coredb: &CoreDB,
-) -> Result<(), ConductorError> {
-    let coredb_name = coredb
-        .metadata
-        .name
-        .clone()
-        .expect("CoreDB should always have a name");
-    let namespace = coredb
-        .metadata
-        .namespace
-        .clone()
-        .expect("CoreDB should always have a namespace");
-    // Could be nice to move these env reads into a config struct
-    let data_plane_basedomain = match env::var("DATA_PLANE_BASEDOMAIN") {
-        Ok(domain) => domain,
-        Err(_) => {
-            error!("DATA_PLANE_BASEDOMAIN is not set, skipping status update");
-            return Ok(());
-        }
-    };
-    let data_plane_events_queue = match env::var("DATA_PLANE_EVENTS_QUEUE") {
-        Ok(data_plane_events_queue) => data_plane_events_queue,
-        Err(_) => {
-            error!("DATA_PLANE_EVENTS_QUEUE is not set, skipping status update");
-            return Ok(());
-        }
-    };
-    let event_id = match get_event_id_from_coredb(coredb) {
-        Ok(event_id) => event_id,
-        Err(_) => {
-            warn!("Could not get event_id from CoreDB {}, needs to be updated with annotations, which will happen on the next update from control plane, skipping", coredb_name);
-            return Ok(());
-        }
-    };
-    let data_plane_id = match get_data_plane_id_from_coredb(coredb) {
-        Ok(event_id) => event_id,
-        Err(_) => {
-            warn!("Could not get data_plane_id from CoreDB {}, needs to be updated with annotations, which will happen on the next update from control plane, skipping", coredb_name);
-            return Ok(());
-        }
-    };
-    let conn_info = match get_pg_conn(client, &namespace, &data_plane_basedomain).await {
-        Ok(conn_info) => conn_info,
-        Err(_) => {
-            warn!("Could not get connection info for CoreDB {}, skipping status update. This can be normal for a few seconds when the resource is initially created.", coredb_name);
-            return Ok(());
-        }
-    };
-    let response = types::StateToControlPlane {
-        data_plane_id,
-        event_id: event_id.clone(),
-        event_type: Event::Update,
-        spec: Some(coredb.spec.clone()),
-        status: coredb.status.clone(),
-        connection: Some(conn_info),
-    };
-    let msg_id = response_queue
-        .send(&data_plane_events_queue, &response)
-        .await?;
-    info!(
-        "{}: Sent ad hoc update to control plane, message_id: {}",
-        event_id, msg_id
-    );
-    Ok(())
-}
-
+// https://github.com/rust-lang/rust-clippy/issues/6446
+// False positive because lock is dropped before await
+#[allow(clippy::await_holding_lock)]
 #[actix_web::main]
 async fn main() -> std::io::Result<()> {
     env_logger::init();
@@ -568,7 +502,6 @@ async fn main() -> std::io::Result<()> {
     let exporter = opentelemetry_prometheus::exporter(controller).init();
     let meter = global::meter("actix_web");
     let custom_metrics = CustomMetrics::new(&meter);
-    let custom_metrics_copy = custom_metrics.clone();
 
     let background_threads: Arc<Mutex<Vec<tokio::task::JoinHandle<()>>>> =
         Arc::new(Mutex::new(Vec::new()));
@@ -578,19 +511,45 @@ async fn main() -> std::io::Result<()> {
         .expect("Failed to remember our background threads");
 
     info!("Starting conductor");
-
-    background_threads_locked.push(tokio::spawn(async move {
-        loop {
-            match run(custom_metrics_copy.clone()).await {
-                Ok(_) => {}
-                Err(err) => {
-                    custom_metrics_copy.clone().conductor_errors.add(
-                        &opentelemetry::Context::current(),
-                        1,
-                        &[],
-                    );
-                    error!("error: {:?}", err);
+    background_threads_locked.push(tokio::spawn({
+        let custom_metrics_copy = custom_metrics.clone();
+        async move {
+            loop {
+                match run(custom_metrics_copy.clone()).await {
+                    Ok(_) => {}
+                    Err(err) => {
+                        custom_metrics_copy.clone().conductor_errors.add(
+                            &opentelemetry::Context::current(),
+                            1,
+                            &[],
+                        );
+                        error!("error in conductor: {:?}", err);
+                    }
                 }
+                warn!("conductor exited, sleeping for 1 second");
+                thread::sleep(time::Duration::from_secs(1));
+            }
+        }
+    }));
+
+    info!("Starting status reporter");
+    background_threads_locked.push(tokio::spawn({
+        let custom_metrics_copy = custom_metrics.clone();
+        async move {
+            loop {
+                match run_status_reporter(custom_metrics_copy.clone()).await {
+                    Ok(_) => {}
+                    Err(err) => {
+                        custom_metrics_copy.clone().conductor_errors.add(
+                            &opentelemetry::Context::current(),
+                            1,
+                            &[],
+                        );
+                        error!("error in conductor: {:?}", err);
+                    }
+                }
+                warn!("conductor exited, sleeping for 1 second");
+                thread::sleep(time::Duration::from_secs(1));
             }
         }
     }));
