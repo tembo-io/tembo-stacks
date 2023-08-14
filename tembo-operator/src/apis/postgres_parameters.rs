@@ -1,5 +1,5 @@
 use itertools::Itertools;
-use kube::Client;
+
 use schemars::{
     schema::{Schema, SchemaObject},
     JsonSchema,
@@ -8,20 +8,9 @@ use serde::{
     de::{Error, MapAccess, Visitor},
     Deserialize, Deserializer, Serialize, Serializer,
 };
-use std::{
-    cmp::Ordering,
-    collections::{BTreeMap, BTreeSet},
-    fmt,
-    str::FromStr,
-};
+use std::{cmp::Ordering, collections::BTreeSet, fmt, str::FromStr};
 use thiserror::Error;
 use tracing::*;
-
-use crate::{
-    apis::coredb_types::CoreDB,
-    configmap::{create_configmap_ifnotexist, set_configmap},
-    Error as OpError,
-};
 
 // these values are multi-valued, and need to be merged across configuration layers
 pub const MULTI_VAL_CONFIGS: [&str; 5] = [
@@ -173,7 +162,7 @@ pub fn merge_pg_configs(
             Err(e) => Err(e),
         },
         (Some(c), None) | (None, Some(c)) => {
-            info!("No configs to merge");
+            debug!("No configs to merge");
             Ok(Some(c))
         }
         (None, None) => Ok(None),
@@ -369,34 +358,6 @@ impl<'de> Deserialize<'de> for PgConfig {
         const FIELDS: &[&str] = &["name", "value"];
         deserializer.deserialize_struct("PgConfig", FIELDS, PgConfigVisitor)
     }
-}
-
-pub async fn reconcile_pg_parameters_configmap(
-    cdb: &CoreDB,
-    client: Client,
-    ns: &str,
-) -> Result<(), OpError> {
-    create_configmap_ifnotexist(client.clone(), ns, TEMBO_POSTGRESQL_CONFIGMAP).await?;
-    // set custom pg-prom metrics in configmap values if they are specified
-    match cdb.spec.get_pg_configs() {
-        Ok(Some(cfgs)) => {
-            let cf_file_string = cfgs
-                .iter()
-                .map(|item| item.to_postgres())
-                .collect::<Vec<_>>()
-                .join("\n");
-            let d: BTreeMap<String, String> =
-                BTreeMap::from([(TEMBO_POSTGRESQL_CONF.to_string(), cf_file_string)]);
-            set_configmap(client.clone(), ns, TEMBO_POSTGRESQL_CONFIGMAP, d).await?
-        }
-        Ok(None) => {
-            debug!("No queries specified in CoreDB spec");
-        }
-        Err(e) => {
-            error!("Failed to get pg configs: {}", e);
-        }
-    }
-    Ok(())
 }
 
 #[cfg(test)]

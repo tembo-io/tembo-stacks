@@ -2,28 +2,19 @@ use chrono::{DateTime, Utc};
 use futures::stream::StreamExt;
 
 use crate::{
-    apis::{
-        coredb_types::{CoreDB, CoreDBStatus},
-        postgres_parameters::reconcile_pg_parameters_configmap,
-    },
+    apis::coredb_types::{CoreDB, CoreDBStatus},
     cloudnativepg::cnpg::{cnpg_cluster_from_cdb, reconcile_cnpg, reconcile_cnpg_scheduled_backup},
     config::Config,
-    deployment_postgres_exporter::reconcile_prometheus_exporter,
+    deployment_postgres_exporter::reconcile_prometheus_exporter_deployment,
     exec::{ExecCommand, ExecOutput},
-    extensions::{reconcile_extensions, Extension},
     ingress::reconcile_postgres_ing_route_tcp,
-    postgres_exporter::{create_postgres_exporter_role, reconcile_prom_configmap},
     psql::{PsqlCommand, PsqlOutput},
-    rbac::reconcile_rbac,
     secret::{reconcile_postgres_exporter_secret, reconcile_secret, PrometheusExporterSecretData},
-    service::reconcile_svc,
+    service::reconcile_prometheus_exporter_service,
     telemetry, Error, Metrics, Result,
 };
 use k8s_openapi::{
-    api::{
-        core::v1::{Namespace, Pod},
-        rbac::v1::PolicyRule,
-    },
+    api::core::v1::{Namespace, Pod},
     apimachinery::pkg::util::intstr::IntOrString,
 };
 use kube::{
@@ -39,6 +30,10 @@ use kube::{
     Resource,
 };
 
+use crate::{
+    extensions::reconcile_extensions,
+    postgres_exporter::{create_postgres_exporter_role, reconcile_prom_configmap},
+};
 use serde::Serialize;
 use serde_json::json;
 use std::sync::Arc;
@@ -106,74 +101,7 @@ fn error_policy(cdb: Arc<CoreDB>, error: &Error, ctx: Arc<Context>) -> Action {
     Action::requeue(Duration::from_secs(5 * 60))
 }
 
-// Create role policy rulesets
-async fn create_policy_rules(cdb: &CoreDB) -> Vec<PolicyRule> {
-    vec![
-        // This policy allows get, list, watch access to the coredb resource
-        PolicyRule {
-            api_groups: Some(vec!["coredb.io".to_owned()]),
-            resource_names: Some(vec![cdb.name_any()]),
-            resources: Some(vec!["coredbs".to_owned()]),
-            verbs: vec!["get".to_string(), "list".to_string(), "watch".to_string()],
-            ..PolicyRule::default()
-        },
-        // This policy allows get, patch, update, watch access to the coredb/status resource
-        PolicyRule {
-            api_groups: Some(vec!["coredb.io".to_owned()]),
-            resource_names: Some(vec![cdb.name_any()]),
-            resources: Some(vec!["coredbs/status".to_owned()]),
-            verbs: vec![
-                "get".to_string(),
-                "patch".to_string(),
-                "update".to_string(),
-                "watch".to_string(),
-            ],
-            ..PolicyRule::default()
-        },
-        // This policy allows get, watch access to a secret in the namespace
-        PolicyRule {
-            api_groups: Some(vec!["".to_owned()]),
-            resource_names: Some(vec![format!("{}-connection", cdb.name_any())]),
-            resources: Some(vec!["secrets".to_owned()]),
-            verbs: vec!["get".to_string(), "watch".to_string()],
-            ..PolicyRule::default()
-        },
-        // This policy for now is specifically open for all configmaps in the namespace
-        // We currently do not have any configmaps
-        PolicyRule {
-            api_groups: Some(vec!["".to_owned()]),
-            resources: Some(vec!["configmaps".to_owned()]),
-            verbs: vec!["get".to_string(), "watch".to_string()],
-            ..PolicyRule::default()
-        },
-    ]
-}
-
 impl CoreDB {
-    pub(crate) async fn cnpg_enabled(&self, ctx: Arc<Context>) -> bool {
-        // We will migrate databases by applying this label manually to the namespace
-        let cnpg_enabled_label = "tembo-pod-init.tembo.io/watch";
-
-        let client = ctx.client.clone();
-        // Get labels of the current namespace
-        let ns_api: Api<Namespace> = Api::all(client.clone());
-        let ns = self.namespace().unwrap();
-        let ns_labels = ns_api
-            .get(&ns)
-            .await
-            .unwrap_or_default()
-            .metadata
-            .labels
-            .unwrap_or_default();
-
-        let enabled_value = ns_labels.get(&String::from(cnpg_enabled_label));
-        if enabled_value.is_some() {
-            let enabled = enabled_value.expect("We already checked this is_some") == "true";
-            return enabled;
-        }
-        false
-    }
-
     // Reconcile (for non-finalizer related changes)
     async fn reconcile(&self, ctx: Arc<Context>, cfg: &Config) -> Result<Action, Action> {
         let client = ctx.client.clone();
@@ -182,18 +110,14 @@ impl CoreDB {
         let name = self.name_any();
         let coredbs: Api<CoreDB> = Api::namespaced(client.clone(), &ns);
 
-        let cnpg_enabled = self.cnpg_enabled(ctx.clone()).await;
+        // Ingress
         match std::env::var("DATA_PLANE_BASEDOMAIN") {
             Ok(basedomain) => {
                 debug!(
                     "DATA_PLANE_BASEDOMAIN is set to {}, reconciling ingress route tcp",
                     basedomain
                 );
-                let service_name_read_write = match cnpg_enabled {
-                    // When CNPG is enabled, we use the CNPG service name
-                    true => format!("{}-rw", self.name_any().as_str()),
-                    false => self.name_any().as_str().to_string(),
-                };
+                let service_name_read_write = format!("{}-rw", self.name_any().as_str());
                 reconcile_postgres_ing_route_tcp(
                     self,
                     ctx.clone(),
@@ -217,8 +141,14 @@ impl CoreDB {
             }
         };
 
-        // create/update configmap when postgres exporter enabled
-        if self.spec.postgresExporterEnabled {
+        if self.spec.postgresExporterEnabled
+            && self
+                .spec
+                .metrics
+                .as_ref()
+                .and_then(|m| m.queries.as_ref())
+                .is_some()
+        {
             debug!("Reconciling prometheus configmap");
             reconcile_prom_configmap(self, client.clone(), &ns)
                 .await
@@ -228,22 +158,14 @@ impl CoreDB {
                 })?;
         }
 
-        // reconcile service account, role, and role binding
-        reconcile_rbac(self, ctx.clone(), None, create_policy_rules(self).await)
-            .await
-            .map_err(|e| {
-                error!("Error reconciling service account: {:?}", e);
-                Action::requeue(Duration::from_secs(300))
-            })?;
-
-        // reconcile secret
         debug!("Reconciling secret");
+        // Superuser connection info
         reconcile_secret(self, ctx.clone()).await.map_err(|e| {
             error!("Error reconciling secret: {:?}", e);
             Action::requeue(Duration::from_secs(300))
         })?;
 
-        // reconcile postgres exporter secret
+        // Postgres exporter connection info
         let secret_data: Option<PrometheusExporterSecretData> = if self.spec.postgresExporterEnabled {
             let result = reconcile_postgres_exporter_secret(self, ctx.clone())
                 .await
@@ -263,26 +185,15 @@ impl CoreDB {
             None
         };
 
-        // handle postgres configs
-        debug!("Reconciling postgres configmap");
-        reconcile_pg_parameters_configmap(self, client.clone(), &ns)
-            .await
-            .map_err(|e| {
-                error!("Error reconciling postgres configmap: {:?}", e);
-                Action::requeue(Duration::from_secs(300))
-            })?;
-
-        if cnpg_enabled {
-            reconcile_cnpg(self, ctx.clone()).await?;
-            if cfg.enable_backup {
-                reconcile_cnpg_scheduled_backup(self, ctx.clone()).await?;
-            }
+        // Deploy cluster
+        reconcile_cnpg(self, ctx.clone()).await?;
+        if cfg.enable_backup {
+            reconcile_cnpg_scheduled_backup(self, ctx.clone()).await?;
         }
 
-        // reconcile prometheus exporter deployment if enabled
         if self.spec.postgresExporterEnabled {
             debug!("Reconciling prometheus exporter deployment");
-            reconcile_prometheus_exporter(self, ctx.clone(), cnpg_enabled)
+            reconcile_prometheus_exporter_deployment(self, ctx.clone())
                 .await
                 .map_err(|e| {
                     error!("Error reconciling prometheus exporter deployment: {:?}", e);
@@ -291,11 +202,13 @@ impl CoreDB {
         };
 
         // reconcile service
-        debug!("Reconciling service");
-        reconcile_svc(self, ctx.clone()).await.map_err(|e| {
-            error!("Error reconciling service: {:?}", e);
-            Action::requeue(Duration::from_secs(300))
-        })?;
+        debug!("Reconciling prometheus exporter service");
+        reconcile_prometheus_exporter_service(self, ctx.clone())
+            .await
+            .map_err(|e| {
+                error!("Error reconciling service: {:?}", e);
+                Action::requeue(Duration::from_secs(300))
+            })?;
 
         let new_status = match self.spec.stop {
             false => {
@@ -309,7 +222,16 @@ impl CoreDB {
                     return Ok(Action::requeue(Duration::from_secs(5)));
                 }
 
-                let extensions: Vec<Extension> =
+                let patch_status = json!({
+                    "apiVersion": "coredb.io/v1alpha1",
+                    "kind": "CoreDB",
+                    "status": {
+                        "running": true
+                    }
+                });
+                patch_cdb_status_merge(&coredbs, &name, patch_status).await?;
+
+                let (trunk_installs, extensions) =
                     reconcile_extensions(self, ctx.clone(), &coredbs, &name).await?;
 
                 create_postgres_exporter_role(self, ctx.clone(), secret_data).await?;
@@ -317,19 +239,21 @@ impl CoreDB {
                 CoreDBStatus {
                     running: true,
                     extensionsUpdating: false,
-                    storage: self.spec.storage.clone(),
-                    sharedirStorage: self.spec.sharedirStorage.clone(),
-                    pkglibdirStorage: self.spec.pkglibdirStorage.clone(),
+                    storage: Some(self.spec.storage.clone()),
                     extensions: Some(extensions),
+                    trunk_installs: Some(trunk_installs),
+                    resources: Some(self.spec.resources.clone()),
+                    runtime_config: self.spec.runtime_config.clone(),
                 }
             }
             true => CoreDBStatus {
                 running: false,
                 extensionsUpdating: false,
-                storage: self.spec.storage.clone(),
-                sharedirStorage: self.spec.sharedirStorage.clone(),
-                pkglibdirStorage: self.spec.pkglibdirStorage.clone(),
+                storage: Some(self.spec.storage.clone()),
                 extensions: self.status.clone().and_then(|f| f.extensions),
+                trunk_installs: self.status.clone().and_then(|f| f.trunk_installs),
+                resources: Some(self.spec.resources.clone()),
+                runtime_config: self.spec.runtime_config.clone(),
             },
         };
 
@@ -339,10 +263,11 @@ impl CoreDB {
             "status": new_status
         });
 
-        patch_cdb_status_force(&coredbs, &name, patch_status).await?;
+        patch_cdb_status_merge(&coredbs, &name, patch_status).await?;
 
-        // Check back every 5 minutes
-        Ok(Action::requeue(Duration::from_secs(300)))
+        info!("Fully reconciled {}", self.name_any());
+        // Check back every minute
+        Ok(Action::requeue(Duration::from_secs(60)))
     }
 
     // Finalizer cleanup (the object was deleted, ensure nothing is orphaned)
@@ -415,7 +340,6 @@ impl CoreDB {
         context: Arc<Context>,
     ) -> Result<PsqlOutput, Action> {
         let client = context.client.clone();
-        let _cnpg_enabled = self.cnpg_enabled(context.clone()).await;
 
         let pod_name_cnpg = self
             .primary_pod_cnpg(client.clone())
@@ -483,18 +407,20 @@ pub fn is_postgres_ready() -> impl Condition<Pod> + 'static {
     }
 }
 
-pub async fn patch_cdb_status_force(
-    cdb: &Api<CoreDB>,
-    name: &str,
-    patch: serde_json::Value,
-) -> Result<(), Action> {
-    let ps = PatchParams::apply("cntrlr").force();
-    let patch_status = Patch::Apply(patch);
-    let _o = cdb.patch_status(name, &ps, &patch_status).await.map_err(|e| {
-        error!("Error updating CoreDB status: {:?}", e);
+pub async fn get_current_coredb_resource(cdb: &CoreDB, ctx: Arc<Context>) -> Result<CoreDB, Action> {
+    let coredb_api: Api<CoreDB> = Api::namespaced(
+        ctx.client.clone(),
+        &cdb.metadata
+            .namespace
+            .clone()
+            .expect("CoreDB should have a namespace"),
+    );
+    let coredb_name = cdb.metadata.name.clone().expect("CoreDB should have a name");
+    let coredb = coredb_api.get(&coredb_name).await.map_err(|e| {
+        error!("Error getting CoreDB resource: {:?}", e);
         Action::requeue(Duration::from_secs(10))
     })?;
-    Ok(())
+    Ok(coredb.clone())
 }
 
 pub async fn patch_cdb_status_merge(
@@ -502,7 +428,10 @@ pub async fn patch_cdb_status_merge(
     name: &str,
     patch: serde_json::Value,
 ) -> Result<(), Action> {
-    let pp = PatchParams::default();
+    let pp = PatchParams {
+        field_manager: Some("cntrlr".to_string()),
+        ..PatchParams::default()
+    };
     let patch_status = Patch::Merge(patch);
     let _o = cdb.patch_status(name, &pp, &patch_status).await.map_err(|e| {
         error!("Error updating CoreDB status: {:?}", e);
@@ -601,14 +530,5 @@ mod test {
         fakeserver.handle_finalizer_creation(&coredb);
         let res = reconcile(Arc::new(coredb), testctx).await;
         assert!(res.is_ok(), "initial creation succeeds in adding finalizer");
-    }
-
-    #[tokio::test]
-    async fn test_patches_coredb() {
-        let (testctx, fakeserver, _) = Context::test();
-        let coredb = CoreDB::test().finalized();
-        fakeserver.handle_coredb_patch(&coredb);
-        let res = reconcile(Arc::new(coredb), testctx).await;
-        assert!(res.is_ok(), "finalized coredb succeeds in its reconciler");
     }
 }
