@@ -20,9 +20,8 @@ futures = "0.3"
 openssl = { version = "0.10", features = ["vendored"] }
 controller = {path = "../tembo-operator", package = "controller"}
 tracing = "0.1"
-tembo-telemetry = "0.1.0"
+tembo-telemetry = "0.2.0"
 opentelemetry = { version = "0.19.0", features = ["trace", "metrics"] }
-tracing-actix-web = { version="0.7", features = ["opentelemetry_0_19"] }
 
 [dependencies.kube]
 features = ["admission","runtime", "client", "derive", "ws"]
