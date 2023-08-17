@@ -28,7 +28,6 @@ use kube::{
     Api, Resource, ResourceExt,
 };
 use std::{collections::BTreeMap, sync::Arc};
-
 use tokio::time::Duration;
 use tracing::{debug, error, info, warn};
 
