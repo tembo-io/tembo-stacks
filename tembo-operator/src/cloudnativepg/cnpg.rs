@@ -496,7 +496,7 @@ fn schedule_expression_from_cdb(cdb: &CoreDB) -> String {
                     match term.parse::<i32>() {
                         Ok(_) => {}
                         Err(_) => {
-                            warn!("Invalid schedule expression, only integers and '*' are accepted, setting as default: {}", expression);
+                            warn!("Invalid schedule expression, only integers and '*' are accepted, setting as default. Found: {}", expression);
                             return default;
                         }
                     }
