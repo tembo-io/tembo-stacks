@@ -118,8 +118,3 @@ pub fn default_backup_schedule() -> Option<String> {
     // Every day at midnight
     Some("0 0 * * *".to_owned())
 }
-
-pub fn enable_replication_slots() -> Option<bool> {
-    // Do not enable HA by default
-    Some(false)
-}
