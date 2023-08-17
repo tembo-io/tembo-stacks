@@ -70,4 +70,12 @@ spec:
       annotations:
         summary: "PostgreSQL instance failover detected"
         description: "The PostgreSQL instance in {{`{{`}} $labels.namespace {{`}}`}}/{{`{{`}} $labels.pod {{`}}`}} transitioned its recovery state, indicating a potential failover."
+    - alert: NoBackupInLast2Hours
+      expr: (time() - cnpg_collector_last_available_backup_timestamp) 
+        > 7200
+      annotations:
+        summary: "No PostgreSQL backup in the last 2 hours"
+        description: "The PostgreSQL in {{`{{`}} $labels.namespace {{`}}`}}/{{`{{`}} $labels.pod {{`}}`}} has not taken a backup in the last 2 hours."
+      labels:
+        severity: critical
 {{- end }}
