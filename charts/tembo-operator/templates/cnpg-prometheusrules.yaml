@@ -2,7 +2,7 @@
 apiVersion: monitoring.coreos.com/v1
 kind: PrometheusRule
 metadata:
-  name: {{ .Release.name }}-cnpg-alerts
+  name: {{ .Release.Name }}-cnpg-alerts
   namespace: {{ .Release.Namespace }}
 spec:
   groups:
