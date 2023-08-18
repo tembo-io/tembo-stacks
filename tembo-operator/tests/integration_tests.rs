@@ -1476,9 +1476,6 @@ mod test {
             },
             "spec": {
                 "replicas": replicas,
-                "high_availability": {
-                    "enable_replication_slots": true,
-                }
             }
         });
         let params = PatchParams::apply("tembo-integration-test");
