@@ -1,4 +1,4 @@
-// Include the #[ignore] macro on slow tests
+// Include the #[gnore] macro on slow tests
 // That way, 'cargo test' does not run them by default.
 // To run just these tests, use 'cargo test -- --ignored'
 // To run all tests, use 'cargo test -- --include-ignored'
@@ -1491,11 +1491,11 @@ mod test {
 
         // Assert that we can query the database with \dt;
         let result = coredb_resource
-            .psql("\\dt".to_string(), "postgres".to_string(), context.clone())
+            .psql("\\dx".to_string(), "postgres".to_string(), context.clone())
             .await
             .unwrap();
-        println!("psql out: {}", result.stdout.clone().unwrap());
-        assert!(!result.stdout.clone().unwrap().contains("postgres"));
+        println!("psql out: {:?}", result.stdout.clone().unwrap());
+        assert!(result.stdout.clone().unwrap().contains("plpgsql"));
 
         // Assert that both pods are replicating successfully
         let result = coredb_resource
@@ -1582,7 +1582,6 @@ mod test {
             .psql("\\dx".to_string(), "postgres".to_string(), context.clone())
             .await
             .unwrap();
-        println!("psql out: {}", result.stdout.clone().unwrap());
         assert!(result.stdout.clone().unwrap().contains("plpgsql"));
 
         // Now upgrade the single instance to be HA
@@ -1611,7 +1610,6 @@ mod test {
             .psql("\\dx".to_string(), "postgres".to_string(), context.clone())
             .await
             .unwrap();
-        println!("psql out: {}", result.stdout.clone().unwrap());
         assert!(result.stdout.clone().unwrap().contains("plpgsql"));
 
         // Assert that both pods are replicating successfully
@@ -1624,6 +1622,48 @@ mod test {
             .await
             .unwrap();
         assert!(result.stdout.clone().unwrap().contains("streaming"));
+
+        // Revert replicas back to 1 to disable HA
+        let replicas = 1;
+        // Generate HA CoreDB resource
+        let coredb_json = serde_json::json!({
+            "apiVersion": API_VERSION,
+            "kind": kind,
+            "metadata": {
+                "name": name
+            },
+            "spec": {
+                "replicas": replicas,
+            }
+        });
+        println!("Disabling HA by setting replicas to {}", replicas);
+        let params = PatchParams::apply("tembo-integration-test");
+        let patch = Patch::Apply(&coredb_json);
+        let coredb_resource = coredbs.patch(name, &params, &patch).await.unwrap();
+
+        // Wait for secondary CNPG pod to be deleted
+        println!("Waiting for Pod {} to be deleted", pod_name_secondary);
+        let _assert_secondary_deleted = tokio::time::timeout(
+            Duration::from_secs(TIMEOUT_SECONDS_POD_DELETED),
+            await_condition(pods.clone(), &pod_name_secondary, conditions::is_deleted("")),
+        )
+        .await
+        .unwrap_or_else(|_| {
+            panic!(
+                "Pod {} was not deleted after waiting {} seconds",
+                pod_name_secondary, TIMEOUT_SECONDS_POD_DELETED
+            )
+        });
+
+        // Query the database again to ensure that pg_replication_slots is empty
+        wait_until_psql_contains(
+            context.clone(),
+            coredb_resource.clone(),
+            "SELECT count(*) from pg_replication_slots".to_string(),
+            "0".to_string(),
+            false,
+        )
+        .await;
 
         // CLEANUP TEST
         // Cleanup CoreDB
