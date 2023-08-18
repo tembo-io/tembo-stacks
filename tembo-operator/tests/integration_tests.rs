@@ -1580,13 +1580,13 @@ mod test {
         let pod_name_primary = format!("{}-1", name);
         pod_ready_and_running(pods.clone(), pod_name_primary.clone()).await;
 
-        // Assert that we can query the database with \dt;
+        // Assert that we can query the database with \dx;
         let result = coredb_resource
-            .psql("\\dt".to_string(), "postgres".to_string(), context.clone())
+            .psql("\\dx".to_string(), "postgres".to_string(), context.clone())
             .await
             .unwrap();
         println!("psql out: {}", result.stdout.clone().unwrap());
-        assert!(!result.stdout.clone().unwrap().contains("postgres"));
+        assert!(result.stdout.clone().unwrap().contains("plpgsql"));
 
         // Now upgrade the single instance to be HA
         let replicas = 2;
@@ -1609,13 +1609,13 @@ mod test {
         let pod_name_secondary = format!("{}-2", name);
         pod_ready_and_running(pods.clone(), pod_name_secondary.clone()).await;
 
-        // Assert that we can query the database again now that HA is enabled with \dt;
+        // Assert that we can query the database again now that HA is enabled with \dx;
         let result = coredb_resource
-            .psql("\\dt".to_string(), "postgres".to_string(), context.clone())
+            .psql("\\dx".to_string(), "postgres".to_string(), context.clone())
             .await
             .unwrap();
         println!("psql out: {}", result.stdout.clone().unwrap());
-        assert!(!result.stdout.clone().unwrap().contains("postgres"));
+        assert!(result.stdout.clone().unwrap().contains("plpgsql"));
 
         // Assert that both pods are replicating successfully
         let result = coredb_resource

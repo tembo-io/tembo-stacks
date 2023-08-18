@@ -247,7 +247,13 @@ fn cnpg_high_availability(cdb: &CoreDB) -> Option<ClusterReplicationSlots> {
             update_interval: Some(30),
         })
     } else {
-        None
+        Some(ClusterReplicationSlots {
+            high_availability: Some(ClusterReplicationSlotsHighAvailability {
+                enabled: Some(false),
+                ..ClusterReplicationSlotsHighAvailability::default()
+            }),
+            update_interval: Some(30),
+        })
     }
 }
 
