@@ -118,7 +118,9 @@ pub fn get_location_spec(
         if extension.name == extension_name {
             for location in &extension.locations {
                 // if location schema is not specified, then match any schema when returning location status
-                if location.database == location_database && (location_schema.is_none() || location.schema == location_schema) {
+                if location.database == location_database
+                    && (location_schema.is_none() || location.schema == location_schema)
+                {
                     return Some(location.clone());
                 }
             }
