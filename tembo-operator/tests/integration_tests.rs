@@ -342,7 +342,7 @@ mod test {
         let patch = Patch::Apply(&coredb_json);
         let coredb_resource = coredbs.patch(name, &params, &patch).await.unwrap();
 
-        // Wait for CNPG Metrics Pod to be created
+        // Wait for CNPG Pod to be created
         let pod_name = format!("{}-1", name);
 
         pod_ready_and_running(pods.clone(), pod_name.clone()).await;
