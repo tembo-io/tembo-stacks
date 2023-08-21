@@ -358,7 +358,7 @@ pub async fn get_pg_conn(
     client: Client,
     name: &str,
     basedomain: &str,
-) -> Result<(types::ConnectionInfo, types::ConnectionInfo), ConductorError> {
+) -> Result<types::ConnectionInfo, ConductorError> {
     let (postgres_user_secret, app_user_secret) = get_secret_for_db(client, name).await?;
 
     // Get the postgres user and password from postgres_user_secret
@@ -375,17 +375,11 @@ pub async fn get_pg_conn(
         port: 5432,
         user: postgres_string_user,
         password: postgres_string_pw,
+        app_user: app_string_user,
+        app_password: app_string_pw,
     };
 
-    // Create ConnectionInfo for the app user
-    let app_conn = types::ConnectionInfo {
-        host: host.clone(),
-        port: 5432,
-        user: app_string_user,
-        password: app_string_pw,
-    };
-
-    Ok((postgres_conn, app_conn))
+    Ok(postgres_conn)
 }
 
 pub async fn restart_statefulset(

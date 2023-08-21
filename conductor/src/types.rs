@@ -40,7 +40,7 @@ pub struct StateToControlPlane {
     pub event_type: Event,     // pass through from event that triggered a data plane action
     pub spec: Option<CoreDBSpec>,
     pub status: Option<CoreDBStatus>,
-    pub connection: Option<(types::ConnectionInfo, types::ConnectionInfo)>,
+    pub connection: Option<types::ConnectionInfo>,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -49,4 +49,6 @@ pub struct ConnectionInfo {
     pub port: u16,
     pub user: String,
     pub password: String,
+    pub app_user: String,
+    pub app_password: String,
 }
