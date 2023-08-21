@@ -1616,6 +1616,15 @@ mod test {
         let pod_name_primary = format!("{}-1", name);
         pod_ready_and_running(pods.clone(), pod_name_primary.clone()).await;
 
+        let pods: Api<Pod> = Api::namespaced(client.clone(), &namespace);
+        let lp =
+            ListParams::default().labels(format!("app=postgres-exporter,coredb.io/name={}", name).as_str());
+        let exporter_pods = pods.list(&lp).await.expect("could not get pods");
+        let exporter_pod_name = exporter_pods.items[0].metadata.name.as_ref().unwrap();
+        println!("Exporter pod name: {}", &exporter_pod_name);
+
+        pod_ready_and_running(pods.clone(), exporter_pod_name.clone()).await;
+
         // Assert that we can query the database with \dx;
         let result = coredb_resource
             .psql("\\dx".to_string(), "postgres".to_string(), context.clone())
