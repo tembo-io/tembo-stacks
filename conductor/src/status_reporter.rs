@@ -97,8 +97,14 @@ async fn send_status_update(
             return Ok(());
         }
     };
-    let conn_info = match get_pg_conn(client, &namespace, &data_plane_basedomain).await {
-        Ok(conn_info) => conn_info,
+    let (conn_info_pg, conn_info_app) = match get_pg_conn(
+        client,
+        &namespace,
+        &data_plane_basedomain,
+    )
+    .await
+    {
+        Ok((conn_pg, conn_app)) => (conn_pg, conn_app),
         Err(_) => {
             info!("Could not get connection info for CoreDB {}, skipping status update. This can be normal for a few seconds when the resource is initially created, and when the instance is being deleted.", coredb_name);
             return Ok(());
@@ -110,7 +116,7 @@ async fn send_status_update(
         event_type: Event::Updated,
         spec: Some(coredb.spec.clone()),
         status: coredb.status.clone(),
-        connection: Some(conn_info),
+        connection: Some((conn_info_pg, conn_info_app)),
     };
     let msg_id = response_queue
         .send(&data_plane_events_queue, &response)
