@@ -2,8 +2,12 @@ use futures::{StreamExt, TryStreamExt};
 use k8s_openapi::api::core::v1::Namespace;
 use kube::api::{Api, ListParams, WatchEvent, WatchParams};
 use kube::Client;
+use notify::{Event, EventHandler};
 use std::collections::HashSet;
-use std::sync::Arc;
+use std::sync::{
+    atomic::{AtomicBool, Ordering},
+    Arc,
+};
 use tokio::sync::RwLock;
 use tracing::*;
 
@@ -81,5 +85,16 @@ impl NamespaceWatcher {
 
     pub fn get_namespaces(&self) -> Arc<RwLock<HashSet<String>>> {
         self.namespaces.clone()
+    }
+}
+
+pub struct CertificateUpdateHandler {
+    pub should_restart: Arc<AtomicBool>,
+}
+
+impl EventHandler for CertificateUpdateHandler {
+    fn handle_event(&mut self, event: notify::Result<Event>) {
+        debug!("Filesystem event: {:?}", event);
+        self.should_restart.store(true, Ordering::Relaxed);
     }
 }
