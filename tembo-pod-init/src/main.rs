@@ -15,6 +15,9 @@ const TRACER_NAME: &str = "tembo.io/tembo-pod-init";
 async fn main() -> std::io::Result<()> {
     let config = Config::default();
 
+    let mut update_counter = 0;
+    const UPDATE_THRESHOLD: usize = 600;
+
     // Initialize logging
     let otlp_endpoint_url = &config.opentelemetry_endpoint_url;
     let telemetry_config = TelemetryConfig {
@@ -45,55 +48,77 @@ async fn main() -> std::io::Result<()> {
     let namespaces = watcher.get_namespaces();
     tokio::spawn(watch_namespaces(watcher));
 
-    // Load the TLS certificate and key
-    let mut tls_config = SslAcceptor::mozilla_intermediate(SslMethod::tls()).unwrap();
-    tls_config
-        .set_private_key_file(config.tls_key.clone(), SslFiletype::PEM)
-        .unwrap();
-    tls_config
-        .set_certificate_chain_file(config.tls_cert.clone())
-        .unwrap();
+    // // Load the TLS certificate and key
+    // let mut tls_config = SslAcceptor::mozilla_intermediate(SslMethod::tls()).unwrap();
+    // tls_config
+    //     .set_private_key_file(config.tls_key.clone(), SslFiletype::PEM)
+    //     .unwrap();
+    // tls_config
+    //     .set_certificate_chain_file(config.tls_cert.clone())
+    //     .unwrap();
+
+    // Create a watch channel for the TLS config
+    let (ssl_sender, ssl_receiver) = tokio::sync::watch::channel(false);
+
     let server_bind_address = format!("{}:{}", config.server_host, config.server_port);
 
-    let server = HttpServer::new({
-        let config_data = web::Data::new(config.clone());
-        let kube_data = web::Data::new(Arc::new(kube_client.clone()));
-        let namespace_watcher_data = web::Data::new(namespaces.clone());
-        let stop_handle = stop_handle.clone();
-        let tc = web::Data::new(telemetry_config.clone());
-        move || {
-            {
-                App::new()
-                    .app_data(config_data.clone())
-                    .app_data(kube_data.clone())
-                    .app_data(namespace_watcher_data.clone())
-                    .app_data(stop_handle.clone())
-                    .app_data(tc.clone())
-                    .wrap(
-                        tembo_telemetry::get_tracing_logger()
-                            .exclude("/health/liveness")
-                            .exclude("/health/readiness")
-                            .build(),
-                    )
-                    .service(liveness)
-                    .service(readiness)
-                    .service(mutate)
+    loop {
+        if *ssl_receiver.borrow() {
+            // Reload TLS cert and key file
+            let mut tls_config = SslAcceptor::mozilla_intermediate(SslMethod::tls())?;
+            tls_config.set_private_key_file(config.tls_key.clone(), SslFiletype::PEM)?;
+            tls_config.set_certificate_chain_file(config.tls_cert.clone())?;
+            let server = HttpServer::new({
+                let config_data = web::Data::new(config.clone());
+                let kube_data = web::Data::new(Arc::new(kube_client.clone()));
+                let namespace_watcher_data = web::Data::new(namespaces.clone());
+                let stop_handle = stop_handle.clone();
+                let tc = web::Data::new(telemetry_config.clone());
+                move || {
+                    {
+                        App::new()
+                            .app_data(config_data.clone())
+                            .app_data(kube_data.clone())
+                            .app_data(namespace_watcher_data.clone())
+                            .app_data(stop_handle.clone())
+                            .app_data(tc.clone())
+                            .wrap(
+                                tembo_telemetry::get_tracing_logger()
+                                    .exclude("/health/liveness")
+                                    .exclude("/health/readiness")
+                                    .build(),
+                            )
+                            .service(liveness)
+                            .service(readiness)
+                            .service(mutate)
+                    }
+                }
+            })
+            .bind_openssl(server_bind_address.clone(), tls_config)?
+            .shutdown_timeout(5)
+            .run();
+
+            stop_handle.register(server.handle());
+
+            info!(
+                "Starting HTTPS server at https://{}:{}/",
+                config.server_host, config.server_port
+            );
+            debug!("Config: {:?}", config);
+            server.await?;
+
+            // Reset the TLS update signal
+            let _ = ssl_sender.send(false);
+        } else {
+            update_counter += 1;
+            if update_counter >= UPDATE_THRESHOLD {
+                info!("No TLS cert update received in 10 minutes, restarting.");
+                break;
             }
         }
-    })
-    .bind_openssl(server_bind_address, tls_config)?
-    .shutdown_timeout(5)
-    .run();
-
-    stop_handle.register(server.handle());
-
-    info!(
-        "Starting HTTPS server at https://{}:{}/",
-        config.server_host, config.server_port
-    );
-    debug!("Config: {:?}", config);
-    server.await?;
-
+        // Sleep or yield the loop for a short duration, so it doesn't busy-wait.
+        tokio::time::sleep(tokio::time::Duration::from_millis(100)).await;
+    }
     // Make sure we close all the spans
     global::shutdown_tracer_provider();
 
