@@ -333,6 +333,32 @@ impl CoreDB {
         Ok(primary)
     }
 
+    pub async fn pods_by_cluster(&self, client: Client) -> Result<Vec<Pod>, Action> {
+        let cluster = cnpg_cluster_from_cdb(self);
+        let cluster_name = cluster
+            .metadata
+            .name
+            .expect("CNPG Cluster should always have a name");
+        let namespace = self
+            .metadata
+            .namespace
+            .clone()
+            .expect("Operator should always be namespaced");
+        let cluster_selector = format!("cnpg.io/cluster={cluster_name}");
+        let list_params = ListParams::default().labels(&cluster_selector);
+        let pods: Api<Pod> = Api::namespaced(client, &namespace);
+        let pods = pods.list(&list_params);
+        let pod_list = pods.await.map_err(|_e| {
+            error!("Failed to query for CNPG pods of {}", &self.name_any());
+            Action::requeue(Duration::from_secs(300))
+        })?;
+        if pod_list.items.is_empty() {
+            warn!("Failed to find CNPG pods of {}", &self.name_any());
+            return Err(Action::requeue(Duration::from_secs(5)));
+        }
+        Ok(pod_list.items)
+    }
+
     pub async fn psql(
         &self,
         command: String,

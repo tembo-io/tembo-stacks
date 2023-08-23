@@ -115,98 +115,99 @@ pub async fn install_extensions(
             .expect("CoreDB should have a namespace"),
     );
 
-    let pod_name = cdb
-        .primary_pod_cnpg(client.clone())
-        .await?
-        .metadata
-        .name
-        .expect("Pod should always have a name");
+    let pods = cdb.pods_by_cluster(client.clone()).await?;
 
     let mut requeue = false;
-    for ext in trunk_installs.iter() {
-        let version = match ext.version.clone() {
-            None => {
-                error!(
-                    "Installing extension {} into {}: missing version",
-                    ext.name, coredb_name
-                );
-                let trunk_install_status = TrunkInstallStatus {
-                    name: ext.name.clone(),
-                    version: None,
-                    error: true,
-                    error_message: Some("Missing version".to_string()),
-                };
-                current_trunk_install_statuses =
-                    add_trunk_install_to_status(&coredb_api, &coredb_name, &trunk_install_status).await?;
-                continue;
-            }
-            Some(version) => version,
-        };
 
-        let cmd = vec![
-            "trunk".to_owned(),
-            "install".to_owned(),
-            "-r https://registry.pgtrunk.io".to_owned(),
-            ext.name.clone(),
-            "--version".to_owned(),
-            version,
-        ];
+    // Loop through pods in the cluster and install extensions
+    for pod in pods {
+        let pod_name = pod.metadata.name.clone().expect("Pod should have a name");
 
-        let result = cdb.exec(pod_name.clone(), client.clone(), &cmd).await;
+        // For each extension execute trunk install
+        for ext in trunk_installs.iter() {
+            let version = match ext.version.clone() {
+                None => {
+                    error!(
+                        "Installing extension {} into {}: missing version",
+                        ext.name, coredb_name
+                    );
+                    let trunk_install_status = TrunkInstallStatus {
+                        name: ext.name.clone(),
+                        version: None,
+                        error: true,
+                        error_message: Some("Missing version".to_string()),
+                    };
+                    current_trunk_install_statuses =
+                        add_trunk_install_to_status(&coredb_api, &coredb_name, &trunk_install_status).await?;
+                    continue;
+                }
+                Some(version) => version,
+            };
 
-        match result {
-            Ok(result) => {
-                let output_stdout = result
-                    .stdout
-                    .clone()
-                    .unwrap_or_else(|| "Nothing in stdout".to_string());
-                let output_stderr = result
-                    .stderr
-                    .clone()
-                    .unwrap_or_else(|| "Nothing in stderr".to_string());
-                let output = format!("{}\n{}", output_stdout, output_stderr);
-                match result.success {
-                    true => {
-                        info!("Installed extension {} into {}", &ext.name, coredb_name);
-                        debug!("{}", output);
-                        let trunk_install_status = TrunkInstallStatus {
-                            name: ext.name.clone(),
-                            version: ext.version.clone(),
-                            error: false,
-                            error_message: None,
-                        };
-                        current_trunk_install_statuses =
-                            add_trunk_install_to_status(&coredb_api, &coredb_name, &trunk_install_status)
-                                .await?
-                    }
-                    false => {
-                        error!(
-                            "Failed to install extension {} into {}:\n{}",
-                            &ext.name,
-                            coredb_name,
-                            output.clone()
-                        );
-                        let trunk_install_status = TrunkInstallStatus {
-                            name: ext.name.clone(),
-                            version: ext.version.clone(),
-                            error: true,
-                            error_message: Some(output),
-                        };
-                        current_trunk_install_statuses =
-                            add_trunk_install_to_status(&coredb_api, &coredb_name, &trunk_install_status)
-                                .await?
+            let cmd = vec![
+                "trunk".to_owned(),
+                "install".to_owned(),
+                "-r https://registry.pgtrunk.io".to_owned(),
+                ext.name.clone(),
+                "--version".to_owned(),
+                version,
+            ];
+            let result = cdb.exec(pod_name.clone(), client.clone(), &cmd).await;
+
+            match result {
+                Ok(result) => {
+                    let output_stdout = result
+                        .stdout
+                        .clone()
+                        .unwrap_or_else(|| "Nothing in stdout".to_string());
+                    let output_stderr = result
+                        .stderr
+                        .clone()
+                        .unwrap_or_else(|| "Nothing in stderr".to_string());
+                    let output = format!("{}\n{}", output_stdout, output_stderr);
+                    match result.success {
+                        true => {
+                            info!("Installed extension {} into {}", &ext.name, coredb_name);
+                            debug!("{}", output);
+                            let trunk_install_status = TrunkInstallStatus {
+                                name: ext.name.clone(),
+                                version: ext.version.clone(),
+                                error: false,
+                                error_message: None,
+                            };
+                            current_trunk_install_statuses =
+                                add_trunk_install_to_status(&coredb_api, &coredb_name, &trunk_install_status)
+                                    .await?
+                        }
+                        false => {
+                            error!(
+                                "Failed to install extension {} into {}:\n{}",
+                                &ext.name,
+                                coredb_name,
+                                output.clone()
+                            );
+                            let trunk_install_status = TrunkInstallStatus {
+                                name: ext.name.clone(),
+                                version: ext.version.clone(),
+                                error: true,
+                                error_message: Some(output),
+                            };
+                            current_trunk_install_statuses =
+                                add_trunk_install_to_status(&coredb_api, &coredb_name, &trunk_install_status)
+                                    .await?
+                        }
                     }
                 }
-            }
-            Err(err) => {
-                // This kind of error means kube exec failed, which are errors other than the
-                // trunk install command failing inside the pod. So, we should retry
-                // when we find this kind of error.
-                error!(
-                    "Kube exec error installing extension {} into {}: {}",
-                    &ext.name, coredb_name, err
-                );
-                requeue = true
+                Err(err) => {
+                    // This kind of error means kube exec failed, which are errors other than the
+                    // trunk install command failing inside the pod. So, we should retry
+                    // when we find this kind of error.
+                    error!(
+                        "Kube exec error installing extension {} into {}: {}",
+                        &ext.name, coredb_name, err
+                    );
+                    requeue = true
+                }
             }
         }
     }
