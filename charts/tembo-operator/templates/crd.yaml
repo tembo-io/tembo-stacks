@@ -446,6 +446,10 @@ spec:
                     error_message:
                       nullable: true
                       type: string
+                    installed_to_instances:
+                      items:
+                        type: string
+                      type: array
                     name:
                       type: string
                     version:
@@ -453,6 +457,7 @@ spec:
                       type: string
                   required:
                   - error
+                  - installed_to_instances
                   - name
                   type: object
                 nullable: true
