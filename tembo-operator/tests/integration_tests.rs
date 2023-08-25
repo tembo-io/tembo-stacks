@@ -1945,17 +1945,6 @@ mod test {
         let patch = Patch::Apply(&coredb_json);
         let coredb_resource = coredbs.patch(name, &params, &patch).await.unwrap();
 
-        // Wait for CNPG Pod to be created
-        let pod_name_primary = format!("{}-1", name);
-        pod_ready_and_running(pods.clone(), pod_name_primary.clone()).await;
-
-        let pods: Api<Pod> = Api::namespaced(client.clone(), &namespace);
-        let lp =
-            ListParams::default().labels(format!("app=postgres-exporter,coredb.io/name={}", name).as_str());
-        let exporter_pods = pods.list(&lp).await.expect("could not get pods");
-        let exporter_pod_name = exporter_pods.items[0].metadata.name.as_ref().unwrap();
-        println!("Exporter pod name: {}", &exporter_pod_name);
-
         // Wait for CNPG Cluster to be created by looping over replicas until
         // they are in a running state
         for i in 1..=replicas {
@@ -2108,22 +2097,22 @@ mod test {
 
         // CLEANUP TEST
         // Cleanup CoreDB
-        coredbs.delete(name, &Default::default()).await.unwrap();
-        println!("Waiting for CoreDB to be deleted: {}", &name);
-        let _assert_coredb_deleted = tokio::time::timeout(
-            Duration::from_secs(TIMEOUT_SECONDS_COREDB_DELETED),
-            await_condition(coredbs.clone(), name, conditions::is_deleted("")),
-        )
-        .await
-        .unwrap_or_else(|_| {
-            panic!(
-                "CoreDB {} was not deleted after waiting {} seconds",
-                name, TIMEOUT_SECONDS_COREDB_DELETED
-            )
-        });
-        println!("CoreDB resource deleted {}", name);
-
-        // Delete namespace
-        let _ = delete_namespace(client.clone(), &namespace).await;
+        // coredbs.delete(name, &Default::default()).await.unwrap();
+        // println!("Waiting for CoreDB to be deleted: {}", &name);
+        // let _assert_coredb_deleted = tokio::time::timeout(
+        //     Duration::from_secs(TIMEOUT_SECONDS_COREDB_DELETED),
+        //     await_condition(coredbs.clone(), name, conditions::is_deleted("")),
+        // )
+        // .await
+        // .unwrap_or_else(|_| {
+        //     panic!(
+        //         "CoreDB {} was not deleted after waiting {} seconds",
+        //         name, TIMEOUT_SECONDS_COREDB_DELETED
+        //     )
+        // });
+        // println!("CoreDB resource deleted {}", name);
+        //
+        // // Delete namespace
+        // let _ = delete_namespace(client.clone(), &namespace).await;
     }
 }

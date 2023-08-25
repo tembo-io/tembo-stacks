@@ -449,6 +449,7 @@ spec:
                     installed_to_instances:
                       items:
                         type: string
+                      nullable: true
                       type: array
                     name:
                       type: string
@@ -457,7 +458,6 @@ spec:
                       type: string
                   required:
                   - error
-                  - installed_to_instances
                   - name
                   type: object
                 nullable: true

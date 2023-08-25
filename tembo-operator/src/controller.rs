@@ -191,6 +191,10 @@ impl CoreDB {
             reconcile_cnpg_scheduled_backup(self, ctx.clone()).await?;
         }
 
+        // Check if the number of running pods matches the desired replica count
+        info!("Checking replica count matches number of running pods");
+        self.check_replica_count_matches_pods(client.clone()).await?;
+
         if self.spec.postgresExporterEnabled {
             debug!("Reconciling prometheus exporter deployment");
             reconcile_prometheus_exporter_deployment(self, ctx.clone())
@@ -212,14 +216,18 @@ impl CoreDB {
 
         let new_status = match self.spec.stop {
             false => {
-                let primary_pod_cnpg = self.primary_pod_cnpg(ctx.client.clone()).await?;
+                // Fetch all ready pods belonging to this cluster
+                let ready_pods = self.pods_by_cluster(ctx.client.clone()).await?;
 
-                if !is_postgres_ready().matches_object(Some(&primary_pod_cnpg)) {
-                    debug!(
-                        "Did not find postgres ready {}, waiting a short period",
-                        self.name_any()
-                    );
-                    return Ok(Action::requeue(Duration::from_secs(5)));
+                // Check if PostgreSQL is ready on all ready pods
+                for pod in &ready_pods {
+                    if !is_postgres_ready().matches_object(Some(pod)) {
+                        debug!(
+                            "Postgres not ready on pod {}, waiting a short period",
+                            pod.name_any()
+                        );
+                        return Ok(Action::requeue(Duration::from_secs(5)));
+                    }
                 }
 
                 let patch_status = json!({
@@ -344,7 +352,7 @@ impl CoreDB {
             .namespace
             .clone()
             .expect("Operator should always be namespaced");
-        let cluster_selector = format!("cnpg.io/cluster={cluster_name}");
+        let cluster_selector = format!("cnpg.io/cluster={cluster_name},cnpg.io/podRole=instance");
         let list_params = ListParams::default().labels(&cluster_selector);
         let pods: Api<Pod> = Api::namespaced(client, &namespace);
         let pods = pods.list(&list_params);
@@ -354,9 +362,53 @@ impl CoreDB {
         })?;
         if pod_list.items.is_empty() {
             warn!("Failed to find CNPG pods of {}", &self.name_any());
-            return Err(Action::requeue(Duration::from_secs(5)));
+            return Err(Action::requeue(Duration::from_secs(30)));
         }
-        Ok(pod_list.items)
+
+        // Filter only pods that are ready
+        let ready_pods: Vec<Pod> = pod_list
+            .items
+            .into_iter()
+            .filter(|pod| {
+                if let Some(conditions) = &pod.status.as_ref().and_then(|s| s.conditions.as_ref()) {
+                    conditions
+                        .iter()
+                        .any(|c| c.type_ == "Ready" && c.status == "True")
+                } else {
+                    false
+                }
+            })
+            .collect();
+
+        if ready_pods.is_empty() {
+            warn!("Failed to find ready CNPG pods of {}", &self.name_any());
+            return Err(Action::requeue(Duration::from_secs(30)));
+        }
+
+        Ok(ready_pods)
+    }
+
+    async fn check_replica_count_matches_pods(&self, client: Client) -> Result<(), Action> {
+        // Fetch current replica count from Self
+        let desired_replica_count = self.spec.replicas;
+        info!("Desired replica count: {}", desired_replica_count);
+
+        // Fetch current pods with pods_by_cluster
+        let current_pods = self.pods_by_cluster(client.clone()).await?;
+        let pod_names: Vec<String> = current_pods.iter().map(|pod| pod.name_any()).collect();
+        info!("Found {} pods, {:?}", current_pods.len(), pod_names);
+
+        // Check if the number of running pods matches the desired replica count
+        if current_pods.len() != desired_replica_count as usize {
+            warn!(
+                "Number of running pods ({}) does not match desired replica count ({}). Requeuing.",
+                current_pods.len(),
+                desired_replica_count
+            );
+            return Err(Action::requeue(Duration::from_secs(10)));
+        }
+
+        Ok(())
     }
 
     pub async fn psql(
