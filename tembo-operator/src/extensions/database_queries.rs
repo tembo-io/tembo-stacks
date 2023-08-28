@@ -16,7 +16,7 @@ lazy_static! {
 }
 
 // TODO: Get this list from trunk instead of coding it here
-pub const REQUIRES_LOAD: [&str; 21] = [
+pub const REQUIRES_LOAD: [&str; 22] = [
     "auth_delay",
     "auto_explain",
     "basebackup_to_shell",
@@ -31,6 +31,7 @@ pub const REQUIRES_LOAD: [&str; 21] = [
     "pglogical",
     "pg_net",
     "pg_stat_kcache",
+    "pg_stat_statements",
     "pg_tle",
     "plrust",
     "postgresql_anonymizer",
@@ -163,12 +164,17 @@ async fn list_installed_libraries(cdb: &CoreDB, ctx: Arc<Context>) -> Result<Vec
             Some(stdout) => {
                 let mut libraries = vec![];
                 for line in stdout.lines() {
-                    if check_input(line) {
+                    if !check_input(line) {
                         warn!("Found invalid library name: {}", line);
                         continue;
                     }
                     libraries.push(line.to_owned());
                 }
+                debug!(
+                    "{} - found libraries: {:?}",
+                    cdb.metadata.name.clone().unwrap(),
+                    libraries
+                );
                 Ok(libraries)
             }
         },
@@ -215,7 +221,7 @@ pub async fn list_databases(cdb: &CoreDB, ctx: Arc<Context>) -> Result<Vec<Strin
     Ok(parse_sql_output(&result_string))
 }
 
-async fn list_shared_preload_libraries(cdb: &CoreDB, ctx: Arc<Context>) -> Result<Vec<String>, Action> {
+pub async fn list_shared_preload_libraries(cdb: &CoreDB, ctx: Arc<Context>) -> Result<Vec<String>, Action> {
     let psql_out = cdb
         .psql(
             LIST_SHARED_PRELOAD_LIBRARIES_QUERY.to_owned(),
@@ -224,7 +230,13 @@ async fn list_shared_preload_libraries(cdb: &CoreDB, ctx: Arc<Context>) -> Resul
         )
         .await?;
     let result_string = psql_out.stdout.unwrap();
-    Ok(parse_sql_output(&result_string))
+    let result = parse_sql_output(&result_string);
+    debug!(
+        "{}: Found shared_preload_libraries: {:?}",
+        cdb.metadata.name.clone().unwrap(),
+        result
+    );
+    Ok(result)
 }
 
 pub fn parse_sql_output(psql_str: &str) -> Vec<String> {
