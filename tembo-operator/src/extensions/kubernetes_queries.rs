@@ -302,6 +302,8 @@ mod tests {
                 error: Some(false),
                 error_message: None,
             }],
+            create_extension: None,
+            load: None,
         }];
         let new_location_status = ExtensionInstallLocationStatus {
             enabled: Some(true),
@@ -337,6 +339,8 @@ mod tests {
                 error: Some(false),
                 error_message: None,
             }],
+            create_extension: None,
+            load: None,
         }];
         let new_location_status = ExtensionInstallLocationStatus {
             enabled: Some(true),
@@ -376,6 +380,8 @@ mod tests {
                 error: Some(false),
                 error_message: None,
             }],
+            create_extension: None,
+            load: None,
         }];
         let new_location_status = ExtensionInstallLocationStatus {
             enabled: Some(true),

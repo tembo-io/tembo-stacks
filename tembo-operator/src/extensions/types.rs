@@ -173,6 +173,8 @@ mod tests {
                     name: extension_name.to_owned(),
                     description: None,
                     locations: vec![location.clone()],
+                    create_extension: None,
+                    load: None,
                 }]),
                 ..CoreDBStatus::default()
             }),

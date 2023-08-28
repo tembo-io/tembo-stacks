@@ -412,6 +412,8 @@ mod tests {
                     error_message: Some("Failed to enable extension".to_string()),
                 },
             ],
+            create_extension: None,
+            load: None,
         }];
 
         let cdb = CoreDB {
@@ -481,6 +483,8 @@ mod tests {
                         error_message: None,
                     },
                 ],
+                create_extension: None,
+                load: None,
             },
             ExtensionStatus {
                 name: "ext2".to_string(),
@@ -503,6 +507,8 @@ mod tests {
                         error_message: None,
                     },
                 ],
+                create_extension: None,
+                load: None,
             },
         ];
 
