@@ -93,7 +93,7 @@ pub fn get_location_status(
     location_schema: Option<String>,
 ) -> Option<ExtensionInstallLocationStatus> {
     match get_extension_status(cdb, extension_name) {
-        None => {return None;}
+        None => None,
         Some(extension_status) => {
             for location_status in &extension_status.locations {
                 // if location schema is not specified, then match any schema when returning location status
@@ -103,15 +103,12 @@ pub fn get_location_status(
                     return Some(location_status.clone());
                 }
             }
-            return None;
+            None
         }
     }
 }
 
-pub fn get_extension_status(
-    cdb: &CoreDB,
-    extension_name: &str,
-) -> Option<ExtensionStatus> {
+pub fn get_extension_status(cdb: &CoreDB, extension_name: &str) -> Option<ExtensionStatus> {
     match &cdb.status {
         None => None,
         Some(status) => match &status.extensions {

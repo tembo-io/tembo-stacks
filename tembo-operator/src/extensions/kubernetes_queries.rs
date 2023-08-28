@@ -1,6 +1,9 @@
 use crate::{
     apis::coredb_types::{CoreDB, CoreDBStatus},
-    extensions::types::{ExtensionInstallLocationStatus, ExtensionStatus, TrunkInstallStatus},
+    extensions::{
+        database_queries::REQUIRES_LOAD,
+        types::{ExtensionInstallLocationStatus, ExtensionStatus, TrunkInstallStatus},
+    },
     get_current_coredb_resource, patch_cdb_status_merge, Context,
 };
 use kube::{runtime::controller::Action, Api};
@@ -11,7 +14,6 @@ use tracing::{
     log::{debug, info},
     warn,
 };
-use crate::extensions::database_queries::REQUIRES_LOAD;
 
 pub async fn update_extension_location_in_status(
     cdb: &CoreDB,

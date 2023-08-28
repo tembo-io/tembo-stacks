@@ -1,7 +1,7 @@
 use crate::{
-    apis::coredb_types::{CoreDB, CoreDBStatus},
+    apis::coredb_types::CoreDB,
     extensions::types::{
-        ExtensionInstallLocation, ExtensionInstallLocationStatus, ExtensionStatus, TrunkInstallStatus,
+        get_extension_status, ExtensionInstallLocation, ExtensionInstallLocationStatus, ExtensionStatus,
     },
     Context, Error,
 };
@@ -10,7 +10,6 @@ use lazy_static::lazy_static;
 use regex::Regex;
 use std::{collections::HashMap, sync::Arc, time::Duration};
 use tracing::{debug, error, info, warn};
-use crate::extensions::types::get_extension_status;
 
 lazy_static! {
     static ref VALID_INPUT: Regex = Regex::new(r"^[a-zA-Z]([a-zA-Z0-9]*[-_]?)*[a-zA-Z0-9]+$").unwrap();
@@ -154,9 +153,12 @@ async fn list_installed_libraries(cdb: &CoreDB, ctx: Arc<Context>) -> Result<Vec
             None => {
                 error!(
                     "Failed to list installed libraries for {}, no stdout",
-                    cdb.metadata.name.clone().expect("Database should always have a name")
+                    cdb.metadata
+                        .name
+                        .clone()
+                        .expect("Database should always have a name")
                 );
-                return Err(Action::requeue(Duration::from_secs(300)));
+                Err(Action::requeue(Duration::from_secs(300)))
             }
             Some(stdout) => {
                 let mut libraries = vec![];
@@ -167,15 +169,18 @@ async fn list_installed_libraries(cdb: &CoreDB, ctx: Arc<Context>) -> Result<Vec
                     }
                     libraries.push(line.to_owned());
                 }
-                return Ok(libraries);
+                Ok(libraries)
             }
         },
         Err(_) => {
             warn!(
                 "Failed to list installed libraries for {}, failed to exec",
-                cdb.metadata.name.clone().expect("Database should always have a name")
+                cdb.metadata
+                    .name
+                    .clone()
+                    .expect("Database should always have a name")
             );
-            return Err(Action::requeue(Duration::from_secs(10)));
+            Err(Action::requeue(Duration::from_secs(10)))
         }
     }
 }
@@ -212,7 +217,11 @@ pub async fn list_databases(cdb: &CoreDB, ctx: Arc<Context>) -> Result<Vec<Strin
 
 async fn list_shared_preload_libraries(cdb: &CoreDB, ctx: Arc<Context>) -> Result<Vec<String>, Action> {
     let psql_out = cdb
-        .psql(LIST_SHARED_PRELOAD_LIBRARIES_QUERY.to_owned(), "postgres".to_owned(), ctx)
+        .psql(
+            LIST_SHARED_PRELOAD_LIBRARIES_QUERY.to_owned(),
+            "postgres".to_owned(),
+            ctx,
+        )
         .await?;
     let result_string = psql_out.stdout.unwrap();
     Ok(parse_sql_output(&result_string))
@@ -331,20 +340,16 @@ fn get_version_of_installed_library(cdb: &CoreDB, library_name: String) -> Optio
     // Improve this using trunk package -> extension name mapping,
     // The consequence is some extensions will not show a version.
     match &cdb.status {
-        None => {
-            return None;
-        }
+        None => None,
         Some(status) => match &status.trunk_installs {
-            None => {
-                return None;
-            }
+            None => None,
             Some(trunk_installs) => {
                 for package in trunk_installs {
                     if package.name == library_name {
                         return package.version.clone();
                     }
                 }
-                return None;
+                None
             }
         },
     }
@@ -380,14 +385,14 @@ pub async fn create_or_drop_extension_if_required(
     ext_loc: ExtensionInstallLocation,
     ctx: Arc<Context>,
 ) -> Result<(), String> {
-    let current_status = match get_extension_status(cdb, &ext_name) {
+    let current_status = match get_extension_status(cdb, ext_name) {
         None => {
             error!("There should always be an extension status before attempting to toggle an extension");
             return Err("Extension is not installed".to_string());
         }
-        Some(status) => status
+        Some(status) => status,
     };
-    if !current_status.create_extension {
+    if current_status.create_extension.is_some() && !current_status.create_extension.unwrap() {
         // If the extension does not require CREATE EXTENSION, then we do not need to do anything in this function.
         return Ok(());
     }
@@ -471,7 +476,7 @@ pub async fn create_or_drop_extension_if_required(
 #[cfg(test)]
 mod tests {
     use crate::extensions::{
-        database_queries::{check_input, generate_extension_enable_cmd, parse_sql_output, parse_extensions},
+        database_queries::{check_input, generate_extension_enable_cmd, parse_extensions, parse_sql_output},
         types::ExtensionInstallLocation,
     };
 

@@ -16,7 +16,7 @@ use crate::{
 };
 use std::sync::Arc;
 use tracing::error;
-use crate::extensions::types::{ExtensionInstallLocation, get_extension_status};
+
 
 pub async fn reconcile_extension_toggle_state(
     cdb: &CoreDB,
@@ -41,26 +41,6 @@ async fn toggle_extensions(
     let mut ext_status_updates = ext_status_updates.clone();
     for extension_to_toggle in toggle_these_extensions {
         for location_to_toggle in extension_to_toggle.locations {
-            match database_queries::load_extension_if_required(
-                cdb,
-                &extension_to_toggle.name,
-                location_to_toggle.clone(),
-                ctx.clone(),
-            )
-                .await
-            {
-                Ok(_) => {}
-                Err(error_message) => {
-                    let location_status = generate_errored_location_status(cdb,  extension_to_toggle.name.clone(), location_to_toggle.database.clone(), location_to_toggle.schema.clone(), error_message);
-                    ext_status_updates = kubernetes_queries::update_extension_location_in_status(
-                        cdb,
-                        ctx.clone(),
-                        &extension_to_toggle.name,
-                        &location_status,
-                    )
-                        .await?;
-                }
-            }
             match database_queries::create_or_drop_extension_if_required(
                 cdb,
                 &extension_to_toggle.name,
@@ -71,7 +51,13 @@ async fn toggle_extensions(
             {
                 Ok(_) => {}
                 Err(error_message) => {
-                    let location_status = generate_errored_location_status(cdb,  extension_to_toggle.name.clone(), location_to_toggle.database.clone(), location_to_toggle.schema.clone(), error_message);
+                    let location_status = generate_errored_location_status(
+                        cdb,
+                        extension_to_toggle.name.clone(),
+                        location_to_toggle.database.clone(),
+                        location_to_toggle.schema.clone(),
+                        error_message,
+                    );
                     ext_status_updates = kubernetes_queries::update_extension_location_in_status(
                         cdb,
                         ctx.clone(),
@@ -86,7 +72,13 @@ async fn toggle_extensions(
     Ok(ext_status_updates)
 }
 
-fn generate_errored_location_status(cdb: &CoreDB, extension_name: String, database_name: String, schema_name: Option<String>, error_message: String) -> ExtensionInstallLocationStatus {
+fn generate_errored_location_status(
+    cdb: &CoreDB,
+    extension_name: String,
+    database_name: String,
+    schema_name: Option<String>,
+    error_message: String,
+) -> ExtensionInstallLocationStatus {
     let mut location_status = match types::get_location_status(
         cdb,
         &extension_name,
@@ -123,8 +115,8 @@ fn determine_updated_extensions_status(
             name: actual_extension.name.clone(),
             description: actual_extension.description.clone(),
             locations: vec![],
-            create_extension: actual_extension.create_extension.clone(),
-            load: actual_extension.load.clone(),
+            create_extension: actual_extension.create_extension,
+            load: actual_extension.load,
         };
         // For every location of an actually installed extension
         for actual_location in actual_extension.locations {
