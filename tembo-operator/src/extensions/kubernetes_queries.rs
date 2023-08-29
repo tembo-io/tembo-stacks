@@ -1,11 +1,10 @@
 use crate::{
     apis::coredb_types::{CoreDB, CoreDBStatus},
+    extensions::types::{ExtensionInstallLocationStatus, ExtensionStatus, TrunkInstallStatus},
+    get_current_coredb_resource, patch_cdb_status_merge,
     Context,
-    extensions::{
-        types::{ExtensionInstallLocationStatus, ExtensionStatus, TrunkInstallStatus},
-    }, get_current_coredb_resource, patch_cdb_status_merge,
 };
-use kube::{Api, runtime::controller::Action};
+use kube::{runtime::controller::Action, Api};
 use serde_json::json;
 use std::{sync::Arc, time::Duration};
 use tracing::{
@@ -13,7 +12,7 @@ use tracing::{
     log::{debug, info},
     warn,
 };
-use crate::trunk::REQUIRES_LOAD;
+use crate::trunk::extensions_that_require_load;
 
 pub async fn update_extension_location_in_status(
     cdb: &CoreDB,
@@ -35,10 +34,12 @@ pub async fn update_extension_location_in_status(
             Some(extensions) => extensions.clone(),
         },
     };
+    let requires_load = extensions_that_require_load(ctx.client.clone(), &cdb.metadata.namespace.clone().unwrap()).await?;
     let new_extensions_status = merge_location_status_into_extension_status_list(
         extension_name,
         new_location_status,
         current_extensions_status,
+        requires_load
     );
     update_extensions_status(&cdb, new_extensions_status.clone(), &ctx).await?;
     Ok(new_extensions_status.clone())
@@ -51,6 +52,7 @@ pub fn merge_location_status_into_extension_status_list(
     extension_name: &str,
     new_location_status: &ExtensionInstallLocationStatus,
     current_extensions_status: Vec<ExtensionStatus>,
+    requires_load: Vec<&str>,
 ) -> Vec<ExtensionStatus> {
     let mut new_extensions_status = current_extensions_status.clone();
     for extension in &mut new_extensions_status {
@@ -77,7 +79,7 @@ pub fn merge_location_status_into_extension_status_list(
         }
     }
     error!("Merging a location status into extension status list, but the extension was not found in the list. This is not expected");
-    let load = REQUIRES_LOAD.contains(&extension_name);
+    let load = requires_load.contains(&extension_name);
     // If we never found the extension status, append it
     new_extensions_status.push(ExtensionStatus {
         name: extension_name.to_string(),

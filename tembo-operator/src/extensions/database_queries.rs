@@ -1,16 +1,16 @@
 use crate::{
     apis::coredb_types::CoreDB,
-    Context,
-    Error, extensions::types::{
-        ExtensionInstallLocation, ExtensionInstallLocationStatus, ExtensionStatus, get_extension_status,
+    extensions::types::{
+        get_extension_status, ExtensionInstallLocation, ExtensionInstallLocationStatus, ExtensionStatus,
     },
+    Context, Error,
 };
 use kube::runtime::controller::Action;
 use lazy_static::lazy_static;
 use regex::Regex;
 use std::{collections::HashMap, sync::Arc, time::Duration};
 use tracing::{debug, error, info, warn};
-use crate::trunk::REQUIRES_LOAD;
+use crate::trunk::extensions_that_require_load;
 
 lazy_static! {
     static ref VALID_INPUT: Regex = Regex::new(r"^[a-zA-Z]([a-zA-Z0-9]*[-_]?)*[a-zA-Z0-9]+$").unwrap();
@@ -259,10 +259,11 @@ pub async fn get_all_extensions(cdb: &CoreDB, ctx: Arc<Context>) -> Result<Vec<E
         }
     }
 
+    let requires_load = extensions_that_require_load(ctx.client.clone(), &cdb.metadata.namespace.clone().unwrap()).await?;
     let mut ext_spec: Vec<ExtensionStatus> = Vec::new();
     for ((extname, extdescr), ext_locations) in &ext_hashmap {
         // load is required if the extension name is present in REQUIRES_LOAD constant
-        let load = REQUIRES_LOAD.contains(&extname.as_str());
+        let load = requires_load.contains(&extname.as_str());
         ext_spec.push(ExtensionStatus {
             name: extname.clone(),
             description: Some(extdescr.clone()),
@@ -281,7 +282,7 @@ pub async fn get_all_extensions(cdb: &CoreDB, ctx: Arc<Context>) -> Result<Vec<E
     let installed_libraries = list_installed_libraries(cdb, ctx.clone()).await?;
     let current_shared_preload_libraries = list_shared_preload_libraries(cdb, ctx.clone()).await?;
     for library in installed_libraries {
-        if REQUIRES_LOAD.contains(&library.as_str()) {
+        if requires_load.contains(&library.as_str()) {
             // If the library is already in the list, skip it
             if ext_spec.iter().any(|e| e.name == library) {
                 continue;

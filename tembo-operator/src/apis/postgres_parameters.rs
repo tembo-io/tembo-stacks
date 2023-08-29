@@ -1,8 +1,8 @@
 use itertools::Itertools;
 
 use schemars::{
-    JsonSchema,
     schema::{Schema, SchemaObject},
+    JsonSchema,
 };
 use serde::{
     de::{Error, MapAccess, Visitor},
@@ -174,8 +174,8 @@ pub enum ConfigValue {
 
 use serde_json::{Error as JsonParsingError, Value};
 
-use serde_json;
 use crate::trunk::MULTI_VAL_CONFIGS_PRIORITY_LIST;
+use serde_json;
 
 pub struct WrapValue(Value);
 
@@ -361,7 +361,7 @@ impl<'de> Deserialize<'de> for PgConfig {
 #[cfg(test)]
 mod pg_param_tests {
     use super::*;
-    use crate::apis::coredb_types::{CoreDB, CoreDBSpec, get_pg_configs, Stack};
+    use crate::apis::coredb_types::{get_pg_configs, CoreDB, CoreDBSpec, Stack};
 
     #[test]
     fn test_pg_config() {

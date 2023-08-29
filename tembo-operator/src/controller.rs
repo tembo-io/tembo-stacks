@@ -40,6 +40,7 @@ use serde_json::json;
 use std::sync::Arc;
 use tokio::{sync::RwLock, time::Duration};
 use tracing::*;
+use crate::trunk::reconcile_trunk_configmap;
 
 pub static COREDB_FINALIZER: &str = "coredbs.coredb.io";
 pub static COREDB_ANNOTATION: &str = "coredbs.coredb.io/watch";
@@ -110,6 +111,9 @@ impl CoreDB {
         let ns = self.namespace().unwrap();
         let name = self.name_any();
         let coredbs: Api<CoreDB> = Api::namespaced(client.clone(), &ns);
+
+        // Fetch any metadata we need from Trunk
+        reconcile_trunk_configmap(ctx.client.clone(), &ns).await?;
 
         // Ingress
         match std::env::var("DATA_PLANE_BASEDOMAIN") {
