@@ -1,12 +1,11 @@
 use crate::{
     apis::coredb_types::{CoreDB, CoreDBStatus},
+    Context,
     extensions::{
-        database_queries::REQUIRES_LOAD,
         types::{ExtensionInstallLocationStatus, ExtensionStatus, TrunkInstallStatus},
-    },
-    get_current_coredb_resource, patch_cdb_status_merge, Context,
+    }, get_current_coredb_resource, patch_cdb_status_merge,
 };
-use kube::{runtime::controller::Action, Api};
+use kube::{Api, runtime::controller::Action};
 use serde_json::json;
 use std::{sync::Arc, time::Duration};
 use tracing::{
@@ -14,6 +13,7 @@ use tracing::{
     log::{debug, info},
     warn,
 };
+use crate::trunk::REQUIRES_LOAD;
 
 pub async fn update_extension_location_in_status(
     cdb: &CoreDB,

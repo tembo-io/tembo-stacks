@@ -1,45 +1,20 @@
 use crate::{
     apis::coredb_types::CoreDB,
-    extensions::types::{
-        get_extension_status, ExtensionInstallLocation, ExtensionInstallLocationStatus, ExtensionStatus,
+    Context,
+    Error, extensions::types::{
+        ExtensionInstallLocation, ExtensionInstallLocationStatus, ExtensionStatus, get_extension_status,
     },
-    Context, Error,
 };
 use kube::runtime::controller::Action;
 use lazy_static::lazy_static;
 use regex::Regex;
 use std::{collections::HashMap, sync::Arc, time::Duration};
 use tracing::{debug, error, info, warn};
+use crate::trunk::REQUIRES_LOAD;
 
 lazy_static! {
     static ref VALID_INPUT: Regex = Regex::new(r"^[a-zA-Z]([a-zA-Z0-9]*[-_]?)*[a-zA-Z0-9]+$").unwrap();
 }
-
-// TODO: Get this list from trunk instead of coding it here
-pub const REQUIRES_LOAD: [&str; 22] = [
-    "auth_delay",
-    "auto_explain",
-    "basebackup_to_shell",
-    "basic_archive",
-    "citus",
-    "passwordcheck",
-    "pg_anonymize",
-    "pgaudit",
-    "pg_cron",
-    "pg_failover_slots",
-    "pg_later",
-    "pglogical",
-    "pg_net",
-    "pg_stat_kcache",
-    "pg_stat_statements",
-    "pg_tle",
-    "plrust",
-    "postgresql_anonymizer",
-    "sepgsql",
-    "supautils",
-    "timescaledb",
-    "vectorize",
-];
 
 pub fn check_input(input: &str) -> bool {
     VALID_INPUT.is_match(input)

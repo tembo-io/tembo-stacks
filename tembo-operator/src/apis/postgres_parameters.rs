@@ -1,8 +1,8 @@
 use itertools::Itertools;
 
 use schemars::{
-    schema::{Schema, SchemaObject},
     JsonSchema,
+    schema::{Schema, SchemaObject},
 };
 use serde::{
     de::{Error, MapAccess, Visitor},
@@ -20,9 +20,6 @@ pub const MULTI_VAL_CONFIGS: [&str; 5] = [
     "log_destination",
     "search_path",
 ];
-
-// This array defines the priority order for any multi-value config
-pub const MULTI_VAL_CONFIGS_PRIORITY_LIST: [&str; 2] = ["pg_stat_statements", "pg_stat_kcache"];
 
 // configurations that are not allowed to be set by the user
 pub const DISALLOWED_CONFIGS: [&str; 66] = [
@@ -178,6 +175,7 @@ pub enum ConfigValue {
 use serde_json::{Error as JsonParsingError, Value};
 
 use serde_json;
+use crate::trunk::MULTI_VAL_CONFIGS_PRIORITY_LIST;
 
 pub struct WrapValue(Value);
 
@@ -363,7 +361,7 @@ impl<'de> Deserialize<'de> for PgConfig {
 #[cfg(test)]
 mod pg_param_tests {
     use super::*;
-    use crate::apis::coredb_types::{get_pg_configs, CoreDB, CoreDBSpec, Stack};
+    use crate::apis::coredb_types::{CoreDB, CoreDBSpec, get_pg_configs, Stack};
 
     #[test]
     fn test_pg_config() {
