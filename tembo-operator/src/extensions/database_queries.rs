@@ -410,20 +410,17 @@ pub async fn create_or_drop_extension_if_required(
         ext_loc.clone()
     );
 
-    match get_extension_status(cdb, ext_name) {
-        None => {}
-        Some(current_status) => {
-            if current_status.create_extension.is_some() && !current_status.create_extension.unwrap() {
-                info!(
-                    "{} Skipping CREATE EXTENSION for {} - not required",
-                    cdb.metadata.name.clone().unwrap(),
-                    ext_name.clone()
-                );
-                // If the extension does not require CREATE EXTENSION, then we do not need to do anything in this function.
-                return Ok(());
-            }
+    let current_status = match get_extension_status(cdb, ext_name) {
+        None => {
+            error!("There should always be an extension status before attempting to toggle an extension");
+            return Err("Extension is not installed".to_string());
         }
+        Some(status) => status,
     };
+    if current_status.create_extension.is_some() && !current_status.create_extension.unwrap() {
+        // If the extension does not require CREATE EXTENSION, then we do not need to do anything in this function.
+        return Ok(());
+    }
 
     let coredb_name = cdb.metadata.name.clone().expect("CoreDB should have a name");
     if !check_input(ext_name) {
