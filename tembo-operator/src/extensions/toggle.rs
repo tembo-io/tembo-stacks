@@ -198,6 +198,13 @@ fn determine_updated_extensions_status(
         };
         // For every location of an actually installed extension
         for actual_location in actual_extension.locations {
+            debug!(
+                "actual status of {} in db {}, schema {:?} is {:?}",
+                actual_extension.name.clone(),
+                actual_location.database.clone(),
+                actual_location.schema.clone(),
+                actual_location.enabled.clone()
+            );
             // Create a location status
             let mut location_status = ExtensionInstallLocationStatus {
                 enabled: actual_location.enabled,
