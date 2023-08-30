@@ -310,9 +310,11 @@ fn determine_extension_locations_to_toggle(cdb: &CoreDB) -> Vec<Extension> {
                         Some(_extension_status) => {
                             // This happens when an extension is requested for a schema that's not in the status
                             // If we fail to toggle, that will get added to status
-                            warn!("When determining extensions to toggle, we found the extension is in status, but the location is not. Assuming that a toggle is needed.");
-                            needs_toggle = true;
-                            extension_to_toggle.locations.push(desired_location.clone());
+                            if desired_location.enabled {
+                                warn!("When determining extensions to toggle, we found the extension is in status, but the location is not. Assuming that a toggle is needed.");
+                                needs_toggle = true;
+                                extension_to_toggle.locations.push(desired_location.clone());
+                            }
                         }
                     }
                 }
@@ -427,13 +429,6 @@ mod tests {
                     schema: Some("public".to_string()),
                     version: None,
                 },
-                // Requesting to enable an extension that is not installed
-                ExtensionInstallLocation {
-                    enabled: true,
-                    database: "db_where_its_not_available".to_string(),
-                    schema: Some("public".to_string()),
-                    version: None,
-                },
                 // Requesting to enable an extension that previously failed to enable
                 ExtensionInstallLocation {
                     enabled: true,
@@ -451,7 +446,19 @@ mod tests {
                     database: "db1".to_string(),
                     schema: Some("public".to_string()),
                     version: None,
-                }],
+                }
+                ],
+            },
+            Extension {
+                name: "ext3".to_string(),
+                description: None,
+                locations: vec![ExtensionInstallLocation {
+                                    enabled: true,
+                                    database: "db_where_its_not_available".to_string(),
+                                    schema: Some("public".to_string()),
+                                    version: None,
+                                },
+                ],
             },
         ];
 
@@ -676,7 +683,7 @@ mod tests {
         assert!(location_status.error_message.is_some());
         let location_status = get_location_status(
             &cdb,
-            "ext1",
+            "ext3",
             "db_where_its_not_available",
             Some("public".to_string()),
         )

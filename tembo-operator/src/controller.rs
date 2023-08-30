@@ -38,7 +38,6 @@ use rand::Rng;
 use serde::Serialize;
 use serde_json::json;
 use std::sync::Arc;
-
 use tokio::{sync::RwLock, time::Duration};
 use tracing::*;
 
