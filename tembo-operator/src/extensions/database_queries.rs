@@ -51,51 +51,67 @@ pub const LIST_DATABASES_QUERY: &str = r#"SELECT datname FROM pg_database WHERE 
 
 pub const LIST_SHARED_PRELOAD_LIBRARIES_QUERY: &str = r#"SHOW shared_preload_libraries;"#;
 
-pub const LIST_EXTENSIONS_QUERY: &str = r#"
-SELECT
-    DISTINCT ON (name, schema) *
-FROM
+pub const LIST_EXTENSIONS_QUERY: &str = r#"select
+distinct on
+(name) *
+from
 (
-    -- Subquery for installed extensions
-    SELECT
-        name,
-        version,
-        TRUE as enabled,
-        schema,
-        description
-    FROM
+select
+    name,
+    version,
+    enabled,
+    schema,
+    description
+from
     (
-        SELECT
-            t0.extname AS name,
-            t0.extversion AS version,
-            t1.nspname AS schema,
-            t2.comment AS description
-        FROM
-            pg_extension t0
-        JOIN pg_namespace t1 ON t1.oid = t0.extnamespace
-        JOIN pg_catalog.pg_available_extensions t2 ON t2.name = t0.extname
-    ) installed
-
-    UNION
-
-    -- Subquery for available extensions
-    SELECT
-        name,
-        default_version AS version,
-        FALSE as enabled,
-        'public' AS schema,
-        comment AS description
-    FROM
-        pg_catalog.pg_available_extensions
-
-    ORDER BY
-        enabled ASC
+    select
+        t0.extname as name,
+        t0.extversion as version,
+        true as enabled,
+        t1.nspname as schema,
+        comment as description
+    from
+        (
+        select
+            extnamespace,
+            extname,
+            extversion
+        from
+            pg_extension
+) t0,
+        (
+        select
+            oid,
+            nspname
+        from
+            pg_namespace
+) t1,
+        (
+        select
+            name,
+            comment
+        from
+            pg_catalog.pg_available_extensions
+) t2
+    where
+        t1.oid = t0.extnamespace
+        and t2.name = t0.extname
+) installed
+union
+select
+    name,
+    default_version as version,
+    false as enabled,
+    'public' as schema,
+    comment as description
+from
+    pg_catalog.pg_available_extensions
+order by
+    enabled asc
 ) combined
-
-ORDER BY
-    name ASC,
-    schema ASC,
-    enabled DESC
+order by
+name asc,
+enabled desc
 "#;
 
 #[derive(Debug)]
