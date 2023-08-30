@@ -17,7 +17,7 @@ use crate::{
     },
 };
 use std::{sync::Arc, time::Duration};
-use tracing::{debug, error, info};
+use tracing::{debug, error, info, warn};
 
 
 pub async fn reconcile_extension_toggle_state(
@@ -259,15 +259,13 @@ fn determine_updated_extensions_status(
     for desired_extension in &cdb.spec.extensions {
         // For every location of the desired extension
         for desired_location in &desired_extension.locations {
-            // If the desired location is not in the current status
+            // If the desired extension is not in the current status
             // and the desired location is enabled, then
             // we need to add it into the status as unavailable.
             if desired_location.clone().enabled
-                && get_location_status(
+                && get_extension_status(
                     &cdb_with_updated_extensions_status,
                     &desired_extension.name,
-                    &desired_location.database,
-                    desired_location.schema.clone(),
                 )
                 .is_none()
             {
@@ -308,7 +306,21 @@ fn determine_extension_locations_to_toggle(cdb: &CoreDB) -> Vec<Extension> {
                 desired_location.schema.clone(),
             ) {
                 None => {
-                    error!("When determining extensions to toggle, there should always be a location status for the desired location, because that should be included by determine_updated_extensions_status.");
+                    match get_extension_status(
+                        cdb,
+                        &desired_extension.name,
+                    ) {
+                        None => {
+                            error!("When determining extensions to toggle, the any desired extension should be in the status, because that should be included by determine_updated_extensions_status.");
+                        }
+                        Some(extension_status) => {
+                            // This happens when an extension is requested for a schema that's not in the status
+                            // If we fail to toggle, that will get added to status
+                            warn!("When determining extensions to toggle, we found the extension is in status, but the location is not. Assuming that a toggle is needed.");
+                            needs_toggle = true;
+                            extension_to_toggle.locations.push(desired_location.clone());
+                        }
+                    }
                 }
                 Some(actual_status) => {
                     // If we don't have an error already, the extension exists, and the desired does not match the actual

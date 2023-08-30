@@ -51,67 +51,51 @@ pub const LIST_DATABASES_QUERY: &str = r#"SELECT datname FROM pg_database WHERE 
 
 pub const LIST_SHARED_PRELOAD_LIBRARIES_QUERY: &str = r#"SHOW shared_preload_libraries;"#;
 
-pub const LIST_EXTENSIONS_QUERY: &str = r#"select
-distinct on
-(name) *
-from
+pub const LIST_EXTENSIONS_QUERY: &str = r#"
+SELECT
+    DISTINCT ON (name, schema) *
+FROM
 (
-select
-    name,
-    version,
-    enabled,
-    schema,
-    description
-from
+    -- Subquery for installed extensions
+    SELECT
+        name,
+        version,
+        TRUE as enabled,
+        schema,
+        description
+    FROM
     (
-    select
-        t0.extname as name,
-        t0.extversion as version,
-        true as enabled,
-        t1.nspname as schema,
-        comment as description
-    from
-        (
-        select
-            extnamespace,
-            extname,
-            extversion
-        from
-            pg_extension
-) t0,
-        (
-        select
-            oid,
-            nspname
-        from
-            pg_namespace
-) t1,
-        (
-        select
-            name,
-            comment
-        from
-            pg_catalog.pg_available_extensions
-) t2
-    where
-        t1.oid = t0.extnamespace
-        and t2.name = t0.extname
-) installed
-union
-select
-    name,
-    default_version as version,
-    false as enabled,
-    'public' as schema,
-    comment as description
-from
-    pg_catalog.pg_available_extensions
-order by
-    enabled asc
+        SELECT
+            t0.extname AS name,
+            t0.extversion AS version,
+            t1.nspname AS schema,
+            t2.comment AS description
+        FROM
+            pg_extension t0
+        JOIN pg_namespace t1 ON t1.oid = t0.extnamespace
+        JOIN pg_catalog.pg_available_extensions t2 ON t2.name = t0.extname
+    ) installed
+
+    UNION
+
+    -- Subquery for available extensions
+    SELECT
+        name,
+        default_version AS version,
+        FALSE as enabled,
+        'public' AS schema,
+        comment AS description
+    FROM
+        pg_catalog.pg_available_extensions
+
+    ORDER BY
+        enabled ASC
 ) combined
-order by
-name asc,
-enabled desc
+
+ORDER BY
+    name ASC,
+    schema ASC,
+    enabled DESC
 "#;
 
 #[derive(Debug)]
@@ -403,11 +387,13 @@ pub async fn create_or_drop_extension_if_required(
     ext_loc: ExtensionInstallLocation,
     ctx: Arc<Context>,
 ) -> Result<(), String> {
+    info!("{} Running CREATE or DROP extension process for {}. Desired state: {:?}", cdb.metadata.name.clone().unwrap(), ext_name.clone(), ext_loc.clone());
 
     match get_extension_status(cdb, ext_name) {
         None => {}
         Some(current_status) => {
             if current_status.create_extension.is_some() && !current_status.create_extension.unwrap() {
+                info!("{} Skipping CREATE EXTENSION for {} - not required", cdb.metadata.name.clone().unwrap(), ext_name.clone());
                 // If the extension does not require CREATE EXTENSION, then we do not need to do anything in this function.
                 return Ok(());
             }
@@ -440,7 +426,10 @@ pub async fn create_or_drop_extension_if_required(
     }
 
     let command = match generate_extension_enable_cmd(ext_name, &ext_loc) {
-        Ok(command) => command,
+        Ok(command) => {
+            info!("{} Running command: {}", &coredb_name, &command);
+            command
+        },
         Err(_) => {
             return Err(
                 "Don't know how to enable this extension. You may enable the extension manually instead."
