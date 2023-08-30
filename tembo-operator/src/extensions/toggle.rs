@@ -80,10 +80,7 @@ pub fn get_desired_shared_preload_libraries(cdb: &CoreDB) -> Vec<String> {
     result
 }
 
-pub async fn reconcile_shared_preload_libraries(
-    cdb: &CoreDB,
-    ctx: Arc<Context>,
-) -> Result<(), Action> {
+pub async fn reconcile_shared_preload_libraries(cdb: &CoreDB, ctx: Arc<Context>) -> Result<(), Action> {
     debug!(
         "Reconciling shared_preload_libraries: {}",
         cdb.metadata.name.clone().unwrap()
@@ -263,11 +260,8 @@ fn determine_updated_extensions_status(
             // and the desired location is enabled, then
             // we need to add it into the status as unavailable.
             if desired_location.clone().enabled
-                && get_extension_status(
-                    &cdb_with_updated_extensions_status,
-                    &desired_extension.name,
-                )
-                .is_none()
+                && get_extension_status(&cdb_with_updated_extensions_status, &desired_extension.name)
+                    .is_none()
             {
                 let location_status = ExtensionInstallLocationStatus {
                     enabled: None,
@@ -306,14 +300,11 @@ fn determine_extension_locations_to_toggle(cdb: &CoreDB) -> Vec<Extension> {
                 desired_location.schema.clone(),
             ) {
                 None => {
-                    match get_extension_status(
-                        cdb,
-                        &desired_extension.name,
-                    ) {
+                    match get_extension_status(cdb, &desired_extension.name) {
                         None => {
                             error!("When determining extensions to toggle, the any desired extension should be in the status, because that should be included by determine_updated_extensions_status.");
                         }
-                        Some(extension_status) => {
+                        Some(_extension_status) => {
                             // This happens when an extension is requested for a schema that's not in the status
                             // If we fail to toggle, that will get added to status
                             warn!("When determining extensions to toggle, we found the extension is in status, but the location is not. Assuming that a toggle is needed.");

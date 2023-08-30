@@ -387,17 +387,26 @@ pub async fn create_or_drop_extension_if_required(
     ext_loc: ExtensionInstallLocation,
     ctx: Arc<Context>,
 ) -> Result<(), String> {
-    info!("{} Running CREATE or DROP extension process for {}. Desired state: {:?}", cdb.metadata.name.clone().unwrap(), ext_name.clone(), ext_loc.clone());
+    info!(
+        "{} Running CREATE or DROP extension process for {}. Desired state: {:?}",
+        cdb.metadata.name.clone().unwrap(),
+        ext_name.clone(),
+        ext_loc.clone()
+    );
 
     match get_extension_status(cdb, ext_name) {
         None => {}
         Some(current_status) => {
             if current_status.create_extension.is_some() && !current_status.create_extension.unwrap() {
-                info!("{} Skipping CREATE EXTENSION for {} - not required", cdb.metadata.name.clone().unwrap(), ext_name.clone());
+                info!(
+                    "{} Skipping CREATE EXTENSION for {} - not required",
+                    cdb.metadata.name.clone().unwrap(),
+                    ext_name.clone()
+                );
                 // If the extension does not require CREATE EXTENSION, then we do not need to do anything in this function.
                 return Ok(());
             }
-        },
+        }
     };
 
     let coredb_name = cdb.metadata.name.clone().expect("CoreDB should have a name");
@@ -429,7 +438,7 @@ pub async fn create_or_drop_extension_if_required(
         Ok(command) => {
             info!("{} Running command: {}", &coredb_name, &command);
             command
-        },
+        }
         Err(_) => {
             return Err(
                 "Don't know how to enable this extension. You may enable the extension manually instead."

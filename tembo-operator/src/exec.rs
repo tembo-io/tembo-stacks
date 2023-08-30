@@ -99,10 +99,7 @@ impl ExecCommand {
                     result_stdout.clone(),
                     result_stderr.clone()
                 );
-                warn!(
-                    "Error executing command on pod: {:?}",
-                    self.pod_name
-                );
+                warn!("Error executing command on pod: {:?}", self.pod_name);
                 debug!(
                     "Error executing command: {:?} on pod: {:?}. response: {:?}",
                     command, self.pod_name, output
