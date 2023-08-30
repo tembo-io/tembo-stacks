@@ -29,7 +29,7 @@ pub async fn reconcile_extension_toggle_state(
     kubernetes_queries::update_extensions_status(cdb, ext_status_updates.clone(), &ctx).await?;
     let cdb = get_current_coredb_resource(cdb, ctx.clone()).await?;
     let toggle_these_extensions = determine_extension_locations_to_toggle(&cdb);
-    reconcile_shared_preload_libraries(&cdb, ctx.clone(), toggle_these_extensions.clone()).await?;
+    reconcile_shared_preload_libraries(&cdb, ctx.clone()).await?;
     let ext_status_updates =
         toggle_extensions(ctx, ext_status_updates, &cdb, toggle_these_extensions).await?;
     Ok(ext_status_updates)
@@ -83,13 +83,12 @@ pub fn get_desired_shared_preload_libraries(cdb: &CoreDB) -> Vec<String> {
 pub async fn reconcile_shared_preload_libraries(
     cdb: &CoreDB,
     ctx: Arc<Context>,
-    _toggle_these_extensions: Vec<Extension>,
 ) -> Result<(), Action> {
-    // These are already set in configuration and the database has been restarted to include them
     debug!(
         "Reconciling shared_preload_libraries: {}",
         cdb.metadata.name.clone().unwrap()
     );
+    // These are already set in configuration and the database has been restarted to include them
     let currently_active_shared_preload_libraries = list_shared_preload_libraries(cdb, ctx.clone()).await?;
     debug!(
         "Found {} currently active shared_preload_libraries in {}: {:?}",

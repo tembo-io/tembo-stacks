@@ -17,7 +17,7 @@ lazy_static! {
 }
 
 // TODO: Get this list from trunk instead of coding it here
-pub const REQUIRES_LOAD: [&str; 22] = [
+pub const REQUIRES_LOAD: [&str; 23] = [
     "auth_delay",
     "auto_explain",
     "basebackup_to_shell",
@@ -34,6 +34,7 @@ pub const REQUIRES_LOAD: [&str; 22] = [
     "pg_stat_kcache",
     "pg_stat_statements",
     "pg_tle",
+    "pgml",
     "plrust",
     "postgresql_anonymizer",
     "sepgsql",
@@ -402,17 +403,16 @@ pub async fn create_or_drop_extension_if_required(
     ext_loc: ExtensionInstallLocation,
     ctx: Arc<Context>,
 ) -> Result<(), String> {
-    let current_status = match get_extension_status(cdb, ext_name) {
-        None => {
-            error!("There should always be an extension status before attempting to toggle an extension");
-            return Err("Extension is not installed".to_string());
-        }
-        Some(status) => status,
+
+    match get_extension_status(cdb, ext_name) {
+        None => {}
+        Some(current_status) => {
+            if current_status.create_extension.is_some() && !current_status.create_extension.unwrap() {
+                // If the extension does not require CREATE EXTENSION, then we do not need to do anything in this function.
+                return Ok(());
+            }
+        },
     };
-    if current_status.create_extension.is_some() && !current_status.create_extension.unwrap() {
-        // If the extension does not require CREATE EXTENSION, then we do not need to do anything in this function.
-        return Ok(());
-    }
 
     let coredb_name = cdb.metadata.name.clone().expect("CoreDB should have a name");
     if !check_input(ext_name) {
