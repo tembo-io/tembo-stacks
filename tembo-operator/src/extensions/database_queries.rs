@@ -17,7 +17,7 @@ lazy_static! {
 }
 
 // TODO: Get this list from trunk instead of coding it here
-pub const REQUIRES_LOAD: [&str; 23] = [
+pub const REQUIRES_LOAD: [&str; 22] = [
     "auth_delay",
     "auto_explain",
     "basebackup_to_shell",
@@ -34,7 +34,6 @@ pub const REQUIRES_LOAD: [&str; 23] = [
     "pg_stat_kcache",
     "pg_stat_statements",
     "pg_tle",
-    "pgml",
     "plrust",
     "postgresql_anonymizer",
     "sepgsql",
@@ -403,13 +402,6 @@ pub async fn create_or_drop_extension_if_required(
     ext_loc: ExtensionInstallLocation,
     ctx: Arc<Context>,
 ) -> Result<(), String> {
-    info!(
-        "{} Running CREATE or DROP extension process for {}. Desired state: {:?}",
-        cdb.metadata.name.clone().unwrap(),
-        ext_name.clone(),
-        ext_loc.clone()
-    );
-
     let current_status = match get_extension_status(cdb, ext_name) {
         None => {
             error!("There should always be an extension status before attempting to toggle an extension");
@@ -448,10 +440,7 @@ pub async fn create_or_drop_extension_if_required(
     }
 
     let command = match generate_extension_enable_cmd(ext_name, &ext_loc) {
-        Ok(command) => {
-            info!("{} Running command: {}", &coredb_name, &command);
-            command
-        }
+        Ok(command) => command,
         Err(_) => {
             return Err(
                 "Don't know how to enable this extension. You may enable the extension manually instead."
