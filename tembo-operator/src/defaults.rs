@@ -42,7 +42,7 @@ pub fn default_image() -> String {
 }
 
 pub fn default_llm_image() -> String {
-    "quay.io/tembo/ml-cnpg:15.3.0-1-77fcafc".to_owned()
+    "quay.io/tembo/ml-cnpg:15.3.0-1-63e32a1".to_owned()
 }
 
 pub fn default_storage() -> Quantity {
