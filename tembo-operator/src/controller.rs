@@ -267,7 +267,6 @@ impl CoreDB {
         patch_cdb_status_merge(&coredbs, &name, patch_status).await?;
 
         info!("Fully reconciled {}", self.name_any());
-        // Check back every 60-90 seconds
         let jitter = rand::thread_rng().gen_range(0..30);
         Ok(Action::requeue(Duration::from_secs(60 + jitter)))
     }
