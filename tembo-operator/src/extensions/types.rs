@@ -39,17 +39,14 @@ impl Default for Extension {
 #[derive(Clone, Debug, Deserialize, Eq, Hash, JsonSchema, Serialize, PartialEq)]
 pub struct ExtensionInstallLocation {
     pub enabled: bool,
-    // no database or schema when disabled
     #[serde(default = "defaults::default_database")]
     pub database: String,
-    pub schema: Option<String>,
     pub version: Option<String>,
 }
 
 impl Default for ExtensionInstallLocation {
     fn default() -> Self {
         ExtensionInstallLocation {
-            schema: Some("public".to_owned()),
             database: "postgres".to_owned(),
             enabled: true,
             version: Some("1.9".to_owned()),
@@ -82,7 +79,6 @@ pub fn get_location_status(
     cdb: &CoreDB,
     extension_name: &str,
     location_database: &str,
-    location_schema: Option<String>,
 ) -> Option<ExtensionInstallLocationStatus> {
     match &cdb.status {
         None => None,
@@ -92,10 +88,7 @@ pub fn get_location_status(
                 for extension in extensions {
                     if extension.name == extension_name {
                         for location in &extension.locations {
-                            // if location schema is not specified, then match any schema when returning location status
-                            if location.database == location_database
-                                && (location_schema.is_none() || location.schema == location_schema)
-                            {
+                            if location.database == location_database {
                                 return Some(location.clone());
                             }
                         }
@@ -112,15 +105,11 @@ pub fn get_location_spec(
     cdb: &CoreDB,
     extension_name: &str,
     location_database: &str,
-    location_schema: Option<String>,
 ) -> Option<ExtensionInstallLocation> {
     for extension in &cdb.spec.extensions {
         if extension.name == extension_name {
             for location in &extension.locations {
-                // if location schema is not specified, then match any schema when returning location status
-                if location.database == location_database
-                    && (location_schema.is_none() || location.schema == location_schema)
-                {
+                if location.database == location_database {
                     return Some(location.clone());
                 }
             }
@@ -162,7 +151,7 @@ mod tests {
         };
 
         assert_eq!(
-            get_location_status(&cdb, extension_name, location_database, location_schema),
+            get_location_status(&cdb, extension_name, location_database),
             Some(location)
         );
     }
@@ -170,12 +159,10 @@ mod tests {
     #[test]
     fn test_get_location_spec() {
         let location_database = "postgres";
-        let location_schema = Some("public".to_string());
         let extension_name = "extension1";
         let location = ExtensionInstallLocation {
             enabled: true,
             database: location_database.to_owned(),
-            schema: location_schema.to_owned(),
             version: Some("1.9".to_owned()),
         };
         let cdb = CoreDB {
@@ -192,7 +179,7 @@ mod tests {
         };
 
         assert_eq!(
-            get_location_spec(&cdb, extension_name, location_database, location_schema),
+            get_location_spec(&cdb, extension_name, location_database),
             Some(location)
         );
     }

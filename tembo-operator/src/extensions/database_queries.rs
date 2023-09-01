@@ -197,17 +197,8 @@ fn generate_extension_enable_cmd(
     ext_name: &str,
     ext_loc: &ExtensionInstallLocation,
 ) -> Result<String, Error> {
-    // only specify the schema if it provided
     let command = match ext_loc.enabled {
-        true => match ext_loc.schema.as_ref() {
-            Some(schema) => {
-                format!(
-                    "CREATE EXTENSION IF NOT EXISTS \"{}\" SCHEMA {} CASCADE;",
-                    ext_name, schema
-                )
-            }
-            None => format!("CREATE EXTENSION IF NOT EXISTS \"{}\" CASCADE;", ext_name),
-        },
+        true => format!("CREATE EXTENSION IF NOT EXISTS \"{}\" CASCADE;", ext_name),
         false => format!("DROP EXTENSION IF EXISTS \"{}\" CASCADE;", ext_name),
     };
     Ok(command)
@@ -236,14 +227,6 @@ pub async fn toggle_extension(
             &coredb_name
         );
         return Err("Database name is not formatted properly".to_string());
-    }
-    let schema_name = ext_loc.schema.to_owned();
-    if schema_name.is_some() && !check_input(&schema_name.unwrap()) {
-        warn!(
-            "Extension.Database.Schema is not formatted properly. Skipping operation. {}",
-            &coredb_name
-        );
-        return Err("Schema name is not formatted properly".to_string());
     }
 
     let command = match generate_extension_enable_cmd(ext_name, &ext_loc) {
@@ -399,7 +382,6 @@ mod tests {
         let loc1 = ExtensionInstallLocation {
             database: "postgres".to_string(),
             enabled: true,
-            schema: None,
             version: Some("1.0.0".to_string()),
         };
         let cmd = generate_extension_enable_cmd("my_ext", &loc1);
@@ -409,20 +391,15 @@ mod tests {
         let loc2 = ExtensionInstallLocation {
             database: "postgres".to_string(),
             enabled: true,
-            schema: Some("public".to_string()),
             version: Some("1.0.0".to_string()),
         };
         let cmd = generate_extension_enable_cmd("my_ext", &loc2);
-        assert_eq!(
-            cmd.unwrap(),
-            "CREATE EXTENSION IF NOT EXISTS \"my_ext\" SCHEMA public CASCADE;"
-        );
+        assert_eq!(cmd.unwrap(), "CREATE EXTENSION IF NOT EXISTS \"my_ext\" CASCADE;");
 
         // drop extension
         let loc2 = ExtensionInstallLocation {
             database: "postgres".to_string(),
             enabled: false,
-            schema: Some("public".to_string()),
             version: Some("1.0.0".to_string()),
         };
         let cmd = generate_extension_enable_cmd("my_ext", &loc2);
