@@ -65,9 +65,6 @@ spec:
                             type: string
                           enabled:
                             type: boolean
-                          schema:
-                            nullable: true
-                            type: string
                           version:
                             nullable: true
                             type: string
