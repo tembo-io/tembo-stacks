@@ -1,7 +1,10 @@
 use crate::{
     apis::coredb_types::CoreDB,
-    extensions::types::{ExtensionInstallLocation, ExtensionInstallLocationStatus, ExtensionStatus},
-    Context, Error,
+    extensions::{
+        types,
+        types::{ExtensionInstallLocation, ExtensionInstallLocationStatus, ExtensionStatus},
+    },
+    Context,
 };
 use kube::runtime::controller::Action;
 use lazy_static::lazy_static;
@@ -191,19 +194,6 @@ pub async fn get_all_extensions(cdb: &CoreDB, ctx: Arc<Context>) -> Result<Vec<E
     Ok(ext_spec)
 }
 
-/// generates the CREATE or DROP EXTENSION command for a given extension
-/// handles schema specification in the command
-fn generate_extension_enable_cmd(
-    ext_name: &str,
-    ext_loc: &ExtensionInstallLocation,
-) -> Result<String, Error> {
-    let command = match ext_loc.enabled {
-        true => format!("CREATE EXTENSION IF NOT EXISTS \"{}\" CASCADE;", ext_name),
-        false => format!("DROP EXTENSION IF EXISTS \"{}\" CASCADE;", ext_name),
-    };
-    Ok(command)
-}
-
 /// Handles create/drop an extension location
 /// On failure, returns an error message
 pub async fn toggle_extension(
@@ -229,15 +219,7 @@ pub async fn toggle_extension(
         return Err("Database name is not formatted properly".to_string());
     }
 
-    let command = match generate_extension_enable_cmd(ext_name, &ext_loc) {
-        Ok(command) => command,
-        Err(_) => {
-            return Err(
-                "Don't know how to enable this extension. You may enable the extension manually instead."
-                    .to_string(),
-            );
-        }
-    };
+    let command = types::generate_extension_enable_cmd(ext_name, &ext_loc)?;
 
     let result = cdb
         .psql(command.clone(), database_name.clone(), ctx.clone())
@@ -282,10 +264,7 @@ pub async fn toggle_extension(
 
 #[cfg(test)]
 mod tests {
-    use crate::extensions::{
-        database_queries::{check_input, generate_extension_enable_cmd, parse_databases, parse_extensions},
-        types::ExtensionInstallLocation,
-    };
+    use crate::extensions::database_queries::{check_input, parse_databases, parse_extensions};
 
     #[test]
     fn test_parse_databases() {
@@ -374,38 +353,5 @@ mod tests {
         for i in valids.iter() {
             assert!(check_input(i), "input {} should be valid", i);
         }
-    }
-
-    #[test]
-    fn test_generate_extension_enable_cmd() {
-        // schema not specified
-        let loc1 = ExtensionInstallLocation {
-            database: "postgres".to_string(),
-            schema: None,
-            enabled: true,
-            version: Some("1.0.0".to_string()),
-        };
-        let cmd = generate_extension_enable_cmd("my_ext", &loc1);
-        assert_eq!(cmd.unwrap(), "CREATE EXTENSION IF NOT EXISTS \"my_ext\" CASCADE;");
-
-        // schema specified
-        let loc2 = ExtensionInstallLocation {
-            database: "postgres".to_string(),
-            schema: None,
-            enabled: true,
-            version: Some("1.0.0".to_string()),
-        };
-        let cmd = generate_extension_enable_cmd("my_ext", &loc2);
-        assert_eq!(cmd.unwrap(), "CREATE EXTENSION IF NOT EXISTS \"my_ext\" CASCADE;");
-
-        // drop extension
-        let loc2 = ExtensionInstallLocation {
-            database: "postgres".to_string(),
-            schema: None,
-            enabled: false,
-            version: Some("1.0.0".to_string()),
-        };
-        let cmd = generate_extension_enable_cmd("my_ext", &loc2);
-        assert_eq!(cmd.unwrap(), "DROP EXTENSION IF EXISTS \"my_ext\" CASCADE;");
     }
 }
