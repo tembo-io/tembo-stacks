@@ -655,7 +655,7 @@ mod tests {
             description: None,
             locations: vec![ExtensionInstallLocationStatus {
                 enabled: Some(false),
-                database: "db1".to_string(),
+                database: "db2".to_string(),
                 schema: Some("schema2".to_string()),
                 version: None,
                 error: Some(false),
@@ -682,7 +682,7 @@ mod tests {
         assert_eq!(result[0].locations[0].database, "db1".to_string());
         assert_eq!(result[0].locations[0].schema, Some("schema1".to_string()));
         assert_eq!(result[0].locations[0].enabled, Some(true));
-        assert_eq!(result[0].locations[1].database, "db1".to_string());
+        assert_eq!(result[0].locations[1].database, "db2".to_string());
         assert_eq!(result[0].locations[1].schema, Some("schema2".to_string()));
         assert_eq!(result[0].locations[1].enabled, Some(false));
     }
