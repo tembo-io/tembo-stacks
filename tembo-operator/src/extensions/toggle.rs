@@ -108,7 +108,7 @@ pub fn determine_updated_extensions_status(
                 error: Some(false),
                 error_message: None,
             };
-            // If there is a current status, retain the error and error message
+            // If there is a current status, retain the error and error message if the schema has not changed
             match types::get_location_status(
                 cdb,
                 &actual_extension.name.clone(),
@@ -116,8 +116,10 @@ pub fn determine_updated_extensions_status(
             ) {
                 None => {}
                 Some(current_status) => {
-                    location_status.error = current_status.error;
-                    location_status.error_message = current_status.error_message;
+                    if current_status.schema == actual_location.schema {
+                        location_status.error = current_status.error;
+                        location_status.error_message = current_status.error_message;
+                    }
                 }
             }
             // If the desired state matches the actual state, unset the error and error message
@@ -132,10 +134,14 @@ pub fn determine_updated_extensions_status(
             }
             extension_status.locations.push(location_status);
         }
+        // Make unique by database name
+        extension_status
+            .locations
+            .dedup_by(|a, b| a.database == b.database);
         // sort locations by database and schema so the order is deterministic
         extension_status
             .locations
-            .sort_by(|a, b| a.database.cmp(&b.database).then(a.schema.cmp(&b.schema)));
+            .sort_by(|a, b| a.database.cmp(&b.database));
         ext_status_updates.push(extension_status);
     }
     let mut cdb_with_updated_extensions_status = cdb.clone();
@@ -174,6 +180,7 @@ pub fn determine_updated_extensions_status(
             }
         }
     }
+    ext_status_updates.dedup_by(|a, b| a.name == b.name);
     // sort by extension name so the order is deterministic
     ext_status_updates.sort_by(|a, b| a.name.cmp(&b.name));
     ext_status_updates

@@ -157,7 +157,10 @@ mod tests {
     use super::*;
     use crate::{
         apis::coredb_types::{CoreDB, CoreDBSpec, CoreDBStatus},
-        extensions::toggle::{determine_extension_locations_to_toggle, determine_updated_extensions_status},
+        extensions::{
+            kubernetes_queries::merge_location_status_into_extension_status_list,
+            toggle::{determine_extension_locations_to_toggle, determine_updated_extensions_status},
+        },
     };
 
     #[test]
@@ -608,5 +611,121 @@ mod tests {
         // we should not try to toggle it again
         let location = get_location_spec(&cdb_spec_check, "ext1", "db_where_enable_failed");
         assert!(location.is_none());
+    }
+
+    #[test]
+    fn test_merge_existing_extension_and_location() {
+        let current_extensions_status = vec![ExtensionStatus {
+            name: "ext1".to_string(),
+            description: None,
+            locations: vec![ExtensionInstallLocationStatus {
+                enabled: Some(false),
+                database: "db1".to_string(),
+                schema: Some("schema1".to_string()),
+                version: None,
+                error: Some(false),
+                error_message: None,
+            }],
+        }];
+        let new_location_status = ExtensionInstallLocationStatus {
+            enabled: Some(true),
+            database: "db1".to_string(),
+            schema: Some("schema1".to_string()),
+            version: None,
+            error: Some(false),
+            error_message: None,
+        };
+
+        // Try updating existing from disabled to enabled
+        let result = merge_location_status_into_extension_status_list(
+            "ext1",
+            &new_location_status,
+            current_extensions_status,
+        );
+
+        assert_eq!(result.len(), 1);
+        assert_eq!(result[0].locations.len(), 1);
+        assert_eq!(result[0].locations[0].enabled, Some(true));
+    }
+
+    #[test]
+    fn test_merge_existing_extension_new_location() {
+        let current_extensions_status = vec![ExtensionStatus {
+            name: "ext1".to_string(),
+            description: None,
+            locations: vec![ExtensionInstallLocationStatus {
+                enabled: Some(false),
+                database: "db1".to_string(),
+                schema: Some("schema2".to_string()),
+                version: None,
+                error: Some(false),
+                error_message: None,
+            }],
+        }];
+        let new_location_status = ExtensionInstallLocationStatus {
+            enabled: Some(true),
+            database: "db1".to_string(),
+            schema: Some("schema1".to_string()),
+            version: None,
+            error: Some(false),
+            error_message: None,
+        };
+
+        let result = merge_location_status_into_extension_status_list(
+            "ext1",
+            &new_location_status,
+            current_extensions_status,
+        );
+
+        assert_eq!(result.len(), 1);
+        assert_eq!(result[0].locations.len(), 2);
+        assert_eq!(result[0].locations[0].database, "db1".to_string());
+        assert_eq!(result[0].locations[0].schema, Some("schema1".to_string()));
+        assert_eq!(result[0].locations[0].enabled, Some(true));
+        assert_eq!(result[0].locations[1].database, "db1".to_string());
+        assert_eq!(result[0].locations[1].schema, Some("schema2".to_string()));
+        assert_eq!(result[0].locations[1].enabled, Some(false));
+    }
+
+    #[test]
+    fn test_merge_new_extension_new_location() {
+        let current_extensions_status = vec![ExtensionStatus {
+            name: "ext2".to_string(),
+            description: None,
+            locations: vec![ExtensionInstallLocationStatus {
+                enabled: Some(false),
+                database: "db1".to_string(),
+                schema: Some("schema1".to_string()),
+                version: None,
+                error: Some(false),
+                error_message: None,
+            }],
+        }];
+        let new_location_status = ExtensionInstallLocationStatus {
+            enabled: Some(true),
+            database: "db1".to_string(),
+            schema: Some("schema1".to_string()),
+            version: None,
+            error: Some(false),
+            error_message: None,
+        };
+
+        let result = merge_location_status_into_extension_status_list(
+            "ext1",
+            &new_location_status,
+            current_extensions_status,
+        );
+
+        assert_eq!(result.len(), 2);
+        assert_eq!(result[0].locations.len(), 1);
+        assert_eq!(result[1].locations.len(), 1);
+        assert_eq!(result[0].name, "ext1".to_string());
+        assert_eq!(result[0].locations[0].database, "db1".to_string());
+        assert_eq!(result[0].locations[0].schema, Some("schema1".to_string()));
+        assert_eq!(result[0].locations[0].enabled, Some(true));
+        assert_eq!(result[1].name, "ext2".to_string());
+        assert_eq!(result[1].locations[0].database, "db1".to_string());
+        assert_eq!(result[1].locations[0].schema, Some("schema1".to_string()));
+        assert_eq!(result[1].locations[0].enabled, Some(false));
     }
 }
