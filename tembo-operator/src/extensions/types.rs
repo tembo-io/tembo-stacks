@@ -46,6 +46,17 @@ pub struct ExtensionInstallLocation {
     schema: Option<String>,
 }
 
+impl Default for ExtensionInstallLocation {
+    fn default() -> Self {
+        ExtensionInstallLocation {
+            enabled: false,
+            database: "postgres".to_string(),
+            version: None,
+            schema: None,
+        }
+    }
+}
+
 /// generates the CREATE or DROP EXTENSION command for a given extension
 /// handles schema specification in the command
 pub fn generate_extension_enable_cmd(
@@ -74,17 +85,6 @@ pub fn generate_extension_enable_cmd(
         false => format!("DROP EXTENSION IF EXISTS \"{}\" CASCADE;", ext_name),
     };
     Ok(command)
-}
-
-impl Default for ExtensionInstallLocation {
-    fn default() -> Self {
-        ExtensionInstallLocation {
-            database: "postgres".to_owned(),
-            schema: None,
-            enabled: true,
-            version: Some("1.9".to_owned()),
-        }
-    }
 }
 
 #[derive(Clone, Debug, Deserialize, Eq, Hash, JsonSchema, Serialize, PartialEq)]
