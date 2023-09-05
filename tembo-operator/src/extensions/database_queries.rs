@@ -381,6 +381,7 @@ mod tests {
         // schema not specified
         let loc1 = ExtensionInstallLocation {
             database: "postgres".to_string(),
+            schema: None,
             enabled: true,
             version: Some("1.0.0".to_string()),
         };
@@ -390,6 +391,7 @@ mod tests {
         // schema specified
         let loc2 = ExtensionInstallLocation {
             database: "postgres".to_string(),
+            schema: None,
             enabled: true,
             version: Some("1.0.0".to_string()),
         };
@@ -399,6 +401,7 @@ mod tests {
         // drop extension
         let loc2 = ExtensionInstallLocation {
             database: "postgres".to_string(),
+            schema: None,
             enabled: false,
             version: Some("1.0.0".to_string()),
         };

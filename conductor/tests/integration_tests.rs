@@ -134,6 +134,7 @@ mod test {
                     enabled: true,
                     version: Some("1.3.0".to_owned()),
                     database: "postgres".to_owned(),
+                    schema: None,
                 }],
             }]),
             "storage": Some("1Gi".to_owned()),
@@ -232,6 +233,7 @@ mod test {
                 enabled: true,
                 version: Some("0.1.4".to_owned()),
                 database: "postgres".to_owned(),
+                schema: None,
             }],
         });
         let num_expected_extensions = extensions_add.len();

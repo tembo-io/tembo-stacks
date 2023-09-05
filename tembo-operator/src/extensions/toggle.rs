@@ -248,6 +248,7 @@ mod tests {
                 description: None,
                 locations: vec![ExtensionInstallLocation {
                     enabled: true,
+                    schema: None,
                     database: "db1".to_string(),
                     version: None,
                 }],
@@ -259,24 +260,28 @@ mod tests {
                 // Requesting to enable a currently disabled extension
                 ExtensionInstallLocation {
                         enabled: true,
+                        schema: None,
                         database: "db_where_its_available_and_disabled".to_string(),
                         version: None,
                 },
                 // Requesting to disable a currently enabled extension
                 ExtensionInstallLocation {
                     enabled: false,
+                    schema: None,
                     database: "db_where_its_available_and_enabled".to_string(),
                     version: None,
                 },
                 // Requesting to enable a currently disabled extension that is not currently in status
                 ExtensionInstallLocation {
                     enabled: true,
+                    schema: None,
                     database: "db_where_its_available_and_disabled_missing_from_status".to_string(),
                     version: None,
                 },
                 // Requesting to disable a currently enabled extension that is not currently in status
                 ExtensionInstallLocation {
                     enabled: false,
+                    schema: None,
                     database: "db_where_its_available_and_enabled_missing_from_status".to_string(),
                     version: None,
                 },
@@ -284,6 +289,7 @@ mod tests {
                 // And now we toggle it back to false
                 ExtensionInstallLocation {
                     enabled: false,
+                    schema: None,
                     database: "db_where_it_is_currently_in_error_having_tried_to_enable_and_failed".to_string(),
                     version: None,
                 },
@@ -291,18 +297,21 @@ mod tests {
                 // because it wasn't installed, now we toggle it back to false
                 ExtensionInstallLocation {
                     enabled: false,
+                    schema: None,
                     database: "db_where_it_is_currently_in_error_having_tried_to_enable_and_failed_because_missing".to_string(),
                     version: None,
                 },
                 // Requesting to enable an extension that is not installed
                 ExtensionInstallLocation {
                     enabled: true,
+                    schema: None,
                     database: "db_where_its_not_available".to_string(),
                     version: None,
                 },
                 // Requesting to enable an extension that previously failed to enable
                 ExtensionInstallLocation {
                     enabled: true,
+                    schema: None,
                     database: "db_where_enable_failed".to_string(),
                     version: None,
                 }
@@ -313,6 +322,7 @@ mod tests {
                 description: None,
                 locations: vec![ExtensionInstallLocation {
                     enabled: false,
+                    schema: None,
                     database: "db1".to_string(),
                     version: None,
                 }],

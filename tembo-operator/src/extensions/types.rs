@@ -41,6 +41,7 @@ pub struct ExtensionInstallLocation {
     pub enabled: bool,
     #[serde(default = "defaults::default_database")]
     pub database: String,
+    pub schema: Option<String>,
     pub version: Option<String>,
 }
 
@@ -48,6 +49,7 @@ impl Default for ExtensionInstallLocation {
     fn default() -> Self {
         ExtensionInstallLocation {
             database: "postgres".to_owned(),
+            schema: None,
             enabled: true,
             version: Some("1.9".to_owned()),
         }
@@ -162,6 +164,7 @@ mod tests {
         let extension_name = "extension1";
         let location = ExtensionInstallLocation {
             enabled: true,
+            schema: None,
             database: location_database.to_owned(),
             version: Some("1.9".to_owned()),
         };
