@@ -1,12 +1,10 @@
-use crate::{Context, Error};
+use crate::Context;
 
-use kube::Client;
-use std::sync::Arc;
-use std::time::Duration;
-use kube::runtime::controller::Action;
-use tracing::{error, warn};
+use kube::{runtime::controller::Action, Client};
+use std::{sync::Arc, time::Duration};
+use tracing::warn;
 
-use crate::exec::{ExecCommand, ExecOutput};
+use crate::exec::ExecCommand;
 
 pub struct PsqlOutput {
     pub stdout: Option<String>,
@@ -59,15 +57,28 @@ impl PsqlCommand {
         ];
         let command = ExecCommand::new(self.pod_name.clone(), self.namespace.clone(), self.client.clone());
         let output = match command.execute(&psql_command).await {
-            Ok(output) => {output}
+            Ok(output) => output,
             Err(e) => {
-                warn!("{}: Failed to kubectl exec a psql command: {:?}", self.namespace, e);
+                warn!(
+                    "{}: Failed to kubectl exec a psql command: {:?}",
+                    self.namespace, e
+                );
                 return Err(Action::requeue(Duration::from_secs(10)));
             }
         };
 
-        if !output.success.clone() && output.stderr.clone().is_some() && output.stderr.clone().unwrap().contains("the database system is shutting down") {
-            warn!("Failed to execute psql command because DB is shutting down. Requeueing. {}", self.namespace);
+        if !output.success
+            && output.stderr.clone().is_some()
+            && output
+                .stderr
+                .clone()
+                .unwrap()
+                .contains("the database system is shutting down")
+        {
+            warn!(
+                "Failed to execute psql command because DB is shutting down. Requeueing. {}",
+                self.namespace
+            );
             return Err(Action::requeue(Duration::from_secs(10)));
         }
 
