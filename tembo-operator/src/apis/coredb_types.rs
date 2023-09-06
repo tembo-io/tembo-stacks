@@ -13,12 +13,16 @@ use crate::{
 };
 use kube::CustomResource;
 
-use crate::extensions::types::{Extension, TrunkInstall, TrunkInstallStatus};
+use crate::{
+    apis::postgres_parameters::ConfigValue,
+    extensions::{
+        toggle::REQUIRES_LOAD,
+        types::{Extension, TrunkInstall, TrunkInstallStatus},
+    },
+};
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use std::collections::{BTreeMap, BTreeSet};
-use crate::apis::postgres_parameters::ConfigValue;
-use crate::extensions::toggle::REQUIRES_LOAD;
 
 #[derive(Deserialize, Serialize, Clone, Debug, JsonSchema, Default)]
 pub struct ServiceAccountTemplate {
