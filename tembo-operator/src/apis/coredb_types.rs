@@ -118,9 +118,12 @@ impl CoreDBSpec {
 
         // Get list of extension names that require load
         let mut requires_load = BTreeSet::new();
-        for ext in self.extensions.iter() {
-            if REQUIRES_LOAD.contains(&ext.name.as_str()) {
-                requires_load.insert(ext.name.clone());
+        'ext: for ext in self.extensions.iter() {
+            for location in ext.locations.iter() {
+                if location.clone().enabled && REQUIRES_LOAD.contains(&ext.name.as_str()) {
+                    requires_load.insert(ext.name.clone());
+                    break 'ext;
+                }
             }
         }
 
