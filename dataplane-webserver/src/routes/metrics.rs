@@ -165,7 +165,7 @@ pub async fn query_range(
         None => "60s".to_string(),
     };
     // Check that end - start is not greater than 1 day, plus 100 seconds
-    if end - start > 86500.0 {
+    if end - start > 604900.0 {
         warn!(
             "Query time range too large: namespace '{}', start '{}', end '{}'",
             namespace, start, end
