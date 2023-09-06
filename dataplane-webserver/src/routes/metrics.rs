@@ -24,6 +24,9 @@ struct NamespaceVisitor {
     namespace: String,
 }
 
+// For example, a 12 hour window with a 30s step size would be 1440 data points.
+const MAX_DATAPOINTS: u64 = 2000;
+
 // Vector selector is the part in prometheus query that selects the metrics
 // Example: (sum by (namespace) (container_memory_usage_bytes))
 // container_memory_usage_bytes is the vector selector.
@@ -40,6 +43,29 @@ fn validate_vector_selector(namespace: &String, vector_selector: &VectorSelector
         }
     }
     authorized_query
+}
+
+// examples:
+// 1m
+// 30s
+// not supported: 1h30m
+fn parse_step_into_seconds(duration: &str) -> Result<u64, &'static str> {
+    let mut duration = duration.to_string();
+    let duration_len = duration.len();
+    let duration_suffix = duration.split_off(duration_len - 1);
+    let duration_value = duration.parse::<u64>();
+    if duration_value.is_err() {
+        return Err("Please use a step size of seconds, minutes, hours or days, for example 1m, 30s, 5m. Combined durations not supported: 1h30m")
+    }
+    let duration_value = duration_value.unwrap();
+    let duration = match duration_suffix.as_str() {
+        "s" => duration_value,
+        "m" => duration_value * 60,
+        "h" => duration_value * 60 * 60,
+        "d" => duration_value * 60 * 60 * 24,
+        _ => return Err("Please use a step size of seconds, minutes, hours or days, for example 1m, 30s, 5m. Combined durations not supported: 1h30m")
+    };
+    Ok(duration)
 }
 
 // This checks that prometheus queries are only using authorized namespace
@@ -165,14 +191,23 @@ pub async fn query_range(
         None => "60s".to_string(),
     };
     // Check that end - start is not greater than 1 day, plus 100 seconds
-    if end - start > 604900.0 {
-        warn!(
-            "Query time range too large: namespace '{}', start '{}', end '{}'",
-            namespace, start, end
-        );
-        return Ok(HttpResponse::BadRequest()
-            .json("Query time range too large, must be less than or equal to 1 day"));
-    }
+    // if end - start > 604900.0 {
+    //     warn!(
+    //         "Query time range too large: namespace '{}', start '{}', end '{}'",
+    //         namespace, start, end
+    //     );
+    //     return Ok(HttpResponse::BadRequest()
+    //         .json("Query time range too large, must be less than or equal to 1 day"));
+    // }
+
+    // Check that the query is not expected to return more than MAX_DATAPOINTS
+    let step_duration = match parse_step_into_seconds(&step) {
+        Ok(d) => d,
+        Err(_) => {
+            error!("Failed to parse step duration");
+            return Ok(HttpResponse::InternalServerError().json("Failed to parse step duration"));
+        }
+    };
 
     // Get timeout from config
     let prometheus_timeout_ms = cfg.prometheus_timeout_ms;
@@ -274,4 +309,67 @@ pub async fn query_range(
 
     // return json response from prometheus to client
     Ok(HttpResponse::Ok().json(json_response))
+}
+
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_parse_seconds() {
+        let result = parse_step_into_seconds("5s").unwrap();
+        assert_eq!(result, 5);
+    }
+
+    #[test]
+    fn test_parse_minutes() {
+        let result = parse_step_into_seconds("2m").unwrap();
+        assert_eq!(result, 2 * 60);
+    }
+
+    #[test]
+    fn test_parse_hours() {
+        let result = parse_step_into_seconds("3h").unwrap();
+        assert_eq!(result, 3 * 60 * 60);
+    }
+
+    #[test]
+    fn test_parse_days() {
+        let result = parse_step_into_seconds("4d").unwrap();
+        assert_eq!(result, 4 * 60 * 60 * 24);
+    }
+
+    #[test]
+    fn test_parse_weeks() {
+        let result = parse_step_into_seconds("1w").unwrap();
+        assert_eq!(result, 7 * 60 * 60 * 24);
+    }
+
+    #[test]
+    fn test_parse_years() {
+        let result = parse_step_into_seconds("2y").unwrap();
+        assert_eq!(result, 2 * 365 * 60 * 60 * 24);
+    }
+
+    #[test]
+    fn test_parse_invalid_suffix() {
+        let result = parse_step_into_seconds("5x");
+        assert!(result.is_err());
+        assert_eq!(result.err().unwrap(), "Failed to parse duration suffix");
+    }
+
+    #[test]
+    fn test_parse_invalid_value() {
+        let result = parse_step_into_seconds("abm");
+        assert!(result.is_err());
+        assert_eq!(result.err().unwrap(), "Failed to parse duration value");
+    }
+
+    #[test]
+    fn test_empty_input() {
+        let result = parse_step_into_seconds("");
+        assert!(result.is_err());
+        assert_eq!(result.err().unwrap(), "Failed to parse duration value");
+    }
 }
