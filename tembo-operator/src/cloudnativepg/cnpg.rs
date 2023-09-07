@@ -803,7 +803,7 @@ pub async fn get_fenced_pods(
                     Err(Action::requeue(Duration::from_secs(10)))
                 }
             } else {
-                info!("fencedInstances annotation is not set in the Cluster Status");
+                debug!("fencedInstances annotation is not set in the Cluster Status");
                 Ok(None)
             }
         } else {

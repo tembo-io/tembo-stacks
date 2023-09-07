@@ -6,7 +6,7 @@ use crate::{
 use kube::{runtime::controller::Action, Api};
 use serde_json::json;
 use std::{sync::Arc, time::Duration};
-use tracing::{debug, error, info, warn};
+use tracing::{debug, error, info, instrument, warn};
 
 pub async fn update_extension_location_in_status(
     cdb: &CoreDB,
@@ -107,6 +107,7 @@ pub async fn update_extensions_status(
     Ok(())
 }
 
+#[instrument(skip(cdb))]
 pub async fn remove_trunk_installs_from_status(
     cdb: &Api<CoreDB>,
     name: &str,
