@@ -292,7 +292,7 @@ impl CoreDB {
             },
         };
 
-        debug!("Updating CoreDB status to {:?}", new_status);
+        debug!("Updating CoreDB status to {:?} for {}", new_status, name.clone());
 
         let patch_status = json!({
             "apiVersion": "coredb.io/v1alpha1",
