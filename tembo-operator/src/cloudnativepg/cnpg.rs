@@ -22,7 +22,7 @@ use crate::{
     defaults::{default_image, default_llm_image},
     Context,
 };
-use k8s_openapi::apimachinery::pkg::apis::meta::v1::ObjectMeta;
+use k8s_openapi::{api::core::v1::Pod, apimachinery::pkg::apis::meta::v1::ObjectMeta};
 use kube::{
     api::{Patch, PatchParams},
     runtime::controller::Action,
@@ -257,7 +257,7 @@ fn cnpg_high_availability(cdb: &CoreDB) -> Option<ClusterReplicationSlots> {
     }
 }
 
-pub fn cnpg_cluster_from_cdb(cdb: &CoreDB) -> Cluster {
+pub fn cnpg_cluster_from_cdb(cdb: &CoreDB, fenced_pods: Option<Vec<String>>) -> Cluster {
     let cfg = Config::default();
     let name = cdb.name_any();
     let namespace = cdb.namespace().unwrap();
@@ -282,6 +282,13 @@ pub fn cnpg_cluster_from_cdb(cdb: &CoreDB) -> Cluster {
             }
         }
     };
+
+    // Format fenced pods annotation if we have any
+    if let Some(fenced_pods) = fenced_pods {
+        let fenced_instances = format!("{:?}", fenced_pods);
+        annotations.insert("cnpg.io/fencedInstances".to_string(), fenced_instances);
+    }
+    debug!("Annotations: {:?}", annotations);
 
     // set the container image
     // Check if the cdb.spec.image is set, if not then figure out which image to use.
@@ -372,9 +379,115 @@ pub fn cnpg_cluster_from_cdb(cdb: &CoreDB) -> Cluster {
     }
 }
 
+// pods_to_fence returns a list of pods that are fenced
+async fn pods_to_fence(cdb: &CoreDB, ctx: Arc<Context>) -> Result<Vec<String>, Action> {
+    // Get replica count from CoreDBSpec
+    let cdb_replica = cdb.spec.replicas;
+
+    // using get_cluster_replicas function to lookup current replica count from Cluster object
+    let cluster_replica_result: Result<i64, Action> =
+        get_cluster_replicas(cdb, ctx.clone(), &cdb.name_any()).await;
+
+    let mut pod_names_to_fence = Vec::new();
+
+    // Since cluster_replica_result is a i64, we need to convert to i32 to compare with cdb_replica
+    match cluster_replica_result {
+        Ok(replica) => {
+            let cluster_replica: i32 = replica.try_into().unwrap();
+
+            // Check if cdb_replica > cluster_replica if so calculate fencing
+            if cdb_replica > cluster_replica {
+                // Get the latest_generated_node from get_latest_generated_node function from
+                // Cluster status latestGeneratedNode
+                match get_latest_generated_node(cdb, ctx.clone(), &cdb.name_any()).await {
+                    Ok(Some(latest_generated_node)) => {
+                        debug!("Latest generated node: {:?}", latest_generated_node.clone());
+                        // Convert latest_generated_node to integer to calculate instances to fence
+                        match latest_generated_node.parse::<i32>() {
+                            Ok(latest_generated_node) => {
+                                // Calculate instances to fence
+                                let diff_instances = cdb_replica - cluster_replica;
+                                let mut instances_to_fence = Vec::new();
+
+                                for i in 1..=diff_instances {
+                                    let instance_to_fence = latest_generated_node + i;
+                                    instances_to_fence.push(instance_to_fence);
+                                }
+
+                                // Create pod names to be fenced based on the indices
+                                for index in instances_to_fence {
+                                    let pod_name = format!("{}-{}", &cdb.name_any(), index);
+                                    pod_names_to_fence.push(pod_name);
+                                }
+
+                                // Debug log to check the names of the pods to fence
+                                debug!("Pods to be fenced: {:?}", pod_names_to_fence);
+                                Ok(pod_names_to_fence)
+                            }
+                            Err(_) => {
+                                error!("Failed to parse latest_generated_node as an integer");
+                                Err(Action::requeue(Duration::from_secs(30)))
+                            }
+                        }
+                    }
+                    Ok(None) => {
+                        // Handle the case where the latest node is not available (yet)
+                        warn!("Latest generated node is not available yet. It might be a new or initializing cluster.");
+                        Err(Action::requeue(Duration::from_secs(30)))
+                    }
+                    Err(e) => {
+                        error!("Error getting latest generated node: {:?}", e);
+                        Err(Action::requeue(Duration::from_secs(30)))
+                    }
+                }
+            } else {
+                // cdb_replica <= cluster_replica, so no fencing is needed
+                debug!("Replica count is the same, lookup annotation for fenced pods");
+                // Add logic to look up annotation for fenced pods
+                // if there are any then add it to pod_names_to_fence
+                // otherwise return an empty vector
+                let fenced_pods = get_fenced_pods(cdb, ctx.clone(), &cdb.name_any()).await?;
+                if let Some(fenced_pods) = fenced_pods {
+                    pod_names_to_fence.extend(fenced_pods);
+                }
+
+                Ok(pod_names_to_fence)
+            }
+        }
+        Err(_) => {
+            if cdb_replica > 1 {
+                // Logic for fencing when cluster_replica is non-existent but cdb_replica > 1
+                // reuse or adapt the existing logic here for when cluster_replica exists
+                // ...
+
+                // get_latest_generated_node will not be present or set in the cluster
+                // at this point.  So we will need to do this another way if the replicas > 1
+                let mut pod_names_to_fence = Vec::new();
+
+                for i in 2..=cdb_replica {
+                    // Start from 2 as per your example
+                    let pod_name = format!("{}-{}", &cdb.name_any(), i);
+                    pod_names_to_fence.push(pod_name);
+                }
+
+                // Debug log to check the names of the pods to fence
+                debug!("Pods to be fenced: {:?}", pod_names_to_fence);
+                Ok(pod_names_to_fence)
+            } else {
+                // Cluster is bootstrapping and cdb_replica <= 1, so no fencing is needed
+                debug!("Cluster is bootstrapping and cdb_replica <= 1, skipping fencing.");
+                Ok(pod_names_to_fence)
+            }
+        }
+    }
+}
+
 pub async fn reconcile_cnpg(cdb: &CoreDB, ctx: Arc<Context>) -> Result<(), Action> {
+    // TESTING HERE
+    let pods_to_fence = pods_to_fence(cdb, ctx.clone()).await?;
+
     debug!("Generating CNPG spec");
-    let mut cluster = cnpg_cluster_from_cdb(cdb);
+    let mut cluster = cnpg_cluster_from_cdb(cdb, Some(pods_to_fence));
 
     debug!("Getting namespace of cluster");
     let namespace = cluster
@@ -577,6 +690,277 @@ pub async fn reconcile_cnpg_scheduled_backup(cdb: &CoreDB, ctx: Arc<Context>) ->
         })?;
     debug!("Applied ScheduledBackup");
     Ok(())
+}
+
+// Lookup latestGeneratedNode from the Cluster Status and return the index number
+pub async fn get_latest_generated_node(
+    cdb: &CoreDB,
+    ctx: Arc<Context>,
+    cluster_name: &str,
+) -> Result<Option<String>, Action> {
+    let namespace = cdb.namespace().unwrap();
+    let cluster: Api<Cluster> = Api::namespaced(ctx.client.clone(), &namespace);
+    let co = cluster.get(cluster_name).await;
+
+    if let Ok(cluster_resource) = co {
+        if let Some(status) = cluster_resource.status {
+            if let Some(latest_generated_node) = status.latest_generated_node {
+                debug!("latest_generated_node: {}", latest_generated_node);
+                Ok(Some(latest_generated_node.to_string()))
+            } else {
+                error!("latest_generated_node is not set in the Cluster Status");
+                Err(Action::requeue(Duration::from_secs(30)))
+            }
+        } else {
+            error!("Cluster Status is not set");
+            Err(Action::requeue(Duration::from_secs(30)))
+        }
+    } else {
+        info!(
+            "Cluster {} not found, possible new cluster detected",
+            cluster_name
+        );
+        Ok(None)
+    }
+}
+
+// Check if fenced pods are initialized
+async fn fenced_pods_initialized(cdb: &CoreDB, ctx: Arc<Context>, pod_name: &str) -> Result<bool, Action> {
+    let namespace = match cdb.namespace() {
+        Some(ns) => ns,
+        None => {
+            error!("Namespace is not set for CoreDB");
+            return Err(Action::requeue(Duration::from_secs(30)));
+        }
+    };
+
+    let pods: Api<Pod> = Api::namespaced(ctx.client.clone(), &namespace);
+    let po = pods.get(pod_name).await;
+
+    if let Ok(pod_resource) = po {
+        if let Some(status) = pod_resource.status {
+            if let Some(conditions) = status.conditions {
+                let initialized_condition = conditions
+                    .iter()
+                    .find(|condition| condition.type_ == "Initialized" && condition.status == "True");
+
+                if initialized_condition.is_some() {
+                    Ok(true)
+                } else {
+                    Ok(false)
+                }
+            } else {
+                error!("Pod Status is not set");
+                Err(Action::requeue(Duration::from_secs(10)))
+            }
+        } else {
+            error!("Pod Status is not set");
+            Err(Action::requeue(Duration::from_secs(10)))
+        }
+    } else {
+        info!("Pod {} not found, possible new pod detected", pod_name);
+        Ok(false)
+    }
+}
+
+// get_fenced_nodes returns a list of nodes that are fenced only after all the pods are initialized
+pub async fn get_fenced_pods(
+    cdb: &CoreDB,
+    ctx: Arc<Context>,
+    cluster_name: &str,
+) -> Result<Option<Vec<String>>, Action> {
+    let namespace = match cdb.namespace() {
+        Some(ns) => ns,
+        None => {
+            error!("Namespace is not set for CoreDB");
+            return Err(Action::requeue(Duration::from_secs(30)));
+        }
+    };
+
+    let cluster: Api<Cluster> = Api::namespaced(ctx.client.clone(), &namespace);
+    let co = cluster.get(cluster_name).await;
+
+    if let Ok(cluster_resource) = co {
+        if let Some(annotations) = cluster_resource.metadata.annotations {
+            if let Some(fenced_instances) = annotations.get("cnpg.io/fencedInstances") {
+                debug!("fenced_instances: {}", fenced_instances);
+                let fenced_instances: Vec<String> = serde_json::from_str(fenced_instances).unwrap();
+
+                let mut all_conditions_met = true;
+
+                for pod_name in &fenced_instances {
+                    let is_initialized = fenced_pods_initialized(cdb, ctx.clone(), pod_name).await?;
+                    if !is_initialized {
+                        all_conditions_met = false;
+                        info!("Pod {} is not yet initialized. Will requeue.", pod_name);
+                        break;
+                    }
+                }
+
+                if all_conditions_met {
+                    Ok(Some(fenced_instances))
+                } else {
+                    Err(Action::requeue(Duration::from_secs(10)))
+                }
+            } else {
+                info!("fencedInstances annotation is not set in the Cluster Status");
+                Ok(None)
+            }
+        } else {
+            info!("Cluster Status is not set");
+            Ok(None)
+        }
+    } else {
+        Ok(None)
+    }
+}
+
+// get_cluster_instances will look up cluster.spec.instances from Kubernetes and return i64 value
+async fn get_cluster_replicas(cdb: &CoreDB, ctx: Arc<Context>, cluster_name: &str) -> Result<i64, Action> {
+    let namespace = match cdb.namespace() {
+        Some(ns) => ns,
+        None => {
+            error!("Namespace is not set for CoreDB");
+            return Err(Action::requeue(Duration::from_secs(30)));
+        }
+    };
+
+    let cluster: Api<Cluster> = Api::namespaced(ctx.client.clone(), &namespace);
+    let co = cluster.get(cluster_name).await;
+
+    if let Ok(cluster_resource) = co {
+        let spec = cluster_resource.spec; // Assuming that this is not an Option
+        Ok(spec.instances) // Assuming that instances is an i64
+    } else {
+        info!(
+            "Cluster {} not found, possible new cluster detected",
+            cluster_name
+        );
+        Err(Action::requeue(Duration::from_secs(30)))
+    }
+}
+
+// unfence_pod function will remove the fencing annotation from the cluster object
+pub async fn unfence_pod(
+    cdb: &CoreDB,
+    ctx: Arc<Context>,
+    cluster_name: &str,
+    pod_name: &str,
+) -> Result<(), Action> {
+    // Get annotations from cluster objects
+    let namespace = match cdb.namespace() {
+        Some(ns) => ns,
+        None => {
+            error!("Namespace is not set for CoreDB");
+            return Err(Action::requeue(Duration::from_secs(30)));
+        }
+    };
+
+    let cluster: Api<Cluster> = Api::namespaced(ctx.client.clone(), &namespace);
+    let co = cluster.get(cluster_name).await;
+
+    // get the annotations from the cluster object
+    if let Ok(mut cluster_resource) = co {
+        let annotations_clone = cluster_resource.metadata.annotations.clone();
+        debug!("Initial annotations: {:?}", annotations_clone);
+
+        if let Some(annotations) = annotations_clone {
+            if annotations.contains_key("cnpg.io/fencedInstances") {
+                let default_fenced_instances = "[]".to_string();
+                let fenced_instances = annotations
+                    .get("cnpg.io/fencedInstances")
+                    .unwrap_or(&default_fenced_instances);
+                debug!("fenced_instances: {}", fenced_instances);
+                let mut fenced_instances: Vec<String> =
+                    serde_json::from_str(fenced_instances).unwrap_or_default();
+
+                // Remove the pod_name from the fenced_instances vector
+                fenced_instances.retain(|x| x != pod_name);
+
+                // Update the annotations
+                let mut updated_annotations = annotations.clone();
+                debug!("Annotations before update: {:?}", updated_annotations);
+
+                if fenced_instances.is_empty() {
+                    // Remove the "cnpg.io/fencedInstances" annotation if the list is empty
+                    updated_annotations.remove("cnpg.io/fencedInstances");
+                } else {
+                    // Otherwise, update the annotation
+                    updated_annotations.insert(
+                        "cnpg.io/fencedInstances".to_string(),
+                        serde_json::to_string(&fenced_instances).unwrap(),
+                    );
+                }
+
+                debug!("Annotations after update: {:?}", updated_annotations);
+
+                // Update the cluster object
+                cluster_resource.metadata.annotations = if updated_annotations.is_empty() {
+                    None
+                } else {
+                    Some(updated_annotations.clone())
+                };
+                debug!(
+                    "Annotations in cluster_resource before patch: {:?}",
+                    cluster_resource.metadata.annotations
+                );
+
+                // Clear managedFields
+                cluster_resource.metadata.managed_fields = None;
+
+                // Patch the cluster object
+                debug!("Patching cluster");
+                let ps = PatchParams::apply("cntrlr");
+                let _o = cluster
+                    .patch(cluster_name, &ps, &Patch::Apply(&cluster_resource))
+                    .await
+                    .map_err(|e| {
+                        error!("Error patching cluster: {}", e);
+                        Action::requeue(Duration::from_secs(300))
+                    })?;
+                debug!("Applied");
+                Ok(())
+            } else {
+                debug!("fencedInstances annotation is not set in the Cluster Status. Removing the key.");
+
+                // Remove the "cnpg.io/fencedInstances" annotation
+                let mut updated_annotations = annotations.clone();
+                updated_annotations.remove("cnpg.io/fencedInstances");
+
+                // Update the cluster object
+                cluster_resource.metadata.annotations = if updated_annotations.is_empty() {
+                    None
+                } else {
+                    Some(updated_annotations.clone())
+                };
+
+                // Clear managedFields
+                cluster_resource.metadata.managed_fields = None;
+
+                // Patch the cluster object
+                debug!("Patching cluster");
+                let ps = PatchParams::apply("cntrlr");
+                let _o = cluster
+                    .patch(cluster_name, &ps, &Patch::Apply(&cluster_resource))
+                    .await
+                    .map_err(|e| {
+                        error!("Error patching cluster: {}", e);
+                        Action::requeue(Duration::from_secs(300))
+                    })?;
+                debug!("Applied");
+                Ok(())
+            }
+        } else {
+            info!("Cluster Status is not set");
+            Ok(())
+        }
+    } else {
+        info!(
+            "Cluster {} not found, possible new cluster detected",
+            cluster_name
+        );
+        Err(Action::requeue(Duration::from_secs(30)))
+    }
 }
 
 #[cfg(test)]
