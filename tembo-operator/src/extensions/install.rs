@@ -144,8 +144,8 @@ fn find_trunk_installs_to_pod<'a>(cdb: &'a CoreDB, pod_name: &str) -> Vec<&'a Tr
                 ext.name == ext_status.name
                     && ext_status
                         .installed_to_pods
-                        .as_ref()
-                        .expect("installed_to_pods should always be Some(Vec)")
+                        .clone()
+                        .unwrap_or_default()
                         .contains(&pod_name.to_string())
             })
         {
@@ -497,11 +497,10 @@ mod tests {
             .iter()
             .filter_map(|pod| pod.metadata.name.clone())
             .collect();
-        assert_eq!(deduplicated_names, vec![
-            "pod1".to_string(),
-            "pod2".to_string(),
-            "pod3".to_string()
-        ]);
+        assert_eq!(
+            deduplicated_names,
+            vec!["pod1".to_string(), "pod2".to_string(), "pod3".to_string()]
+        );
     }
 
     #[test]
