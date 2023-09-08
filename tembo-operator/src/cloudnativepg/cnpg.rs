@@ -929,7 +929,7 @@ pub async fn unfence_pod(cdb: &CoreDB, ctx: Arc<Context>, pod_name: &str) -> Res
     // get the annotations from the cluster object
     if let Ok(mut cluster_resource) = co {
         let annotations_clone = cluster_resource.metadata.annotations.clone();
-        error!(
+        debug!(
             "Instance initial annotations for instance {}: {:?}",
             instance_name, annotations_clone
         );
@@ -946,7 +946,7 @@ pub async fn unfence_pod(cdb: &CoreDB, ctx: Arc<Context>, pod_name: &str) -> Res
                 cluster_resource.metadata.managed_fields = None;
 
                 // Patch the cluster object
-                error!("Patching CoreDBSpec for instance {}", instance_name);
+                debug!("Patching CoreDBSpec for instance {}", instance_name);
                 let ps = PatchParams::apply("cntrlr");
                 let _o = cluster
                     .patch(instance_name, &ps, &Patch::Apply(&cluster_resource))
