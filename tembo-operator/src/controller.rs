@@ -463,23 +463,39 @@ impl CoreDB {
         let _enter = span.enter();
         // Fetch current replica count from Self
         let desired_replica_count = self.spec.replicas;
-        info!("Desired replica count: {}", desired_replica_count);
+        debug!(
+            "Instance {} has a desired replica count: {}",
+            self.name_any(),
+            desired_replica_count
+        );
 
         // Fetch current pods with pods_by_cluster
         let current_pods = self.pods_by_cluster(client.clone()).await?;
         let pod_names: Vec<String> = current_pods.iter().map(|pod| pod.name_any()).collect();
-        info!("Found {} pods, {:?}", current_pods.len(), pod_names);
+        debug!(
+            "Found {} pods, {:?} for {}",
+            current_pods.len(),
+            pod_names,
+            self.name_any()
+        );
 
         // Check if the number of running pods matches the desired replica count
         if current_pods.len() != desired_replica_count as usize {
             warn!(
-                "Number of running pods ({}) does not match desired replica count ({}). Requeuing.",
+                "Number of running pods ({}) does not match desired replica count ({}) for ({}). Requeuing.",
                 current_pods.len(),
-                desired_replica_count
+                desired_replica_count,
+                self.name_any()
             );
             return Err(Action::requeue(Duration::from_secs(10)));
         }
 
+        info!(
+            "Number of running pods ({}) matches desired replica count ({}) for ({}).",
+            current_pods.len(),
+            desired_replica_count,
+            self.name_any()
+        );
         Ok(())
     }
 
@@ -497,9 +513,12 @@ impl CoreDB {
                     .as_ref()
                     .map(|s| format!("{:?}", s))
                     .unwrap_or_else(|| "Unknown".to_string());
-                info!(
-                    "Status of pod {} in namespace {}: {}",
-                    pod_name, namespace, status
+                debug!(
+                    "Status of instance {} pod {} in namespace {}: {}",
+                    self.metadata.name.clone().expect("CoreDB should have a name"),
+                    pod_name,
+                    namespace,
+                    status
                 );
                 Ok(())
             }
@@ -619,7 +638,7 @@ pub async fn patch_cdb_status_merge(
 
     match cdb.patch_status(name, &pp, &patch_status).await {
         Ok(_) => {
-            info!("Successfully updated CoreDB status for {}", name);
+            debug!("Successfully updated CoreDB status for {}", name);
             Ok(())
         }
         Err(e) => {
