@@ -98,7 +98,7 @@ pub struct CoreDBSpec {
 
     pub metrics: Option<PostgresMetrics>,
 
-    pub extra_domain_names: Option<Vec<String>>,
+    pub extra_domain_names_rw: Option<Vec<String>>,
 
     pub stack: Option<Stack>,
     // dynamic runtime configs
