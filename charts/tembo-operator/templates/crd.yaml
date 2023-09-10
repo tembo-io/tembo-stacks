@@ -82,7 +82,7 @@ spec:
                   - name
                   type: object
                 type: array
-              extra_domain_names_rw:
+              extra_domains_rw:
                 items:
                   type: string
                 nullable: true

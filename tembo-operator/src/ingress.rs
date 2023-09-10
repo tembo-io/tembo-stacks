@@ -66,7 +66,7 @@ pub async fn reconcile_extra_postgres_ing_route_tcp(
     service_name_read_write: &str,
     port: IntOrString,
 ) -> Result<(), OperatorError> {
-    let mut extra_domain_names = cdb.spec.extra_domain_names_rw.clone().unwrap_or_default();
+    let mut extra_domain_names = cdb.spec.extra_domains_rw.clone().unwrap_or_default();
     // Ensure always same order
     extra_domain_names.sort();
     let matchers = extra_domain_names
@@ -74,7 +74,7 @@ pub async fn reconcile_extra_postgres_ing_route_tcp(
         .map(|domain_name| format!("Host(`{}`)", domain_name))
         .collect::<Vec<String>>();
     let matcher_actual = matchers.join(" || ");
-    let ingress_route_tcp_name = format!("extras-{}-rw", cdb.name_any());
+    let ingress_route_tcp_name = format!("extra-{}-rw", cdb.name_any());
     let owner_reference = cdb.controller_owner_ref(&()).unwrap();
     let ingress_route_tcp_to_apply = postgres_ingress_route_tcp(
         ingress_route_tcp_name.clone(),
