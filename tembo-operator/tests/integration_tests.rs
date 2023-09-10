@@ -1314,7 +1314,7 @@ mod test {
                 "extra_domains_rw": [],
             }
         });
-        let params = PatchParams::apply("functional-test-ingress-route-tcp");
+        let params = PatchParams::apply("functional-test-ingress-route-tcp").force();
         let patch = Patch::Apply(&coredb_json);
         let _coredb_resource = coredbs.patch(name, &params, &patch).await.unwrap();
 
