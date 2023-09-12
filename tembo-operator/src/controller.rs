@@ -41,7 +41,7 @@ use serde_json::json;
 use std::sync::Arc;
 use tokio::{sync::RwLock, time::Duration};
 use tracing::*;
-use crate::trunk::reconcile_trunk_configmap;
+use crate::trunk::{extensions_that_require_load, reconcile_trunk_configmap};
 
 pub static COREDB_FINALIZER: &str = "coredbs.coredb.io";
 pub static COREDB_ANNOTATION: &str = "coredbs.coredb.io/watch";
@@ -368,7 +368,8 @@ impl CoreDB {
     pub async fn primary_pod_cnpg(&self, client: Client) -> Result<Pod, Action> {
         let span = span!(Level::INFO, "primary_pod_cnpg");
         let _enter = span.enter();
-        let cluster = cnpg_cluster_from_cdb(self, None);
+        let requires_load = extensions_that_require_load(client.clone(), &self.metadata.namespace.clone().unwrap()).await?;
+        let cluster = cnpg_cluster_from_cdb(self, None, requires_load);
         let cluster_name = cluster
             .metadata
             .name
@@ -414,7 +415,8 @@ impl CoreDB {
     pub async fn pods_by_cluster(&self, client: Client) -> Result<Vec<Pod>, Action> {
         let span = span!(Level::INFO, "pods_in_cluster");
         let _enter = span.enter();
-        let cluster = cnpg_cluster_from_cdb(self, None);
+        let requires_load = extensions_that_require_load(client.clone(), &self.metadata.namespace.clone().unwrap()).await?;
+        let cluster = cnpg_cluster_from_cdb(self, None, requires_load);
         let cluster_name = cluster
             .metadata
             .name
