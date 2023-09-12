@@ -20,6 +20,7 @@ use crate::{
     },
     config::Config,
     defaults::{default_image, default_llm_image},
+    trunk::extensions_that_require_load,
     Context,
 };
 use k8s_openapi::{api::core::v1::Pod, apimachinery::pkg::apis::meta::v1::ObjectMeta};
@@ -31,7 +32,6 @@ use kube::{
 use std::{collections::BTreeMap, sync::Arc};
 use tokio::time::Duration;
 use tracing::{debug, error, info, instrument, warn};
-use crate::trunk::extensions_that_require_load;
 
 pub struct PostgresConfig {
     pub postgres_parameters: Option<BTreeMap<String, String>>,
@@ -258,7 +258,11 @@ fn cnpg_high_availability(cdb: &CoreDB) -> Option<ClusterReplicationSlots> {
     }
 }
 
-pub fn cnpg_cluster_from_cdb(cdb: &CoreDB, fenced_pods: Option<Vec<String>>, requires_load: Vec<String>) -> Cluster {
+pub fn cnpg_cluster_from_cdb(
+    cdb: &CoreDB,
+    fenced_pods: Option<Vec<String>>,
+    requires_load: Vec<String>,
+) -> Cluster {
     let cfg = Config::default();
     let name = cdb.name_any();
     let namespace = cdb.namespace().unwrap();
@@ -487,7 +491,8 @@ async fn pods_to_fence(cdb: &CoreDB, ctx: Arc<Context>) -> Result<Vec<String>, A
 #[instrument(skip(cdb, ctx) fields(trace_id))]
 pub async fn reconcile_cnpg(cdb: &CoreDB, ctx: Arc<Context>) -> Result<(), Action> {
     let pods_to_fence = pods_to_fence(cdb, ctx.clone()).await?;
-    let requires_load = extensions_that_require_load(ctx.client.clone(), &cdb.metadata.namespace.clone().unwrap()).await?;
+    let requires_load =
+        extensions_that_require_load(ctx.client.clone(), &cdb.metadata.namespace.clone().unwrap()).await?;
 
     debug!("Generating CNPG spec");
     let mut cluster = cnpg_cluster_from_cdb(cdb, Some(pods_to_fence), requires_load);

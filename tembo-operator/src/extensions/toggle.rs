@@ -14,10 +14,10 @@ use crate::{
         database_queries::list_shared_preload_libraries,
         kubernetes_queries::merge_location_status_into_extension_status_list, types::get_location_status,
     },
+    trunk::extensions_that_require_load,
 };
 use std::{sync::Arc, time::Duration};
 use tracing::{error, warn};
-use crate::trunk::extensions_that_require_load;
 
 pub async fn reconcile_extension_toggle_state(
     cdb: &CoreDB,
@@ -40,7 +40,8 @@ async fn toggle_extensions(
     toggle_these_extensions: Vec<Extension>,
 ) -> Result<Vec<ExtensionStatus>, Action> {
     let current_shared_preload_libraries = list_shared_preload_libraries(cdb, ctx.clone()).await?;
-    let requires_load = extensions_that_require_load(ctx.client.clone(), &cdb.metadata.namespace.clone().unwrap()).await?;
+    let requires_load =
+        extensions_that_require_load(ctx.client.clone(), &cdb.metadata.namespace.clone().unwrap()).await?;
     let mut ext_status_updates = ext_status_updates.clone();
     for extension_to_toggle in toggle_these_extensions {
         for location_to_toggle in extension_to_toggle.locations {
@@ -56,7 +57,11 @@ async fn toggle_extensions(
                     "Extension {} requires load, but is not present in shared_preload_libraries for {}, checking if we should requeue.",
                     extension_to_toggle.name, cdb.metadata.name.clone().unwrap());
                 // Requeue only if we are expecting a shared preload library that is not yet present
-                requeue_if_expecting_shared_preload_library(cdb, &extension_to_toggle.name, requires_load.clone())?;
+                requeue_if_expecting_shared_preload_library(
+                    cdb,
+                    &extension_to_toggle.name,
+                    requires_load.clone(),
+                )?;
             }
             match database_queries::toggle_extension(
                 cdb,
@@ -109,7 +114,10 @@ fn requeue_if_expecting_shared_preload_library(
     requires_load: Vec<String>,
 ) -> Result<(), Action> {
     // Get config by name
-    match cdb.spec.get_pg_config_by_name("shared_preload_libraries", requires_load) {
+    match cdb
+        .spec
+        .get_pg_config_by_name("shared_preload_libraries", requires_load)
+    {
         // If there is not an error
         Ok(shared_preload_libraries_config_value) => match shared_preload_libraries_config_value {
             // If there is no value, then we are not expecting a restart

@@ -15,9 +15,7 @@ use kube::CustomResource;
 
 use crate::{
     apis::postgres_parameters::ConfigValue,
-    extensions::{
-        types::{Extension, TrunkInstall, TrunkInstallStatus},
-    },
+    extensions::types::{Extension, TrunkInstall, TrunkInstallStatus},
 };
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
@@ -207,7 +205,11 @@ impl CoreDBSpec {
         }
     }
 
-    pub fn get_pg_config_by_name(&self, config_name: &str, requires_load: Vec<String>) -> Result<Option<PgConfig>, MergeError> {
+    pub fn get_pg_config_by_name(
+        &self,
+        config_name: &str,
+        requires_load: Vec<String>,
+    ) -> Result<Option<PgConfig>, MergeError> {
         let all_configs = self.get_pg_configs(requires_load)?;
         for config in all_configs.unwrap_or_default() {
             if config.name == config_name {
