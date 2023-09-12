@@ -15,44 +15,35 @@ const DEFAULT_TRUNK_REGISTRY_DOMAIN: &str = "registry.pgtrunk.io";
 // multiple DBs in the same namespace can share the same configmap
 const TRUNK_CONFIGMAP_NAME: &str = "trunk-metadata";
 
-// This could be fetched from trunk
-pub const MULTI_VAL_CONFIGS_PRIORITY_LIST: [&str; 2] = ["pg_stat_statements", "pg_stat_kcache"];
-
-async fn update_extensions_libraries_list() -> Result<Vec<String>, reqwest::Error> {
-    let domain = env::var("TRUNK_REGISTRY_DOMAIN").unwrap_or_else(|_| DEFAULT_TRUNK_REGISTRY_DOMAIN.to_string());
-    let url = format!("https://{}/extensions/libraries", domain);
-
-    let response = reqwest::get(&url).await?;
-
-    if response.status().is_success() {
-        let libraries: Vec<String> = serde_json::from_str(&response.text().await?)?;
-        Ok(libraries)
-    } else {
-        Err(reqwest::Error::from_http_status(response.status()))
-    }
-}
-
-pub async fn extensions_that_require_load(client: Client, namespace: &str) -> Result<Vec<&str>, kube::Error> {
+pub async fn extensions_that_require_load(client: Client, namespace: &str) -> Result<Vec<String>, Action> {
     let cm_api: Api<ConfigMap> = Api::namespaced(client, namespace);
 
     // Get the ConfigMap
-    let cm = cm_api.get(TRUNK_CONFIGMAP_NAME).await?;
-
-    // Extract libraries from ConfigMap data
-    match cm.data.and_then(|data| data.get("libraries")) {
-        Some(libraries_str) => {
-            let libraries: Vec<&str> = libraries_str.split(',').map(|s| s.to_string()).collect();
-            Ok(libraries)
-        },
-        None => {
-            // Handle the case where "libraries" key isn't present in the ConfigMap
-            Err(kube::Error::Custom("Libraries key not found in the ConfigMap".into()))
+    let cm = match cm_api.get(TRUNK_CONFIGMAP_NAME).await {
+        Ok(configmap) => {configmap}
+        Err(_) => {
+            error!("Failed to get trunk configmap in namespace {}", namespace);
+            return Err(Action::requeue(Duration::from_secs(300)))
         }
+    };
+    if let Some(data) = cm.data {
+        if let Some(libraries_str) = data.get("libraries") {
+            let libraries: Vec<String> = libraries_str.split(',')
+                .map(|s| s.to_string())
+                .collect();
+            return Ok(libraries);
+        } else {
+            error!("Invalid content of trunk metadata configmap in namespace {}", namespace);
+            return Err(Action::requeue(Duration::from_secs(300)));
+        }
+    } else {
+        error!("No data in trunk metadata configmap in namespace {}", namespace);
+        return Err(Action::requeue(Duration::from_secs(300)));
     }
 }
 
 pub async fn reconcile_trunk_configmap(client: Client, namespace: &str) -> Result<(), Action> {
-    let libraries = match update_extensions_libraries_list().await{
+    let libraries = match requires_load_list_from_trunk().await{
         Ok(libraries) => {libraries}
         Err(e) => {
             error!("Failed to update extensions libraries list from trunk: {:?}", e);
@@ -63,8 +54,9 @@ pub async fn reconcile_trunk_configmap(client: Client, namespace: &str) -> Resul
                     return Ok(());
                 }
                 Err(e) => {
-                    // If the configmap is not already present, then we can requeue the request
-                    return Err(Action::requeue(Duration::from_secs(30)))
+                    // If the configmap is not already present, then we should requeue the request
+                    // as an unexpected error.
+                    return Err(Action::requeue(Duration::from_secs(300)))
                 }
             }
         }
@@ -82,4 +74,33 @@ pub async fn reconcile_trunk_configmap(client: Client, namespace: &str) -> Resul
             return Err(Action::requeue(Duration::from_secs(300)))
         }
     }
+}
+
+async fn requires_load_list_from_trunk() -> Result<Vec<String>, TrunkError> {
+    let domain = env::var("TRUNK_REGISTRY_DOMAIN").unwrap_or_else(|_| DEFAULT_TRUNK_REGISTRY_DOMAIN.to_string());
+    let url = format!("https://{}/extensions/libraries", domain);
+
+    let response = reqwest::get(&url).await?;
+
+    if response.status().is_success() {
+        let response_body = response.text().await?;
+        let libraries: Vec<String> = serde_json::from_str(&response_body)?;
+        Ok(libraries)
+    } else {
+        error!("Failed to update extensions libraries list from trunk: {}", response.status());
+        return Err(TrunkError::ConfigMapApplyError);
+    }
+}
+
+// Define error type
+#[derive(Debug, thiserror::Error)]
+pub enum TrunkError {
+    #[error("Failed to update extensions libraries list from trunk: {0}")]
+    ExtensionsLibrariesListUpdateError(#[from] reqwest::Error),
+    #[error("Failed to parse extensions libraries list from trunk: {0}")]
+    ExtensionsLibrariesListParseError(#[from] serde_json::Error),
+    #[error("Failed to apply trunk configmap")]
+    ConfigMapApplyError,
+    #[error("Unexpected content in Trunk configmap")]
+    ConfigMapContentError,
 }
