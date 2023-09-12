@@ -20,6 +20,8 @@ pub fn check_input(input: &str) -> bool {
     VALID_INPUT.is_match(input)
 }
 
+pub const LIST_SHARED_PRELOAD_LIBRARIES_QUERY: &str = r#"SHOW shared_preload_libraries;"#;
+
 pub const LIST_DATABASES_QUERY: &str = r#"SELECT datname FROM pg_database WHERE datistemplate = false;"#;
 
 pub const LIST_SHARED_PRELOAD_LIBRARIES_QUERY: &str = r#"SHOW shared_preload_libraries;"#;
@@ -94,6 +96,37 @@ pub struct ExtRow {
     pub version: String,
     pub enabled: bool,
     pub schema: String,
+}
+
+pub async fn list_shared_preload_libraries(cdb: &CoreDB, ctx: Arc<Context>) -> Result<Vec<String>, Action> {
+    let psql_out = cdb
+        .psql(
+            LIST_SHARED_PRELOAD_LIBRARIES_QUERY.to_owned(),
+            "postgres".to_owned(),
+            ctx,
+        )
+        .await?;
+    let result_string = match psql_out.stdout {
+        None => {
+            error!(
+                "No stdout from psql when looking for shared_preload_libraries for {}",
+                cdb.metadata.name.clone().unwrap()
+            );
+            return Err(Action::requeue(Duration::from_secs(300)));
+        }
+        Some(out) => out,
+    };
+    let result = parse_sql_output(&result_string);
+    let mut libraries: Vec<String> = vec![];
+    if result.len() == 1 {
+        libraries = result[0].split(',').map(|s| s.trim().to_string()).collect();
+    }
+    debug!(
+        "{}: Found shared_preload_libraries: {:?}",
+        cdb.metadata.name.clone().unwrap(),
+        libraries.clone()
+    );
+    Ok(libraries)
 }
 
 /// lists all extensions in a single database
@@ -196,24 +229,6 @@ pub async fn list_databases(cdb: &CoreDB, ctx: Arc<Context>) -> Result<Vec<Strin
     Ok(parse_sql_output(&result_string))
 }
 
-pub async fn list_shared_preload_libraries(cdb: &CoreDB, ctx: Arc<Context>) -> Result<Vec<String>, Action> {
-    let psql_out = cdb
-        .psql(
-            LIST_SHARED_PRELOAD_LIBRARIES_QUERY.to_owned(),
-            "postgres".to_owned(),
-            ctx,
-        )
-        .await?;
-    let result_string = psql_out.stdout.unwrap();
-    let result = parse_sql_output(&result_string);
-    debug!(
-        "{}: Found shared_preload_libraries: {:?}",
-        cdb.metadata.name.clone().unwrap(),
-        result
-    );
-    Ok(result)
-}
-
 pub fn parse_sql_output(psql_str: &str) -> Vec<String> {
     let mut results = vec![];
     for line in psql_str.lines().skip(2) {
@@ -229,7 +244,7 @@ pub fn parse_sql_output(psql_str: &str) -> Vec<String> {
         results.push(fields[0].to_string());
     }
     let num_results = results.len();
-    info!("Found {} results", num_results);
+    debug!("Found {} results", num_results);
     results
 }
 
@@ -322,49 +337,6 @@ pub async fn get_all_extensions(cdb: &CoreDB, ctx: Arc<Context>) -> Result<Vec<E
     Ok(ext_spec)
 }
 
-fn get_version_of_installed_library(cdb: &CoreDB, library_name: String) -> Option<String> {
-    // If the library name is an exact match to a package name, then we can
-    // get the version from status.trunk_installs.
-    // Improve this using trunk package -> extension name mapping,
-    // The consequence is some extensions will not show a version.
-    match &cdb.status {
-        None => None,
-        Some(status) => match &status.trunk_installs {
-            None => None,
-            Some(trunk_installs) => {
-                for package in trunk_installs {
-                    if package.name == library_name {
-                        return package.version.clone();
-                    }
-                }
-                None
-            }
-        },
-    }
-}
-
-/// generates the CREATE or DROP EXTENSION command for a given extension
-/// handles schema specification in the command
-fn generate_extension_enable_cmd(
-    ext_name: &str,
-    ext_loc: &ExtensionInstallLocation,
-) -> Result<String, Error> {
-    // only specify the schema if it provided
-    let command = match ext_loc.enabled {
-        true => match ext_loc.schema.as_ref() {
-            Some(schema) => {
-                format!(
-                    "CREATE EXTENSION IF NOT EXISTS \"{}\" SCHEMA {} CASCADE;",
-                    ext_name, schema
-                )
-            }
-            None => format!("CREATE EXTENSION IF NOT EXISTS \"{}\" CASCADE;", ext_name),
-        },
-        false => format!("DROP EXTENSION IF EXISTS \"{}\" CASCADE;", ext_name),
-    };
-    Ok(command)
-}
-
 /// Handles create/drop an extension location
 /// On failure, returns an error message
 pub async fn create_or_drop_extension_if_required(
@@ -401,24 +373,8 @@ pub async fn create_or_drop_extension_if_required(
         );
         return Err("Database name is not formatted properly".to_string());
     }
-    let schema_name = ext_loc.schema.to_owned();
-    if schema_name.is_some() && !check_input(&schema_name.unwrap()) {
-        warn!(
-            "Extension.Database.Schema is not formatted properly. Skipping operation. {}",
-            &coredb_name
-        );
-        return Err("Schema name is not formatted properly".to_string());
-    }
 
-    let command = match generate_extension_enable_cmd(ext_name, &ext_loc) {
-        Ok(command) => command,
-        Err(_) => {
-            return Err(
-                "Don't know how to enable this extension. You may enable the extension manually instead."
-                    .to_string(),
-            );
-        }
-    };
+    let command = types::generate_extension_enable_cmd(ext_name, &ext_loc)?;
 
     let result = cdb
         .psql(command.clone(), database_name.clone(), ctx.clone())
@@ -437,9 +393,9 @@ pub async fn create_or_drop_extension_if_required(
                     "Failed to toggle extension {} in database {}, instance {}",
                     ext_name, database_name, &coredb_name
                 );
-                match psql_output.stdout {
-                    Some(stdout) => {
-                        return Err(stdout);
+                match psql_output.stderr {
+                    Some(stderr) => {
+                        return Err(stderr);
                     }
                     None => {
                         return Err("Failed to enable extension, and found no output. Please try again. If this issue persists, contact support.".to_string());
@@ -463,10 +419,7 @@ pub async fn create_or_drop_extension_if_required(
 
 #[cfg(test)]
 mod tests {
-    use crate::extensions::{
-        database_queries::{check_input, generate_extension_enable_cmd, parse_extensions, parse_sql_output},
-        types::ExtensionInstallLocation,
-    };
+    use crate::extensions::database_queries::{check_input, parse_extensions, parse_sql_output};
 
     #[test]
     fn test_parse_databases() {
@@ -555,41 +508,5 @@ mod tests {
         for i in valids.iter() {
             assert!(check_input(i), "input {} should be valid", i);
         }
-    }
-
-    #[test]
-    fn test_generate_extension_enable_cmd() {
-        // schema not specified
-        let loc1 = ExtensionInstallLocation {
-            database: "postgres".to_string(),
-            enabled: true,
-            schema: None,
-            version: Some("1.0.0".to_string()),
-        };
-        let cmd = generate_extension_enable_cmd("my_ext", &loc1);
-        assert_eq!(cmd.unwrap(), "CREATE EXTENSION IF NOT EXISTS \"my_ext\" CASCADE;");
-
-        // schema specified
-        let loc2 = ExtensionInstallLocation {
-            database: "postgres".to_string(),
-            enabled: true,
-            schema: Some("public".to_string()),
-            version: Some("1.0.0".to_string()),
-        };
-        let cmd = generate_extension_enable_cmd("my_ext", &loc2);
-        assert_eq!(
-            cmd.unwrap(),
-            "CREATE EXTENSION IF NOT EXISTS \"my_ext\" SCHEMA public CASCADE;"
-        );
-
-        // drop extension
-        let loc2 = ExtensionInstallLocation {
-            database: "postgres".to_string(),
-            enabled: false,
-            schema: Some("public".to_string()),
-            version: Some("1.0.0".to_string()),
-        };
-        let cmd = generate_extension_enable_cmd("my_ext", &loc2);
-        assert_eq!(cmd.unwrap(), "DROP EXTENSION IF EXISTS \"my_ext\" CASCADE;");
     }
 }

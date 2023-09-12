@@ -82,8 +82,13 @@ spec:
                   - name
                   type: object
                 type: array
+              extra_domains_rw:
+                items:
+                  type: string
+                nullable: true
+                type: array
               image:
-                default: quay.io/tembo/tembo-pg-cnpg:15.3.0-5-48d489e
+                default: quay.io/tembo/standard-cnpg:15.3.0-1-0c19c7e
                 type: string
               metrics:
                 nullable: true
@@ -452,6 +457,11 @@ spec:
                     error_message:
                       nullable: true
                       type: string
+                    installed_to_pods:
+                      items:
+                        type: string
+                      nullable: true
+                      type: array
                     name:
                       type: string
                     version:
