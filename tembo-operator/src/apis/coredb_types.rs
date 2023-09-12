@@ -172,51 +172,40 @@ impl CoreDBSpec {
                 merged_multival_configs.push(merged_config);
             }
         }
-    }
 
-    // handle merge of any of the settings that are multi-value.
-    // e.g. stack defines shared_preload_libraries = pg_cron, then operator installs pg_stat_statements at runtime
-    // we need to merge the two configs into one,  shared_preload_libraries = pg_cron, pg_stat_statements
-    let mut merged_multival_configs: Vec<PgConfig> = Vec::new();
-    for cfg_name in MULTI_VAL_CONFIGS {
-        let merged_config = merge_pg_configs(&stack_configs, &runtime_configs, cfg_name)?;
-        if let Some(merged_config) = merged_config {
-            merged_multival_configs.push(merged_config);
+        // Order matters - to ensure anything down stream does not have to worry about ordering,
+        // set these into a BTreeSet now
+        // 1. stack configs
+        // 2. runtime configs
+        // 3. merged multivals
+        // 4. overrides
+        let mut pg_configs: BTreeMap<String, PgConfig> = BTreeMap::new();
+
+        for p in stack_configs {
+            pg_configs.insert(p.name.clone(), p);
         }
-    }
-
-    // Order matters - to ensure anything down stream does not have to worry about ordering,
-    // set these into a BTreeSet now
-    // 1. stack configs
-    // 2. runtime configs
-    // 3. merged multivals
-    // 4. overrides
-    let mut pg_configs: BTreeMap<String, PgConfig> = BTreeMap::new();
-
-    for p in stack_configs {
-        pg_configs.insert(p.name.clone(), p);
-    }
-    for p in runtime_configs {
-        pg_configs.insert(p.name.clone(), p);
-    }
-    for p in merged_multival_configs {
-        pg_configs.insert(p.name.clone(), p);
-    }
-    if let Some(override_configs) = &cdb.spec.override_configs {
-        for p in override_configs {
-            pg_configs.insert(p.name.clone(), p.clone());
+        for p in runtime_configs {
+            pg_configs.insert(p.name.clone(), p);
         }
-    }
+        for p in merged_multival_configs {
+            pg_configs.insert(p.name.clone(), p);
+        }
+        if let Some(override_configs) = &self.override_configs {
+            for p in override_configs {
+                pg_configs.insert(p.name.clone(), p.clone());
+            }
+        }
 
-    // remove any configs that are not allowed
-    for key in DISALLOWED_CONFIGS {
-        pg_configs.remove(key);
-    }
+        // remove any configs that are not allowed
+        for key in DISALLOWED_CONFIGS {
+            pg_configs.remove(key);
+        }
 
-    if pg_configs.is_empty() {
-        Ok(None)
-    } else {
-        Ok(Some(pg_configs.values().cloned().collect()))
+        if pg_configs.is_empty() {
+            Ok(None)
+        } else {
+            Ok(Some(pg_configs.values().cloned().collect()))
+        }
     }
 
     pub fn get_pg_config_by_name(&self, config_name: &str) -> Result<Option<PgConfig>, MergeError> {

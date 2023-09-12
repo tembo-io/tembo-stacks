@@ -179,7 +179,6 @@ pub enum ConfigValue {
 
 use serde_json::{Error as JsonParsingError, Value};
 
-use crate::trunk::MULTI_VAL_CONFIGS_PRIORITY_LIST;
 use serde_json;
 
 pub struct WrapValue(Value);
@@ -366,7 +365,7 @@ impl<'de> Deserialize<'de> for PgConfig {
 #[cfg(test)]
 mod pg_param_tests {
     use super::*;
-    use crate::apis::coredb_types::{get_pg_configs, CoreDB, CoreDBSpec, Stack};
+    use crate::apis::coredb_types::{CoreDBSpec, Stack};
 
     #[test]
     fn test_pg_config() {
@@ -421,12 +420,8 @@ mod pg_param_tests {
             }),
             ..Default::default()
         };
-        let cdb = CoreDB {
-            metadata: Default::default(),
-            spec,
-            status: None,
-        };
-        let pg_configs = get_pg_configs(&cdb)
+        let pg_configs = spec
+            .get_pg_configs()
             .expect("failed to get pg configs")
             .expect("expected configs");
 

@@ -55,76 +55,9 @@ pub async fn reconcile_extension_toggle_state(
     kubernetes_queries::update_extensions_status(cdb, ext_status_updates.clone(), &ctx).await?;
     let cdb = get_current_coredb_resource(cdb, ctx.clone()).await?;
     let toggle_these_extensions = determine_extension_locations_to_toggle(&cdb);
-    reconcile_shared_preload_libraries(&cdb, ctx.clone(), toggle_these_extensions.clone()).await?;
     let ext_status_updates =
         toggle_extensions(ctx, ext_status_updates, &cdb, toggle_these_extensions).await?;
     Ok(ext_status_updates)
-}
-
-pub fn get_desired_shared_preload_libraries(cdb: &CoreDB) -> Vec<String> {
-    // Get the list of extensions configured in spec that we want to enable libraries for
-    let extensions = cdb.spec.extensions.clone();
-    let mut result = vec![];
-    'extension: for extension in extensions {
-        match get_extension_status(cdb, &extension.name) {
-            None => {
-                // We should not enable libraries for extensions not yet present
-                // in status, for example when initially starting up the instance,
-                // since we have to install the extension(s) before we can set
-                // that configuration.
-                continue 'extension;
-            }
-            Some(extension_status) => {
-                if extension_status.load.is_some() && extension_status.load.unwrap() {
-                    'location: for location in extension.locations {
-                        match get_location_status(
-                            cdb,
-                            &extension.name,
-                            &location.database,
-                            location.schema.clone(),
-                        ) {
-                            None => {
-                                // We should not enable libraries for extensions not yet present
-                                // in status, for example when initially starting up the instance.
-                                continue 'location;
-                            }
-                            Some(_location_status) => {
-                                result.push(extension_status.name.clone());
-                                continue 'extension;
-                            }
-                        }
-                    }
-                }
-            }
-        };
-    }
-    debug!(
-        "{} desired shared_preload_libraries: {:?}",
-        cdb.metadata.name.clone().unwrap(),
-        result.clone()
-    );
-    result
-}
-
-pub async fn reconcile_shared_preload_libraries(
-    cdb: &CoreDB,
-    ctx: Arc<Context>,
-    _toggle_these_extensions: Vec<Extension>,
-) -> Result<(), Action> {
-    // These are already set in configuration and the database has been restarted to include them
-    let currently_active_shared_preload_libraries = list_shared_preload_libraries(cdb, ctx.clone()).await?;
-    for desired_library in get_desired_shared_preload_libraries(cdb) {
-        if !currently_active_shared_preload_libraries.contains(&desired_library) {
-            // When a desired library is detected as not enabled yet, then we requeue
-            info!(
-                "{} does not currently have {} in shared_preload_libraries, requeuing.",
-                cdb.metadata.name.clone().unwrap(),
-                desired_library.clone()
-            );
-            return Err(Action::requeue(Duration::from_secs(10)));
-        }
-    }
-    Ok(())
 }
 
 async fn toggle_extensions(
@@ -161,7 +94,7 @@ async fn toggle_extensions(
             {
                 Ok(_) => {}
                 Err(error_message) => {
-                    let location_status = generate_errored_location_status(
+                    let mut location_status = match types::get_location_status(
                         cdb,
                         &extension_to_toggle.name,
                         &location_to_toggle.database,
@@ -245,8 +178,6 @@ pub fn determine_updated_extensions_status(
             name: actual_extension.name.clone(),
             description: actual_extension.description.clone(),
             locations: vec![],
-            create_extension: actual_extension.create_extension,
-            load: actual_extension.load,
         };
         // For every location of an actually installed extension
         for actual_location in actual_extension.locations {

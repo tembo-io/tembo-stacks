@@ -1,13 +1,11 @@
 use crate::{
     apis::coredb_types::{CoreDB, CoreDBStatus},
     extensions::types::{ExtensionInstallLocationStatus, ExtensionStatus, TrunkInstallStatus},
-    get_current_coredb_resource, patch_cdb_status_merge,
-    Context,
+    get_current_coredb_resource, patch_cdb_status_merge, Context,
 };
 use kube::{runtime::controller::Action, Api};
 use serde_json::json;
 use std::{sync::Arc, time::Duration};
-use crate::trunk::extensions_that_require_load;
 use tracing::{debug, error, info, instrument, warn};
 
 pub async fn update_extension_location_in_status(
@@ -30,12 +28,10 @@ pub async fn update_extension_location_in_status(
             Some(extensions) => extensions.clone(),
         },
     };
-    let requires_load = extensions_that_require_load(ctx.client.clone(), &cdb.metadata.namespace.clone().unwrap()).await?;
     let new_extensions_status = merge_location_status_into_extension_status_list(
         extension_name,
         new_location_status,
         current_extensions_status,
-        requires_load
     );
     update_extensions_status(&cdb, new_extensions_status.clone(), &ctx).await?;
     Ok(new_extensions_status.clone())
@@ -48,7 +44,6 @@ pub fn merge_location_status_into_extension_status_list(
     extension_name: &str,
     new_location_status: &ExtensionInstallLocationStatus,
     current_extensions_status: Vec<ExtensionStatus>,
-    requires_load: Vec<&str>,
 ) -> Vec<ExtensionStatus> {
     let mut new_extensions_status = current_extensions_status.clone();
     for extension in &mut new_extensions_status {
@@ -70,15 +65,11 @@ pub fn merge_location_status_into_extension_status_list(
             return new_extensions_status;
         }
     }
-    error!("Merging a location status into extension status list, but the extension was not found in the list. This is not expected");
-    let load = requires_load.contains(&extension_name);
     // If we never found the extension status, append it
     new_extensions_status.push(ExtensionStatus {
         name: extension_name.to_string(),
         description: None,
         locations: vec![new_location_status.clone()],
-        create_extension: None,
-        load: Some(load),
     });
     // Then sort alphabetically by name
     new_extensions_status.sort_by(|a, b| a.name.cmp(&b.name));
