@@ -40,6 +40,9 @@ pub enum ConductorError {
     #[error("Failed to parse postgres connection information")]
     ParsingPostgresConnectionError,
 
+    #[error("Instance is still booting up")]
+    NotDoneRestarting,
+
     #[error("Secret data not found for: {0}")]
     SecretDataNotFound(String),
 }

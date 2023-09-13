@@ -423,8 +423,18 @@ async fn run(metrics: CustomMetrics) -> Result<(), Box<dyn std::error::Error>> {
                     }
                 }
                 let retry_strategy = FixedInterval::from_millis(5000).take(20);
-                let result = Retry::spawn(retry_strategy.clone(), || {
-                    get_coredb_error_without_status(client.clone(), &namespace)
+                let result = Retry::spawn(retry_strategy.clone(), || async {
+                    let res = get_coredb_error_without_status(client.clone(), &namespace).await;
+
+                    if let Ok(coredb) = res.as_ref() {
+                        // Safety: we know status exists due to get_coredb_error_without_status
+                        let status = coredb.status.as_ref().unwrap();
+                        if !status.running {
+                            return Err(ConductorError::NotDoneRestarting);
+                        }
+                    }
+
+                    res
                 })
                 .await;
                 if result.is_err() {
