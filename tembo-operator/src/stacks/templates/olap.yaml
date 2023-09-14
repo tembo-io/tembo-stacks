@@ -13,12 +13,6 @@ compute_templates:
     memory: 32Gi
   - cpu: 16
     memory: 32Gi
-infrastructure:
-  cpu: 1
-  memory: 2Gi
-  storage_size: 10Gi
-  instance_type: GeneralPurpose
-  storage_class: gp3
 postgres_config_engine: olap
 postgres_config:
   - name: checkpoint_timeout

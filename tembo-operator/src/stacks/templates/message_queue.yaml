@@ -13,12 +13,6 @@ compute_templates:
     memory: 32Gi
   - cpu: 16
     memory: 32Gi
-infrastructure:
-  cpu: 1
-  memory: 1Gi
-  storage_size: 10Gi
-  instance_type: GeneralPurpose
-  storage_class: gp3
 trunk_installs:
   - name: pgmq
     version: 0.19.0

@@ -8,8 +8,8 @@ use lazy_static::lazy_static;
 lazy_static! {
     pub static ref MQ: Stack = serde_yaml::from_str(include_str!("templates/message_queue.yaml"))
         .expect("message_queue.yaml not found");
-    pub static ref STANDARD: Stack = serde_yaml::from_str(include_str!("templates/standard.yaml"))
-        .expect("standard.yaml not found");
+    pub static ref STANDARD: Stack =
+        serde_yaml::from_str(include_str!("templates/standard.yaml")).expect("standard.yaml not found");
     pub static ref ML: Stack = serde_yaml::from_str(include_str!("templates/machine_learning.yaml"))
         .expect("machine_learning.yaml not found");
     pub static ref OLAP: Stack =

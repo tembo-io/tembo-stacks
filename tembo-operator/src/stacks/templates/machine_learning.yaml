@@ -13,20 +13,6 @@ compute_templates:
     memory: 32Gi
   - cpu: 32
     memory: 32Gi
-  # pretty sure we do not yet support the below?
-  # uncomment when we do
-  # - cpu: 48
-  #   memory: 96Gi
-  # - cpu: 64
-  #   memory: 128Gi
-  # - cpu: 96
-  #   memory: 192Gi
-infrastructure:
-  cpu: 2
-  memory: 2Gi
-  storage_size: 10Gi
-  instance_type: GeneralPurpose
-  storage_class: gp3
 postgres_config_engine: standard
 postgres_config:
   - name: pg_stat_statements.track

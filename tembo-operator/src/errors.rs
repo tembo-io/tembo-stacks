@@ -1,9 +1,6 @@
 use std::str::Utf8Error;
 
-
 use thiserror::Error;
-
-
 
 #[derive(Error, Debug)]
 pub enum OperatorError {
@@ -19,7 +16,6 @@ pub enum OperatorError {
     #[error("ValueError: {0}")]
     ValueError(#[from] ValueError),
 }
-
 
 #[derive(Error, Debug)]
 pub enum ValueError {

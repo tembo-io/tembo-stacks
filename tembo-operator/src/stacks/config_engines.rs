@@ -3,11 +3,11 @@ use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
 
-use crate::apis::postgres_parameters::{PgConfig, ConfigValue};
-use crate::errors::ValueError;
-use crate::stacks::types::Stack;
-
-
+use crate::{
+    apis::postgres_parameters::{ConfigValue, PgConfig},
+    errors::ValueError,
+    stacks::types::Stack,
+};
 
 #[derive(Clone, Debug, Serialize, Deserialize, ToSchema, JsonSchema, PartialEq)]
 #[serde(rename_all = "lowercase")]
@@ -140,15 +140,12 @@ fn parse_memory(stack: &Stack) -> Result<f64, ValueError> {
         .as_ref()
         .expect("infra required for a configuration engine")
         .memory
-        .to_string();
+        .clone();
     let (mem, unit) = split_string(&mem_str)?;
     match unit.as_str() {
         "Gi" => Ok(mem * 1024.0),
         "Mi" => Ok(mem),
-        _ => Err(ValueError::Invalid(format!(
-            "Invalid mem value: {}",
-            mem_str
-        ))),
+        _ => Err(ValueError::Invalid(format!("Invalid mem value: {}", mem_str))),
     }
 }
 
@@ -158,8 +155,8 @@ fn parse_storage(stack: &Stack) -> Result<f64, ValueError> {
         .infrastructure
         .as_ref()
         .expect("infra required for a configuration engine")
-        .storage_size
-        .to_string();
+        .storage
+        .clone();
     let (storage, unit) = split_string(&storage_str)?;
     match unit.as_str() {
         "Gi" => Ok(storage),
@@ -183,8 +180,8 @@ fn standard_max_connections(mem_mb: f64) -> i32 {
 
 // returns work_mem value in MB
 fn dynamic_work_mem(sys_mem_mb: i32, shared_buffers_mb: i32, max_connections: i32) -> i32 {
-    (((sys_mem_mb - shared_buffers_mb) as f64 - (sys_mem_mb as f64 * 0.2)) / max_connections as f64)
-        .floor() as i32
+    (((sys_mem_mb - shared_buffers_mb) as f64 - (sys_mem_mb as f64 * 0.2)) / max_connections as f64).floor()
+        as i32
 }
 
 // generally safe for most workloads
@@ -207,10 +204,7 @@ fn split_string(input: &str) -> Result<(f64, String), ValueError> {
         let alpha = cap[2].to_string();
         Ok((num, alpha))
     } else {
-        Err(ValueError::Invalid(format!(
-            "Invalid string format: {}",
-            input
-        )))
+        Err(ValueError::Invalid(format!("Invalid string format: {}", input)))
     }
 }
 
@@ -218,7 +212,6 @@ fn split_string(input: &str) -> Result<(f64, String), ValueError> {
 mod tests {
     use super::*;
     use crate::stacks::types::*;
-    use crate::types::coredb_cp::*;
 
     #[test]
     #[should_panic]
@@ -271,41 +264,24 @@ mod tests {
     fn test_standard_config_engine() {
         let stack = Stack {
             name: "test".to_owned(),
-            compute_templates: None,
-            infrastructure: Some(Infrastructure {
-                provider: CloudProvider::Aws,
-                instance_type: InstanceTypes::GeneralPurpose,
-                region: "us-east-1".to_owned(),
-                cpu: Cpu::_1,
-                memory: Memory::_16Gi,
-                storage_size: Storage::_10gi,
-                storage_class: StorageClass::Gp3,
-            }),
-            image: None,
-            extensions: None,
-            trunk_installs: None,
-            description: None,
-            stack_version: None,
             postgres_config_engine: Some(ConfigEngine::Standard),
-            services: None,
-            postgres_config: None,
-            postgres_metrics: None,
+            ..Stack::default()
         };
         let configs = standard_config_engine(&stack);
         assert_eq!(configs[0].name, "shared_buffers");
-        assert_eq!(configs[0].value, "4096MB");
+        assert_eq!(configs[0].value.to_string(), "4096MB");
         assert_eq!(configs[1].name, "max_connections");
-        assert_eq!(configs[1].value, "1724");
+        assert_eq!(configs[1].value.to_string(), "1724");
         assert_eq!(configs[2].name, "work_mem");
-        assert_eq!(configs[2].value, "5MB");
+        assert_eq!(configs[2].value.to_string(), "5MB");
         assert_eq!(configs[3].name, "bgwriter_delay");
-        assert_eq!(configs[3].value, "10ms");
+        assert_eq!(configs[3].value.to_string(), "10ms");
         assert_eq!(configs[4].name, "effective_cache_size");
-        assert_eq!(configs[4].value, "11468MB");
+        assert_eq!(configs[4].value.to_string(), "11468MB");
         assert_eq!(configs[5].name, "maintenance_work_mem");
-        assert_eq!(configs[5].value, "819MB");
+        assert_eq!(configs[5].value.to_string(), "819MB");
         assert_eq!(configs[6].name, "max_wal_size");
-        assert_eq!(configs[6].value, "2GB");
+        assert_eq!(configs[6].value.to_string(), "2GB");
     }
 
     #[test]
@@ -341,7 +317,7 @@ mod tests {
 
         let error_val = split_string("BadData");
         assert!(error_val.is_err());
-        let error_val: Result<(f64, String), ControlPlaneError> = split_string("Gi10");
+        let error_val: Result<(f64, String), ValueError> = split_string("Gi10");
         assert!(error_val.is_err());
     }
 }
