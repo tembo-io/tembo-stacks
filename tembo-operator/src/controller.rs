@@ -212,17 +212,13 @@ impl CoreDB {
             })?;
         }
 
-        let _ = reconcile_postgres_role_secret(
-            self,
-            ctx.clone(),
-            "readonly",
-            &format!("{}-ro", name.clone()),
-        )
-            .await
-            .map_err(|e| {
-                error!("Error reconciling postgres exporter secret: {:?}", e);
-                Action::requeue(Duration::from_secs(300))
-            })?;
+        let _ =
+            reconcile_postgres_role_secret(self, ctx.clone(), "readonly", &format!("{}-ro", name.clone()))
+                .await
+                .map_err(|e| {
+                    error!("Error reconciling postgres exporter secret: {:?}", e);
+                    Action::requeue(Duration::from_secs(300))
+                })?;
 
         // Deploy cluster
         let span = span!(Level::INFO, "reconcile_cnpg");

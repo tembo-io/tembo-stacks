@@ -122,7 +122,7 @@ pub async fn reconcile_postgres_role_secret(
     labels.insert("tembo.io/name".to_owned(), cdb.name_any());
 
     // Get secret by name
-    if let Ok(_) = secret_api.get(secret_name).await {
+    if secret_api.get(secret_name).await.is_ok() {
         debug!("skipping secret creation: secret {} exists", &name);
         let secret_data = fetch_secret_data(client.clone(), name, &ns).await?;
         return Ok(Some(secret_data));
