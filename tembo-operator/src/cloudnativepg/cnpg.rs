@@ -337,7 +337,7 @@ pub fn cnpg_cluster_from_cdb(
                         ensure: Some(ClusterManagedRolesEnsure::Present),
                         login: Some(true),
                         password_secret: Some(ClusterManagedRolesPasswordSecret {
-                            name: format!("{}-ro-password", name).to_string(),
+                            name: format!("{}-ro", name).to_string(),
                         }),
                         in_roles: Some(vec!["pg_read_all_data".to_string()]),
                         ..ClusterManagedRoles::default()
