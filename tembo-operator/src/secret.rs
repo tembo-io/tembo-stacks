@@ -112,7 +112,7 @@ pub async fn reconcile_postgres_exporter_secret(
 ) -> Result<Option<PrometheusExporterSecretData>, Error> {
     let client = ctx.client.clone();
     let ns = cdb.namespace().unwrap();
-    let name = format!("{}-metrics", cdb.name_any());
+    let name = format!("{}-exporter", cdb.name_any());
     let mut labels: BTreeMap<String, String> = BTreeMap::new();
     let secret_api: Api<Secret> = Api::namespaced(client.clone(), &ns);
     let oref = cdb.controller_owner_ref(&()).unwrap();
@@ -166,6 +166,7 @@ fn postgres_exporter_secret_data() -> (BTreeMap<String, ByteString>, PrometheusE
     let password = generate_password();
     let b64_password = b64_encode(&password);
     data.insert("password".to_owned(), b64_password);
+    data.insert("username".to_owned(), b64_encode("postgres_exporter"));
 
     let secret_data = PrometheusExporterSecretData { password };
 

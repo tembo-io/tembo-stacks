@@ -45,7 +45,6 @@ pub fn cnpg_backup_configuration(
 ) -> (Option<ClusterBackup>, Option<ClusterServiceAccountTemplate>) {
     // Check to make sure that backups are enabled, and return None if it is disabled.
     if !cfg.enable_backup {
-        warn!("Backups are disabled");
         (None, None)
     } else {
         debug!("Backups are enabled, configuring...");
@@ -332,16 +331,28 @@ pub fn cnpg_cluster_from_cdb(
             instances: cdb.spec.replicas as i64,
             log_level: Some(ClusterLogLevel::Info),
             managed: Some(ClusterManaged {
-                roles: Some(vec![ClusterManagedRoles {
-                    name: "readonly".to_string(),
-                    ensure: Some(ClusterManagedRolesEnsure::Present),
-                    login: Some(true),
-                    password_secret: Some(ClusterManagedRolesPasswordSecret {
-                        name: format!("{}-ro-password", name).to_string(),
-                    }),
-                    in_roles: Some(vec!["pg_read_all_data".to_string()]),
-                    ..ClusterManagedRoles::default()
-                }]),
+                roles: Some(vec![
+                    ClusterManagedRoles {
+                        name: "readonly".to_string(),
+                        ensure: Some(ClusterManagedRolesEnsure::Present),
+                        login: Some(true),
+                        password_secret: Some(ClusterManagedRolesPasswordSecret {
+                            name: format!("{}-ro-password", name).to_string(),
+                        }),
+                        in_roles: Some(vec!["pg_read_all_data".to_string()]),
+                        ..ClusterManagedRoles::default()
+                    },
+                    ClusterManagedRoles {
+                        name: "postgres_exporter".to_string(),
+                        ensure: Some(ClusterManagedRolesEnsure::Present),
+                        login: Some(true),
+                        password_secret: Some(ClusterManagedRolesPasswordSecret {
+                            name: format!("{}-exporter", name).to_string(),
+                        }),
+                        in_roles: Some(vec!["pg_read_all_stats".to_string(), "pg_monitor".to_string()]),
+                        ..ClusterManagedRoles::default()
+                    },
+                ]),
             }),
             max_sync_replicas: Some(0),
             min_sync_replicas: Some(0),
