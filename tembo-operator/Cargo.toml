@@ -1,5 +1,6 @@
 [package]
 name = "controller"
+description = "Tembo Operator for Postgres"
 version = "0.0.2-alpha"
 edition = "2021"
 default-run = "controller"
