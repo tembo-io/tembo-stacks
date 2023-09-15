@@ -17,14 +17,44 @@ pub struct StackLeg {
     pub postgres_config: Option<Vec<PgConfig>>,
 }
 
-#[derive(Clone, Debug, Serialize, Deserialize, JsonSchema, PartialEq, ToSchema)]
+#[derive(Clone, Debug, Default, Serialize, Deserialize, JsonSchema, PartialEq, ToSchema)]
 pub enum StackType {
     Standard,
     MessageQueue,
     MachineLearning,
     OLAP,
+    #[default]
     OLTP,
 }
+
+impl std::str::FromStr for StackType {
+    type Err = &'static str;
+
+    fn from_str(value: &str) -> Result<Self, Self::Err> {
+        match value {
+            "CoreDB" => Ok(StackType::Standard),
+            "Standard" => Ok(StackType::Standard),
+            "MessageQueue" => Ok(StackType::MessageQueue),
+            "MachineLearning" => Ok(StackType::MachineLearning),
+            "OLAP" => Ok(StackType::OLAP),
+            "OLTP" => Ok(StackType::OLTP),
+            _ => Err("invalid value"),
+        }
+    }
+}
+
+impl StackType {
+    pub fn as_str(&self) -> &str {
+        match self {
+            StackType::Standard => "Standard",
+            StackType::MessageQueue => "MessageQueue",
+            StackType::MachineLearning => "MachineLearning",
+            StackType::OLAP => "OLAP",
+            StackType::OLTP => "OLTP",
+        }
+    }
+}
+
 
 #[derive(Clone, Debug, Default, Serialize, Deserialize, JsonSchema, PartialEq, ToSchema)]
 pub struct Stack {
@@ -65,9 +95,24 @@ fn default_config_engine() -> Option<ConfigEngine> {
 #[derive(Clone, Debug, Default, Serialize, Deserialize, JsonSchema, PartialEq, ToSchema)]
 pub struct Infrastructure {
     // generic specs
+    #[serde(default = "default_cpu")]
     pub cpu: String,
+    #[serde(default = "default_memory")]
     pub memory: String,
+    #[serde(default = "default_storage")]
     pub storage: String,
+}
+
+fn default_cpu() -> String {
+    "1".to_owned()
+}
+
+fn default_memory() -> String {
+    "1Gi".to_owned()
+}
+
+fn default_storage() -> String {
+    "10Gi".to_owned()
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize, ToSchema, JsonSchema, PartialEq)]
