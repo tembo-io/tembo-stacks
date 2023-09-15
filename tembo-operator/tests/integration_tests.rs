@@ -21,7 +21,9 @@ mod test {
         cloudnativepg::clusters::Cluster,
         defaults::{default_resources, default_storage},
         ingress_route_tcp_crd::IngressRouteTCP,
-        is_pod_ready, Context, State,
+        is_pod_ready,
+        psql::PsqlOutput,
+        Context, State,
     };
     use k8s_openapi::{
         api::{
@@ -182,7 +184,7 @@ mod test {
         query: String,
         expected: String,
         inverse: bool,
-    ) {
+    ) -> PsqlOutput {
         // Wait up to 50 seconds
         for _ in 1..10 {
             thread::sleep(Duration::from_millis(5000));
@@ -194,12 +196,12 @@ mod test {
                 match inverse {
                     true => {
                         if !output.stdout.clone().unwrap().contains(expected.clone().as_str()) {
-                            break;
+                            return output;
                         }
                     }
                     false => {
                         if output.stdout.clone().unwrap().contains(expected.clone().as_str()) {
-                            break;
+                            return output;
                         }
                     }
                 }
@@ -209,6 +211,7 @@ mod test {
                 coredb_resource.metadata.name.clone().unwrap()
             );
         }
+        panic!("Timed out waiting for psql result of {}", query);
     }
 
     async fn pod_ready_and_running(pods: Api<Pod>, pod_name: String) {
@@ -590,7 +593,7 @@ mod test {
         println!("{}", result.stdout.clone().unwrap());
         assert!(result.stdout.clone().unwrap().contains("customers"));
 
-        wait_until_psql_contains(
+        let result = wait_until_psql_contains(
             context.clone(),
             coredb_resource.clone(),
             "select * from pg_extension;".to_string(),
@@ -598,16 +601,6 @@ mod test {
             false,
         )
         .await;
-
-        // Assert extension 'aggs_for_vecs' was created
-        let result = coredb_resource
-            .psql(
-                "select extname from pg_catalog.pg_extension;".to_string(),
-                "postgres".to_string(),
-                context.clone(),
-            )
-            .await
-            .unwrap();
 
         println!("{}", result.stdout.clone().unwrap());
         assert!(result.stdout.clone().unwrap().contains("aggs_for_vecs"));
@@ -682,7 +675,7 @@ mod test {
         let patch = Patch::Apply(&coredb_json);
         let coredb_resource = coredbs.patch(name, &params, &patch).await.unwrap();
 
-        wait_until_psql_contains(
+        let result = wait_until_psql_contains(
             context.clone(),
             coredb_resource.clone(),
             "select extname from pg_catalog.pg_extension;".to_string(),
@@ -691,15 +684,6 @@ mod test {
         )
         .await;
 
-        // assert does not contain aggs_for_vecs
-        let result = coredb_resource
-            .psql(
-                "select extname from pg_catalog.pg_extension;".to_string(),
-                "postgres".to_string(),
-                context.clone(),
-            )
-            .await
-            .unwrap();
         assert!(
             !result.stdout.clone().unwrap().contains("aggs_for_vecs"),
             "results should not contain aggs_for_vecs: {}",
@@ -882,7 +866,7 @@ mod test {
 
         println!("Waiting to install extension pgmq");
 
-        wait_until_psql_contains(
+        let result = wait_until_psql_contains(
             context.clone(),
             coredb_resource.clone(),
             "select extname from pg_catalog.pg_extension;".to_string(),
@@ -890,16 +874,6 @@ mod test {
             false,
         )
         .await;
-
-        // Assert extension 'pgmq' was created
-        let result = coredb_resource
-            .psql(
-                "select extname from pg_catalog.pg_extension;".to_string(),
-                "postgres".to_string(),
-                context.clone(),
-            )
-            .await
-            .unwrap();
 
         println!("{}", result.stdout.clone().unwrap());
         assert!(result.stdout.clone().unwrap().contains("pgmq"));
@@ -924,7 +898,7 @@ mod test {
         let patch = Patch::Merge(patch_json);
         let _patch = cluster.patch(name, &params, &patch);
 
-        wait_until_psql_contains(
+        let _result = wait_until_psql_contains(
             context.clone(),
             coredb_resource.clone(),
             "show shared_preload_libraries;".to_string(),
