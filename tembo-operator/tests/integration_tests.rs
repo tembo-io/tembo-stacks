@@ -503,7 +503,7 @@ mod test {
         println!("Found secret: {}", secret_name);
 
         // assert for postgres-exporter secret to be created
-        let exporter_name = format!("{}-metrics", name);
+        let exporter_name = format!("{}-exporter", name);
         let exporter_secret_name = exporter_name.clone();
         let exporter_secret = secret_api.get(&exporter_secret_name).await;
         match exporter_secret {
