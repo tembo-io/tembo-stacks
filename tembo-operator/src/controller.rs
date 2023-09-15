@@ -9,7 +9,7 @@ use crate::{
     exec::{ExecCommand, ExecOutput},
     ingress::reconcile_postgres_ing_route_tcp,
     psql::{PsqlCommand, PsqlOutput},
-    secret::{reconcile_postgres_exporter_secret, reconcile_secret},
+    secret::{reconcile_postgres_role_secret, reconcile_secret},
     service::reconcile_prometheus_exporter_service,
     telemetry, Error, Metrics, Result,
 };
@@ -199,12 +199,17 @@ impl CoreDB {
 
         // Postgres exporter connection info
         if self.spec.postgresExporterEnabled {
-            let _ = reconcile_postgres_exporter_secret(self, ctx.clone())
-                .await
-                .map_err(|e| {
-                    error!("Error reconciling postgres exporter secret: {:?}", e);
-                    Action::requeue(Duration::from_secs(300))
-                })?;
+            let _ = reconcile_postgres_role_secret(
+                self,
+                ctx.clone(),
+                "postgres_exporter",
+                &format!("{}-exporter", name.clone()),
+            )
+            .await
+            .map_err(|e| {
+                error!("Error reconciling postgres exporter secret: {:?}", e);
+                Action::requeue(Duration::from_secs(300))
+            })?;
         }
 
         // Deploy cluster
