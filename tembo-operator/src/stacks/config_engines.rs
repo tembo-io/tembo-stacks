@@ -262,11 +262,17 @@ mod tests {
 
     #[test]
     fn test_standard_config_engine() {
-        let stack = Stack {
+        let mut stack = Stack {
             name: "test".to_owned(),
             postgres_config_engine: Some(ConfigEngine::Standard),
             ..Stack::default()
         };
+        let infra = Infrastructure {
+            cpu: "1".to_string(),
+            memory: "16Gi".to_string(),
+            storage: "10Gi".to_string(),
+        };
+        stack.infrastructure = Some(infra);
         let configs = standard_config_engine(&stack);
         assert_eq!(configs[0].name, "shared_buffers");
         assert_eq!(configs[0].value.to_string(), "4096MB");
