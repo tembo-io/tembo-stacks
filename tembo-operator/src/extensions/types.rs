@@ -83,7 +83,7 @@ pub fn generate_extension_enable_cmd(
             }
             None => format!("CREATE EXTENSION IF NOT EXISTS \"{}\" CASCADE;", ext_name),
         },
-        false => format!("DROP EXTENSION IF EXISTS \"{}\" CASCADE;", ext_name),
+        false => format!("DROP EXTENSION IF EXISTS \"{}\";", ext_name),
     };
     Ok(command)
 }
