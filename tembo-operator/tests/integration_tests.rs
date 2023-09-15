@@ -486,7 +486,7 @@ mod test {
 
         // Wait for secret to be created
         let secret_api: Api<Secret> = Api::namespaced(client.clone(), &namespace);
-        let secret_name = format!("{}-metrics", name);
+        let secret_name = format!("{}-exporter", name);
         println!("Waiting for secret to be created: {}", secret_name);
         let establish = await_condition(secret_api.clone(), &secret_name, wait_for_secret());
         let _ = tokio::time::timeout(Duration::from_secs(TIMEOUT_SECONDS_SECRET_PRESENT), establish)
