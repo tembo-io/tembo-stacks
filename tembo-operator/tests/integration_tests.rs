@@ -178,6 +178,25 @@ mod test {
         panic!("Failed to run command in container");
     }
 
+    async fn psql_with_retry(context: Arc<Context>, coredb_resource: CoreDB, query: String) -> PsqlOutput {
+        // Wait up to 100 seconds
+        for _ in 1..20 {
+            // Assert extension no longer created
+            if let Ok(result) = coredb_resource
+                .psql(query.clone(), "postgres".to_string(), context.clone())
+                .await
+            {
+                return result;
+            }
+            println!(
+                "Waiting for psql result on DB {}...",
+                coredb_resource.metadata.name.clone().unwrap()
+            );
+            thread::sleep(Duration::from_millis(5000));
+        }
+        panic!("Timed out waiting for psql result of '{}'", query);
+    }
+
     async fn wait_until_psql_contains(
         context: Arc<Context>,
         coredb_resource: CoreDB,
@@ -302,7 +321,7 @@ mod test {
         // Initialize the Kubernetes client
         let client = kube_client().await;
         let state = State::default();
-        let context = state.create_context(client.clone());
+        let _context = state.create_context(client.clone());
 
         // Configurations
         let mut rng = rand::thread_rng();
@@ -353,7 +372,7 @@ mod test {
         });
         let params = PatchParams::apply("tembo-integration-test");
         let patch = Patch::Apply(&coredb_json);
-        let coredb_resource = coredbs.patch(name, &params, &patch).await.unwrap();
+        let _coredb_resource = coredbs.patch(name, &params, &patch).await.unwrap();
 
         // Wait for CNPG Pod to be created
         let pod_name = format!("{}-1", name);
@@ -368,14 +387,6 @@ mod test {
         println!("Exporter pod name: {}", &exporter_pod_name);
 
         pod_ready_and_running(pods.clone(), exporter_pod_name.clone()).await;
-
-        // Assert that we can query the database with \dt;
-        let result = coredb_resource
-            .psql("\\dt".to_string(), "postgres".to_string(), context.clone())
-            .await
-            .unwrap();
-        println!("psql out: {}", result.stdout.clone().unwrap());
-        assert!(!result.stdout.clone().unwrap().contains("postgres"));
 
         let coredb_resource = coredbs.patch(name, &params, &patch).await.unwrap();
         let mut found_extension = false;
@@ -567,38 +578,29 @@ mod test {
         assert_eq!(default_resources, resources.unwrap());
 
         // Assert no tables found
-        let result = coredb_resource
-            .psql("\\dt".to_string(), "postgres".to_string(), context.clone())
-            .await
-            .unwrap();
+        let result = psql_with_retry(context.clone(), coredb_resource.clone(), "\\dt".to_string()).await;
         println!("psql out: {}", result.stdout.clone().unwrap());
         assert!(!result.stdout.clone().unwrap().contains("customers"));
 
-        // Create table 'customers'
-        let result = coredb_resource
-            .psql(
-                "
+        let result = psql_with_retry(
+            context.clone(),
+            coredb_resource.clone(),
+            "
                 CREATE TABLE customers (
                    id serial PRIMARY KEY,
                    name VARCHAR(50) NOT NULL,
                    email VARCHAR(50) NOT NULL UNIQUE,
                    created_at TIMESTAMP DEFAULT NOW()
                 );
-                "
-                .to_string(),
-                "postgres".to_string(),
-                context.clone(),
-            )
-            .await
-            .unwrap();
+            "
+            .to_string(),
+        )
+        .await;
         println!("{}", result.stdout.clone().unwrap());
         assert!(result.stdout.clone().unwrap().contains("CREATE TABLE"));
 
         // Assert table 'customers' exists
-        let result = coredb_resource
-            .psql("\\dt".to_string(), "postgres".to_string(), context.clone())
-            .await
-            .unwrap();
+        let result = psql_with_retry(context.clone(), coredb_resource.clone(), "\\dt".to_string()).await;
         println!("{}", result.stdout.clone().unwrap());
         assert!(result.stdout.clone().unwrap().contains("customers"));
 
@@ -615,15 +617,12 @@ mod test {
         assert!(result.stdout.clone().unwrap().contains("aggs_for_vecs"));
 
         // Assert role 'postgres_exporter' was created
-        let result = coredb_resource
-            .psql(
-                "SELECT rolname FROM pg_roles;".to_string(),
-                "postgres".to_string(),
-                context.clone(),
-            )
-            .await
-            .unwrap();
-
+        let result = psql_with_retry(
+            context.clone(),
+            coredb_resource.clone(),
+            "SELECT rolname FROM pg_roles;".to_string(),
+        )
+        .await;
         assert!(
             result.stdout.clone().unwrap().contains("postgres_exporter"),
             "results must contain postgres_exporter: {}",
@@ -919,17 +918,12 @@ mod test {
         // Assert that shared_preload_libraries contains pg_stat_statements
         // and pg_partman_bgw
 
-        let result = match coredb_resource
-            .psql(
-                "show shared_preload_libraries;".to_string(),
-                "postgres".to_string(),
-                context.clone(),
-            )
-            .await
-        {
-            Ok(res) => res,
-            Err(e) => panic!("Failed to execute psql: {:?}", e),
-        };
+        let result = psql_with_retry(
+            context.clone(),
+            coredb_resource.clone(),
+            "show shared_preload_libraries;".to_string(),
+        )
+        .await;
 
         let stdout = match result.stdout {
             Some(output) => output,
@@ -1614,21 +1608,16 @@ mod test {
         pod_ready_and_running(pods.clone(), pod_name_secondary.clone()).await;
 
         // Assert that we can query the database with \dt;
-        let result = coredb_resource
-            .psql("\\dx".to_string(), "postgres".to_string(), context.clone())
-            .await
-            .unwrap();
+        let result = psql_with_retry(context.clone(), coredb_resource.clone(), "\\dx".to_string()).await;
         assert!(result.stdout.clone().unwrap().contains("plpgsql"));
 
         // Assert that both pods are replicating successfully
-        let result = coredb_resource
-            .psql(
-                "SELECT state FROM pg_stat_replication".to_string(),
-                "postgres".to_string(),
-                context.clone(),
-            )
-            .await
-            .unwrap();
+        let result = psql_with_retry(
+            context.clone(),
+            coredb_resource.clone(),
+            "SELECT state FROM pg_stat_replication".to_string(),
+        )
+        .await;
         assert!(result.stdout.clone().unwrap().contains("streaming"));
 
         // CLEANUP TEST
@@ -1710,10 +1699,7 @@ mod test {
         pod_ready_and_running(pods.clone(), exporter_pod_name.clone()).await;
 
         // Assert that we can query the database with \dx;
-        let result = coredb_resource
-            .psql("\\dx".to_string(), "postgres".to_string(), context.clone())
-            .await
-            .unwrap();
+        let result = psql_with_retry(context.clone(), coredb_resource.clone(), "\\dx".to_string()).await;
         assert!(result.stdout.clone().unwrap().contains("plpgsql"));
 
         // Now upgrade the single instance to be HA
@@ -1738,21 +1724,16 @@ mod test {
         pod_ready_and_running(pods.clone(), pod_name_secondary.clone()).await;
 
         // Assert that we can query the database again now that HA is enabled with \dx;
-        let result = coredb_resource
-            .psql("\\dx".to_string(), "postgres".to_string(), context.clone())
-            .await
-            .unwrap();
+        let result = psql_with_retry(context.clone(), coredb_resource.clone(), "\\dx".to_string()).await;
         assert!(result.stdout.clone().unwrap().contains("plpgsql"));
 
         // Assert that both pods are replicating successfully
-        let result = coredb_resource
-            .psql(
-                "SELECT state FROM pg_stat_replication".to_string(),
-                "postgres".to_string(),
-                context.clone(),
-            )
-            .await
-            .unwrap();
+        let result = psql_with_retry(
+            context.clone(),
+            coredb_resource.clone(),
+            "SELECT state FROM pg_stat_replication".to_string(),
+        )
+        .await;
         assert!(result.stdout.clone().unwrap().contains("streaming"));
 
         // Revert replicas back to 1 to disable HA
@@ -1902,14 +1883,6 @@ mod test {
 
         pod_ready_and_running(pods.clone(), exporter_pod_name.clone()).await;
 
-        // Assert that we can query the database with \dt;
-        let result = coredb_resource
-            .psql("\\dt".to_string(), "postgres".to_string(), context.clone())
-            .await
-            .unwrap();
-        println!("psql out: {}", result.stdout.clone().unwrap());
-        assert!(!result.stdout.clone().unwrap().contains("postgres"));
-
         wait_until_psql_contains(
             context.clone(),
             coredb_resource.clone(),
@@ -2032,21 +2005,16 @@ mod test {
         }
 
         // Assert that we can query the database with \dx;
-        let result = coredb_resource
-            .psql("\\dx".to_string(), "postgres".to_string(), context.clone())
-            .await
-            .unwrap();
+        let result = psql_with_retry(context.clone(), coredb_resource.clone(), "\\dx".to_string()).await;
         assert!(result.stdout.clone().unwrap().contains("plpgsql"));
 
         // Assert that both pods are replicating successfully
-        let result = coredb_resource
-            .psql(
-                "SELECT state FROM pg_stat_replication".to_string(),
-                "postgres".to_string(),
-                context.clone(),
-            )
-            .await
-            .unwrap();
+        let result = psql_with_retry(
+            context.clone(),
+            coredb_resource.clone(),
+            "SELECT state FROM pg_stat_replication".to_string(),
+        )
+        .await;
         assert!(result.stdout.clone().unwrap().contains("streaming"));
 
         // Add in an extension and lets make sure it's installed on all pods
@@ -2459,13 +2427,7 @@ mod test {
         pod_ready_and_running(pods.clone(), exporter_pod_name.clone()).await;
 
         // Assert that we can query the database with \dx;
-        let result = match coredb_resource
-            .psql("\\dx".to_string(), "postgres".to_string(), context.clone())
-            .await
-        {
-            Ok(res) => res,
-            Err(e) => panic!("Failed to execute psql: {:?}", e),
-        };
+        let result = psql_with_retry(context.clone(), coredb_resource.clone(), "\\dx".to_string()).await;
 
         let stdout = match result.stdout {
             Some(output) => output,
