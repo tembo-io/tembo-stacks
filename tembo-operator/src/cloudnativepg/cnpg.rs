@@ -32,6 +32,7 @@ use kube::{
 use std::{collections::BTreeMap, sync::Arc};
 use tokio::time::Duration;
 use tracing::{debug, error, info, instrument, warn};
+use crate::cloudnativepg::clusters::{ClusterManaged, ClusterManagedRoles, ClusterManagedRolesEnsure, ClusterManagedRolesPasswordSecret};
 
 pub struct PostgresConfig {
     pub postgres_parameters: Option<BTreeMap<String, String>>,
@@ -330,6 +331,20 @@ pub fn cnpg_cluster_from_cdb(
             image_name: Some(image),
             instances: cdb.spec.replicas as i64,
             log_level: Some(ClusterLogLevel::Info),
+            managed: Some(ClusterManaged{
+                roles: Some(vec![ClusterManagedRoles {
+                    name: "readonly".to_string(),
+                    ensure: Some(ClusterManagedRolesEnsure::Present),
+                    login: Some(true),
+                    password_secret: Some(ClusterManagedRolesPasswordSecret {
+                        name: format!("{}-ro-password", name).to_string(),
+                    }),
+                    in_roles: Some(vec![
+                        "pg_read_all_data".to_string()
+                    ]),
+                    ..ClusterManagedRoles::default()
+                }]),
+            }),
             max_sync_replicas: Some(0),
             min_sync_replicas: Some(0),
             monitoring: Some(ClusterMonitoring {
