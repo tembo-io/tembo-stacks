@@ -212,9 +212,15 @@ mod test {
             );
         }
         if inverse {
-            panic!("Timed out waiting for psql result of '{}' to not contain {}", query, expected);
+            panic!(
+                "Timed out waiting for psql result of '{}' to not contain {}",
+                query, expected
+            );
         }
-        panic!("Timed out waiting for psql result of '{}' to contain {}", query, expected);
+        panic!(
+            "Timed out waiting for psql result of '{}' to contain {}",
+            query, expected
+        );
     }
 
     async fn pod_ready_and_running(pods: Api<Pod>, pod_name: String) {
@@ -1904,6 +1910,24 @@ mod test {
         println!("psql out: {}", result.stdout.clone().unwrap());
         assert!(!result.stdout.clone().unwrap().contains("postgres"));
 
+        wait_until_psql_contains(
+            context.clone(),
+            coredb_resource.clone(),
+            "\\dx".to_string(),
+            "pg_cron".to_string(),
+            false,
+        )
+        .await;
+
+        wait_until_psql_contains(
+            context.clone(),
+            coredb_resource.clone(),
+            "\\dx".to_string(),
+            "citus".to_string(),
+            false,
+        )
+        .await;
+
         let coredb_resource = coredbs.get(name).await.unwrap();
         let mut found_citus = false;
         let mut found_cron = false;
@@ -2166,25 +2190,14 @@ mod test {
         let exporter_pod_name = exporter_pods.items[0].metadata.name.as_ref().unwrap();
         pod_ready_and_running(pods.clone(), exporter_pod_name.clone()).await;
 
-        wait_until_psql_contains(
+        let _result = wait_until_psql_contains(
             context.clone(),
             coredb_resource.clone(),
             "select extname from pg_catalog.pg_extension;".to_string(),
             "plpgsql".to_string(),
-            true,
+            false,
         )
         .await;
-
-        // Assert that we can query the database with \dx;
-        let result = coredb_resource
-            .psql("\\dx".to_string(), "postgres".to_string(), context.clone())
-            .await
-            .unwrap_or_else(|err| {
-                // Log the error, send it to an error tracking service, etc.
-                panic!("Failed to query the database with \\dx, error: {:?}", err);
-            });
-
-        assert!(result.stdout.clone().unwrap().contains("plpgsql"));
 
         // Add in an extension and lets make sure it's installed on all pods
         let coredb_json = serde_json::json!({
