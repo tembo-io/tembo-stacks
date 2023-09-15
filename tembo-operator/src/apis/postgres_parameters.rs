@@ -205,7 +205,6 @@ impl From<WrapValue> for Result<ConfigValue, JsonParsingError> {
     }
 }
 
-// TODO: NOT SURE IF THIS WORKS
 impl From<&str> for ConfigValue {
     fn from(item: &str) -> Self {
         let values: Vec<String> = item.split(',').map(|s| s.trim().to_string()).collect();
