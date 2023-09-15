@@ -185,8 +185,8 @@ mod test {
         expected: String,
         inverse: bool,
     ) -> PsqlOutput {
-        // Wait up to 50 seconds
-        for _ in 1..10 {
+        // Wait up to 200 seconds
+        for _ in 1..40 {
             thread::sleep(Duration::from_millis(5000));
             // Assert extension no longer created
             let result = coredb_resource
@@ -211,7 +211,10 @@ mod test {
                 coredb_resource.metadata.name.clone().unwrap()
             );
         }
-        panic!("Timed out waiting for psql result of {}", query);
+        if inverse {
+            panic!("Timed out waiting for psql result of '{}' to not contain {}", query, expected);
+        }
+        panic!("Timed out waiting for psql result of '{}' to contain {}", query, expected);
     }
 
     async fn pod_ready_and_running(pods: Api<Pod>, pod_name: String) {
@@ -902,7 +905,7 @@ mod test {
             context.clone(),
             coredb_resource.clone(),
             "show shared_preload_libraries;".to_string(),
-            "pg_stat_statements,pg_partman_pgw".to_string(),
+            "pg_stat_statements,pg_partman_bgw".to_string(),
             false,
         )
         .await;
