@@ -11,9 +11,10 @@ use crate::{
 };
 use kube::{runtime::controller::Action, Api};
 use std::sync::Arc;
-use tracing::debug;
+use tracing::{debug, instrument};
 
 /// reconcile extensions between the spec and the database
+#[instrument(skip(coredb, ctx, _cdb_api, _name), fields(instance = %coredb.metadata.name.as_deref().unwrap_or_default(), trace_id))]
 pub async fn reconcile_extensions(
     coredb: &CoreDB,
     ctx: Arc<Context>,

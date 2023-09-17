@@ -1,4 +1,4 @@
-use crate::{apis::coredb_types::CoreDB, Context, Error};
+use crate::{apis::coredb_types::CoreDB, telemetry, Context, Error};
 
 use base64::{engine::general_purpose, Engine as _};
 use k8s_openapi::{api::core::v1::Secret, apimachinery::pkg::apis::meta::v1::ObjectMeta, ByteString};
@@ -8,13 +8,14 @@ use kube::{
 };
 use passwords::PasswordGenerator;
 use std::{collections::BTreeMap, sync::Arc};
-use tracing::debug;
+use tracing::{debug, field, instrument, Span};
 
 #[derive(Clone, Debug)]
 pub struct PrometheusExporterSecretData {
     pub password: String,
 }
 
+#[instrument(skip(cdb, ctx) fields(instance = %cdb.name_any(), trace_id))]
 pub async fn reconcile_secret(cdb: &CoreDB, ctx: Arc<Context>) -> Result<(), Error> {
     let client = ctx.client.clone();
     let ns = cdb.namespace().unwrap();

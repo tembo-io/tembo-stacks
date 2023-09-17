@@ -55,12 +55,10 @@ pub struct Context {
     pub metrics: Metrics,
 }
 
-#[instrument(skip(ctx, cdb), fields(trace_id))]
+#[instrument(skip(ctx, cdb), fields(trace_id, instance = %cdb.name_any()))]
 async fn reconcile(cdb: Arc<CoreDB>, ctx: Arc<Context>) -> Result<Action> {
     let trace_id = telemetry::get_trace_id();
     Span::current().record("trace_id", &field::display(&trace_id));
-    let span = span!(Level::INFO, "reconcile");
-    let _enter = span.enter();
     let cfg = Config::default();
     let _timer = ctx.metrics.count_and_measure();
     ctx.diagnostics.write().await.last_event = Utc::now();
@@ -106,10 +104,8 @@ fn error_policy(cdb: Arc<CoreDB>, error: &Error, ctx: Arc<Context>) -> Action {
 
 impl CoreDB {
     // Reconcile (for non-finalizer related changes)
-    #[instrument(skip(self, ctx, cfg))]
+    #[instrument(skip(self, ctx, cfg) fields(instance = &self.name_any(), trace_id))]
     async fn reconcile(&self, ctx: Arc<Context>, cfg: &Config) -> Result<Action, Action> {
-        let span = span!(Level::INFO, "self_reconcile");
-        let _enter = span.enter();
         let client = ctx.client.clone();
         let _recorder = ctx.diagnostics.read().await.recorder(client.clone(), self);
         let ns = self.namespace().unwrap();
@@ -123,8 +119,6 @@ impl CoreDB {
                     "DATA_PLANE_BASEDOMAIN is set to {}, reconciling ingress route tcp",
                     basedomain
                 );
-                let span = span!(Level::INFO, "reconcile_ingress_route_tcp");
-                let _enter = span.enter();
                 let service_name_read_write = format!("{}-rw", self.name_any().as_str());
                 reconcile_postgres_ing_route_tcp(
                     self,
@@ -157,9 +151,7 @@ impl CoreDB {
                 .and_then(|m| m.queries.as_ref())
                 .is_some()
         {
-            debug!("Reconciling prometheus configmap");
-            let span = span!(Level::INFO, "reconcile_prom_configmap");
-            let _enter = span.enter();
+            debug!("Reconciling prometheus configmap for instance {}", name);
             reconcile_prom_configmap(self, client.clone(), &ns)
                 .await
                 .map_err(|e| {
@@ -168,9 +160,7 @@ impl CoreDB {
                 })?;
         }
 
-        debug!("Reconciling secret");
-        let span = span!(Level::INFO, "reconcile_secret");
-        let _enter = span.enter();
+        debug!("Reconciling secret for instance {}", name);
         // Superuser connection info
         reconcile_secret(self, ctx.clone()).await.map_err(|e| {
             error!("Error reconciling secret: {:?}", e);
@@ -198,19 +188,16 @@ impl CoreDB {
         };
 
         // Deploy cluster
-        let span = span!(Level::INFO, "reconcile_cnpg");
-        let _enter = span.enter();
         reconcile_cnpg(self, ctx.clone()).await?;
         if cfg.enable_backup {
-            let span = span!(Level::DEBUG, "reconcile_cnpg_scheduled_backup");
-            let _enter = span.enter();
             reconcile_cnpg_scheduled_backup(self, ctx.clone()).await?;
         }
 
         if self.spec.postgresExporterEnabled {
-            debug!("Reconciling prometheus exporter deployment");
-            let span = span!(Level::DEBUG, "reconcile_prometheus_exporter_deployment");
-            let _enter = span.enter();
+            debug!(
+                "Reconciling prometheus exporter deployment for instance {}",
+                self.name_any()
+            );
             reconcile_prometheus_exporter_deployment(self, ctx.clone())
                 .await
                 .map_err(|e| {
@@ -220,35 +207,33 @@ impl CoreDB {
         };
 
         // reconcile service
-        debug!("Reconciling prometheus exporter service");
-        let span = span!(Level::DEBUG, "reconcile_prometheus_exporter_service");
-        let _enter = span.enter();
+        debug!(
+            "Reconciling prometheus exporter service for instance {}",
+            self.name_any()
+        );
         reconcile_prometheus_exporter_service(self, ctx.clone())
             .await
             .map_err(|e| {
-                error!("Error reconciling service: {:?}", e);
+                error!(
+                    "Error reconciling service for instance {}: {:?}",
+                    self.name_any(),
+                    e
+                );
                 Action::requeue(Duration::from_secs(300))
             })?;
 
-        let span = span!(Level::INFO, "status_update");
-        let _enter = span.enter();
-
         let new_status = match self.spec.stop {
             false => {
-                let span = span!(Level::DEBUG, "check_postgres_ready");
-                let _enter = span.enter();
                 let primary_pod_cnpg = self.primary_pod_cnpg(ctx.client.clone()).await?;
 
                 if !is_postgres_ready().matches_object(Some(&primary_pod_cnpg)) {
                     debug!(
-                        "Did not find postgres ready {}, waiting a short period",
+                        "Did not find postgres ready for instance {}, waiting a short period",
                         self.name_any()
                     );
                     return Ok(Action::requeue(Duration::from_secs(5)));
                 }
 
-                let span = span!(Level::INFO, "patch_status");
-                let _enter = span.enter();
                 let patch_status = json!({
                     "apiVersion": "coredb.io/v1alpha1",
                     "kind": "CoreDB",
@@ -258,18 +243,10 @@ impl CoreDB {
                 });
                 patch_cdb_status_merge(&coredbs, &name, patch_status).await?;
 
-                let span = span!(Level::INFO, "reconcile_extensions");
-                let _enter = span.enter();
                 let (trunk_installs, extensions) =
                     reconcile_extensions(self, ctx.clone(), &coredbs, &name).await?;
 
-                let span = span!(Level::DEBUG, "create_postgres_exporter_role");
-                let _enter = span.enter();
                 create_postgres_exporter_role(self, ctx.clone(), secret_data).await?;
-
-                // At this point all pods should be unfenced so lets make sure
-                let span = span!(Level::DEBUG, "unfence_pods");
-                let _enter = span.enter();
 
                 CoreDBStatus {
                     running: true,
@@ -292,7 +269,11 @@ impl CoreDB {
             },
         };
 
-        debug!("Updating CoreDB status to {:?} for {}", new_status, name.clone());
+        debug!(
+            "Updating CoreDB status to {:?} for instance {}",
+            new_status,
+            name.clone()
+        );
 
         let patch_status = json!({
             "apiVersion": "coredb.io/v1alpha1",
@@ -300,20 +281,16 @@ impl CoreDB {
             "status": new_status
         });
 
-        let span = span!(Level::INFO, "patch_cdb_status_merge");
-        let _enter = span.enter();
         patch_cdb_status_merge(&coredbs, &name, patch_status).await?;
 
-        info!("Fully reconciled {}", self.name_any());
+        info!("Fully reconciled instance {}", self.name_any());
         let jitter = rand::thread_rng().gen_range(0..30);
         Ok(Action::requeue(Duration::from_secs(60 + jitter)))
     }
 
     // Finalizer cleanup (the object was deleted, ensure nothing is orphaned)
-    #[instrument(skip(self, ctx))]
+    #[instrument(skip(self, ctx) fields(instance = %self.name_any()))]
     async fn cleanup(&self, ctx: Arc<Context>) -> Result<Action> {
-        let span = span!(Level::INFO, "cleanup");
-        let _enter = span.enter();
         // If namespace is terminating, do not publish delete event. Attempting to publish an event
         // in a terminating namespace will leave us in a bad state in which the namespace will hang
         // in terminating state.
@@ -328,8 +305,6 @@ impl CoreDB {
         }
         let recorder = ctx.diagnostics.read().await.recorder(ctx.client.clone(), self);
         // CoreDB doesn't have dependencies in this example case, so we just publish an event
-        let span = span!(Level::INFO, "recorder.publish");
-        let _enter = span.enter();
         recorder
             .publish(Event {
                 type_: EventType::Normal,
@@ -343,10 +318,8 @@ impl CoreDB {
         Ok(Action::await_change())
     }
 
-    #[instrument(skip(self, client))]
+    #[instrument(skip(self, client)  fields(instance = %self.name_any()))]
     pub async fn primary_pod_cnpg(&self, client: Client) -> Result<Pod, Action> {
-        let span = span!(Level::INFO, "primary_pod_cnpg");
-        let _enter = span.enter();
         let cluster = cnpg_cluster_from_cdb(self, None);
         let cluster_name = cluster
             .metadata
@@ -367,13 +340,16 @@ impl CoreDB {
         // Return an error if the query fails
         let pod_list = pods.await.map_err(|_e| {
             // It is not expected to fail the query to the pods API
-            error!("Failed to query for CNPG primary pod of {}", &self.name_any());
+            error!(
+                "Failed to query for CNPG primary pod of instance {}",
+                &self.name_any()
+            );
             Action::requeue(Duration::from_secs(300))
         })?;
         // Return an error if the list is empty
         if pod_list.items.is_empty() {
             // It's expected to sometimes be empty, we should retry after a short duration
-            warn!("Failed to find CNPG primary pod of {}, this can be expected if the pod is restarting for some reason", &self.name_any());
+            warn!("Failed to find CNPG primary pod of instance {}, this can be expected if the pod is restarting for some reason", &self.name_any());
             return Err(Action::requeue(Duration::from_secs(5)));
         }
         let primary = pod_list.items[0].clone();
@@ -381,7 +357,7 @@ impl CoreDB {
         if !is_postgres_ready().matches_object(Some(&primary)) {
             // It's expected to sometimes be empty, we should retry after a short duration
             warn!(
-                "Found CNPG primary pod of {}, but it is not ready",
+                "Found CNPG primary pod of instance {}, but it is not ready",
                 &self.name_any()
             );
             return Err(Action::requeue(Duration::from_secs(5)));
@@ -389,10 +365,8 @@ impl CoreDB {
         Ok(primary)
     }
 
-    #[instrument(skip(self, client))]
+    #[instrument(skip(self, client) fields(instance = %self.name_any()))]
     pub async fn pods_by_cluster(&self, client: Client) -> Result<Vec<Pod>, Action> {
-        let span = span!(Level::INFO, "pods_in_cluster");
-        let _enter = span.enter();
         let cluster = cnpg_cluster_from_cdb(self, None);
         let cluster_name = cluster
             .metadata
@@ -417,25 +391,29 @@ impl CoreDB {
         let replica_pods = pods.list(&list_params_replica);
 
         let primary_pod_list = primary_pods.await.map_err(|_e| {
-            error!("Failed to query for CNPG primary pods of {}", &self.name_any());
+            error!(
+                "Failed to query for CNPG primary pods of instance {}",
+                &self.name_any()
+            );
             Action::requeue(Duration::from_secs(300))
         })?;
 
         let replica_pod_list = replica_pods.await.map_err(|_e| {
-            error!("Failed to query for CNPG replica pods of {}", &self.name_any());
+            error!(
+                "Failed to query for CNPG replica pods of instance {}",
+                &self.name_any()
+            );
             Action::requeue(Duration::from_secs(300))
         })?;
 
         let pod_list = [primary_pod_list.items, replica_pod_list.items].concat();
 
         if pod_list.is_empty() {
-            warn!("Failed to find CNPG pods of {}", &self.name_any());
+            warn!("Failed to find CNPG pods of instance {}", &self.name_any());
             return Err(Action::requeue(Duration::from_secs(30)));
         }
 
         // Filter only pods that are ready
-        let span = span!(Level::INFO, "filter_ready_pods");
-        let _enter = span.enter();
         let ready_pods: Vec<Pod> = pod_list
             .into_iter()
             .filter(|pod| {
@@ -450,17 +428,15 @@ impl CoreDB {
             .collect();
 
         if ready_pods.is_empty() {
-            warn!("Failed to find ready CNPG pods of {}", &self.name_any());
+            warn!("Failed to find ready CNPG pods of instance {}", &self.name_any());
             return Err(Action::requeue(Duration::from_secs(30)));
         }
 
         Ok(ready_pods)
     }
 
-    #[instrument(skip(self, client))]
+    #[instrument(skip(self, client) fields(instance = %self.name_any()))]
     async fn check_replica_count_matches_pods(&self, client: Client) -> Result<(), Action> {
-        let span = span!(Level::INFO, "check_replica_count_matches_pods");
-        let _enter = span.enter();
         // Fetch current replica count from Self
         let desired_replica_count = self.spec.replicas;
         debug!(
@@ -473,7 +449,7 @@ impl CoreDB {
         let current_pods = self.pods_by_cluster(client.clone()).await?;
         let pod_names: Vec<String> = current_pods.iter().map(|pod| pod.name_any()).collect();
         debug!(
-            "Found {} pods, {:?} for {}",
+            "Found {} pods, {:?} for instance {}",
             current_pods.len(),
             pod_names,
             self.name_any()
@@ -482,7 +458,7 @@ impl CoreDB {
         // Check if the number of running pods matches the desired replica count
         if current_pods.len() != desired_replica_count as usize {
             warn!(
-                "Number of running pods ({}) does not match desired replica count ({}) for ({}). Requeuing.",
+                "Number of running pods ({}) does not match desired replica count ({}) for instance ({}). Requeuing.",
                 current_pods.len(),
                 desired_replica_count,
                 self.name_any()
@@ -491,7 +467,7 @@ impl CoreDB {
         }
 
         info!(
-            "Number of running pods ({}) matches desired replica count ({}) for ({}).",
+            "Number of running pods ({}) matches desired replica count ({}) for instance ({}).",
             current_pods.len(),
             desired_replica_count,
             self.name_any()
@@ -499,6 +475,7 @@ impl CoreDB {
         Ok(())
     }
 
+    #[instrument(skip(self, client) fields(instance = %self.name_any(), pod_name = %pod_name))]
     pub async fn log_pod_status(&self, client: Client, pod_name: &str) -> Result<(), kube::Error> {
         let namespace = self
             .metadata
@@ -532,16 +509,13 @@ impl CoreDB {
         }
     }
 
-    #[instrument(skip(self, context))]
+    #[instrument(skip(self, context) fields(instance = %self.name_any()))]
     pub async fn psql(
         &self,
         command: String,
         database: String,
         context: Arc<Context>,
     ) -> Result<PsqlOutput, Action> {
-        let span = span!(Level::INFO, "psql");
-        let _enter = span.enter();
-
         let client = context.client.clone();
 
         let pod_name_cnpg = self
@@ -551,8 +525,6 @@ impl CoreDB {
             .name
             .expect("All pods should have a name");
 
-        let span = span!(Level::DEBUG, "cnpg_psql_command");
-        let _enter = span.enter();
         let cnpg_psql_command = PsqlCommand::new(
             pod_name_cnpg.clone(),
             self.metadata.namespace.clone().unwrap(),
@@ -560,10 +532,11 @@ impl CoreDB {
             database,
             context,
         );
-        debug!("Running exec command in {}", pod_name_cnpg);
+        debug!("Running exec command in pod {}", pod_name_cnpg);
         cnpg_psql_command.execute().await
     }
 
+    #[instrument(skip(self, client) fields(instance = %self.name_any(), command = ?command, pod_name = %pod_name))]
     pub async fn exec(
         &self,
         pod_name: String,
@@ -608,7 +581,7 @@ pub fn is_postgres_ready() -> impl Condition<Pod> + 'static {
     }
 }
 
-#[instrument(skip(ctx, cdb))]
+#[instrument(skip(ctx, cdb) fields(instance = %cdb.name_any()))]
 pub async fn get_current_coredb_resource(cdb: &CoreDB, ctx: Arc<Context>) -> Result<CoreDB, Action> {
     let coredb_api: Api<CoreDB> = Api::namespaced(
         ctx.client.clone(),
@@ -619,12 +592,17 @@ pub async fn get_current_coredb_resource(cdb: &CoreDB, ctx: Arc<Context>) -> Res
     );
     let coredb_name = cdb.metadata.name.clone().expect("CoreDB should have a name");
     let coredb = coredb_api.get(&coredb_name).await.map_err(|e| {
-        error!("Error getting CoreDB resource: {:?}", e);
+        error!(
+            "Error getting CoreDB resource for instance {}: {:?}",
+            cdb.name_any(),
+            e
+        );
         Action::requeue(Duration::from_secs(10))
     })?;
     Ok(coredb.clone())
 }
 
+#[instrument(skip(cdb) fields(instance = %name, patch = ?patch))]
 pub async fn patch_cdb_status_merge(
     cdb: &Api<CoreDB>,
     name: &str,

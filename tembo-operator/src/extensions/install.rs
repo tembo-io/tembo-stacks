@@ -15,7 +15,7 @@ use tracing::{debug, error, info, instrument, span, warn, Level};
 use crate::apis::coredb_types::CoreDBStatus;
 
 // Syncroniously merge and deduplicate pods
-#[instrument(skip(non_fenced_pods, fenced_names) fields(trace_id))]
+#[instrument]
 fn merge_and_deduplicate_pods(non_fenced_pods: Vec<Pod>, fenced_names: Option<Vec<String>>) -> Vec<Pod> {
     let mut all_pods: Vec<Pod> = Vec::new();
     let mut unique_pod_names: HashSet<String> = HashSet::new();
@@ -49,7 +49,7 @@ fn merge_and_deduplicate_pods(non_fenced_pods: Vec<Pod>, fenced_names: Option<Ve
 }
 
 // Collect any fenced pods and add them to the list of pods to install extensions into
-#[instrument(skip(ctx, cdb) fields(trace_id))]
+#[instrument(skip(ctx, cdb))]
 async fn all_fenced_and_non_fenced_pods(cdb: &CoreDB, ctx: Arc<Context>) -> Result<Vec<Pod>, Action> {
     let span = span!(Level::DEBUG, "all_fenced_and_non_fenced_pods");
     let _enter = span.enter();
@@ -74,7 +74,7 @@ async fn all_fenced_and_non_fenced_pods(cdb: &CoreDB, ctx: Arc<Context>) -> Resu
 }
 
 /// Find all trunk installs to remove and return a list of strings
-#[instrument(skip(cdb) fields(trace_id))]
+#[instrument(skip(cdb) fields(instance = &cdb.metadata.name.as_deref().unwrap_or_default()))]
 fn find_trunk_installs_to_remove_from_status(cdb: &CoreDB) -> Vec<String> {
     let span = span!(Level::DEBUG, "remove_trunk_installs_from_status");
     let _enter = span.enter();
@@ -118,7 +118,7 @@ fn find_trunk_installs_to_remove_from_status(cdb: &CoreDB) -> Vec<String> {
 /// Find all trunk installs to install on a pod and return a Vec of TrunkInstall
 /// This function also needs to define a lifetime, since we are only returning a reference to
 /// TrunkInstall, which is owned by CoreDB we only need to define a lifetime for CoreDB
-#[instrument(skip(cdb, pod_name) fields(trace_id))]
+#[instrument(skip(cdb) fields(instance = &cdb.metadata.name.as_deref().unwrap_or_default()))]
 fn find_trunk_installs_to_pod<'a>(cdb: &'a CoreDB, pod_name: &str) -> Vec<&'a TrunkInstall> {
     let span = span!(Level::DEBUG, "find_trunk_installs_to_pod");
     let _enter = span.enter();
@@ -157,7 +157,7 @@ fn find_trunk_installs_to_pod<'a>(cdb: &'a CoreDB, pod_name: &str) -> Vec<&'a Tr
 }
 
 // is_pod_fenced function checks if a pod is fenced and returns a bool or requeue action
-#[instrument(skip(cdb, ctx, pod_name) fields(trace_id))]
+#[instrument(skip(cdb, ctx) fields(instance = &cdb.metadata.name.as_deref().unwrap_or_default()))]
 async fn is_pod_fenced(cdb: &CoreDB, ctx: Arc<Context>, pod_name: &str) -> Result<bool, Action> {
     let span = span!(Level::DEBUG, "is_pod_fenced");
     let _enter = span.enter();
@@ -182,7 +182,7 @@ async fn is_pod_fenced(cdb: &CoreDB, ctx: Arc<Context>, pod_name: &str) -> Resul
     Ok(false)
 }
 
-#[instrument(skip(ctx, cdb) fields(trace_id))]
+#[instrument(skip(ctx, cdb) fields(instance = &cdb.metadata.name.as_deref().unwrap_or_default()))]
 pub async fn reconcile_trunk_installs(
     cdb: &CoreDB,
     ctx: Arc<Context>,
@@ -272,7 +272,7 @@ pub async fn reconcile_trunk_installs(
 }
 
 // initializing current_trunk_install_statuses from CoreDB status and return a Vec of TrunkInstallStatus
-#[instrument(skip(cdb, coredb_name) fields(trace_id))]
+#[instrument(skip(cdb)  fields(instance = &cdb.metadata.name.as_deref().unwrap_or_default()))]
 fn initialize_trunk_install_statuses(cdb: &CoreDB, coredb_name: &str) -> Vec<TrunkInstallStatus> {
     cdb.status
         .clone()
@@ -292,7 +292,7 @@ fn initialize_trunk_install_statuses(cdb: &CoreDB, coredb_name: &str) -> Vec<Tru
 
 /// execute_extension_install_command function executes the trunk install command and returns a
 /// TrunkInstallStatus or bool
-#[instrument(skip(cdb, ctx, coredb_name, ext, pod_name) fields(trace_id))]
+#[instrument(skip(cdb, ctx)  fields(instance = &cdb.metadata.name.as_deref().unwrap_or_default()))]
 async fn execute_extension_install_command(
     cdb: &CoreDB,
     ctx: Arc<Context>,
@@ -387,7 +387,7 @@ async fn execute_extension_install_command(
     }
 }
 /// handles installing extensions
-#[instrument(skip(ctx, cdb) fields(trace_id))]
+#[instrument(skip(ctx, cdb) fields(instance = &cdb.metadata.name.as_deref().unwrap_or_default()))]
 pub async fn install_extensions_to_pod(
     cdb: &CoreDB,
     trunk_installs: Vec<&TrunkInstall>,
@@ -497,11 +497,10 @@ mod tests {
             .iter()
             .filter_map(|pod| pod.metadata.name.clone())
             .collect();
-        assert_eq!(deduplicated_names, vec![
-            "pod1".to_string(),
-            "pod2".to_string(),
-            "pod3".to_string()
-        ]);
+        assert_eq!(
+            deduplicated_names,
+            vec!["pod1".to_string(), "pod2".to_string(), "pod3".to_string()]
+        );
     }
 
     #[test]

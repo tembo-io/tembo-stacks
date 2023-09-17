@@ -399,6 +399,7 @@ fn extend_with_fenced_pods(pod_names_to_fence: &mut Vec<String>, fenced_pods: Op
 }
 
 // pods_to_fence determines a list of pod names that should be fenced when we detect that new replicas are being created
+#[instrument(skip(cdb, ctx))]
 async fn pods_to_fence(cdb: &CoreDB, ctx: Arc<Context>) -> Result<Vec<String>, Action> {
     // Get replica count from CoreDBSpec
     let cdb_replica = cdb.spec.replicas;
@@ -483,7 +484,7 @@ async fn pods_to_fence(cdb: &CoreDB, ctx: Arc<Context>) -> Result<Vec<String>, A
     }
 }
 
-#[instrument(skip(cdb, ctx) fields(trace_id))]
+#[instrument(skip(cdb, ctx) fields(instance = %cdb.name_any()))]
 pub async fn reconcile_cnpg(cdb: &CoreDB, ctx: Arc<Context>) -> Result<(), Action> {
     let pods_to_fence = pods_to_fence(cdb, ctx.clone()).await?;
 
@@ -665,6 +666,7 @@ fn cnpg_scheduled_backup(cdb: &CoreDB) -> ScheduledBackup {
 }
 
 // Reconcile a SheduledBackup
+#[instrument(skip(cdb, ctx) fields(instance = %cdb.name_any()))]
 pub async fn reconcile_cnpg_scheduled_backup(cdb: &CoreDB, ctx: Arc<Context>) -> Result<(), Action> {
     let scheduledbackup = cnpg_scheduled_backup(cdb);
     let client = ctx.client.clone();
@@ -694,7 +696,7 @@ pub async fn reconcile_cnpg_scheduled_backup(cdb: &CoreDB, ctx: Arc<Context>) ->
 }
 
 // Lookup latestGeneratedNode from the Cluster Status and return the index number
-#[instrument(skip(cdb, ctx), fields(trace_id))]
+#[instrument(skip(cdb, ctx))]
 pub async fn get_latest_generated_node(
     cdb: &CoreDB,
     ctx: Arc<Context>,
@@ -734,7 +736,7 @@ pub async fn get_latest_generated_node(
 
 /// fenced_pods_initialized checks if fenced pods are initialized and retuns a bool or action in a
 /// result
-#[instrument(skip(cdb, ctx), fields(trace_id))]
+#[instrument(skip(cdb, ctx))]
 async fn fenced_pods_initialized(cdb: &CoreDB, ctx: Arc<Context>, pod_name: &str) -> Result<bool, Action> {
     let instance_name = cdb.name_any();
     let namespace = cdb.namespace().ok_or_else(|| {
@@ -773,7 +775,6 @@ async fn fenced_pods_initialized(cdb: &CoreDB, ctx: Arc<Context>, pod_name: &str
 
 // get_fenced_instances_from_annotations returns a list of fenced instances from the annotations as
 // a BTreeMap of String, String
-#[instrument(fields(trace_id))]
 fn get_fenced_instances_from_annotations(
     annotations: &BTreeMap<String, String>,
 ) -> Result<Option<Vec<String>>, serde_json::Error> {
@@ -786,7 +787,7 @@ fn get_fenced_instances_from_annotations(
 }
 
 // get_fenced_nodes returns a list of nodes that are fenced only after all the pods are initialized
-#[instrument(skip(cdb, ctx), fields(trace_id))]
+#[instrument(skip(cdb, ctx))]
 pub async fn get_fenced_pods(cdb: &CoreDB, ctx: Arc<Context>) -> Result<Option<Vec<String>>, Action> {
     let instance_name = cdb.metadata.name.as_deref().unwrap_or_default();
     let namespace = cdb.namespace().ok_or_else(|| {
@@ -859,7 +860,7 @@ pub async fn get_fenced_pods(cdb: &CoreDB, ctx: Arc<Context>) -> Result<Option<V
 }
 
 // get_instance_replicas will look up cluster.spec.instances from Kubernetes and return i64 value
-#[instrument(skip(cdb, ctx), fields(trace_id))]
+#[instrument(skip(cdb, ctx))]
 async fn get_instance_replicas(cdb: &CoreDB, ctx: Arc<Context>, instance_name: &str) -> Result<i64, Action> {
     let namespace = match cdb.namespace() {
         Some(ns) => ns,
@@ -886,7 +887,6 @@ async fn get_instance_replicas(cdb: &CoreDB, ctx: Arc<Context>, instance_name: &
 
 // remove_pod_from_fenced_instances_annotation function will remove the pod name from the fencedInstances annotation
 // and return the updated annotations as a BTreeMap
-#[instrument(fields(trace_id))]
 fn remove_pod_from_fenced_instances_annotation(
     annotations: &BTreeMap<String, String>,
     pod_name: &str,
@@ -912,7 +912,7 @@ fn remove_pod_from_fenced_instances_annotation(
 }
 
 // unfence_pod function will remove the fencing annotation from the cluster object
-#[instrument(skip(cdb, ctx), fields(trace_id))]
+#[instrument(skip(cdb, ctx))]
 pub async fn unfence_pod(cdb: &CoreDB, ctx: Arc<Context>, pod_name: &str) -> Result<(), Action> {
     let instance_name = cdb.metadata.name.as_deref().unwrap_or_default();
     let namespace = match cdb.namespace() {

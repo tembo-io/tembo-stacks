@@ -3,7 +3,7 @@ use kube::Client;
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use std::{collections::BTreeMap, sync::Arc};
-use tracing::{debug, error};
+use tracing::{debug, error, instrument};
 
 pub const QUERIES_YAML: &str = "queries.yaml";
 pub const EXPORTER_VOLUME: &str = "postgres-exporter";
@@ -82,6 +82,7 @@ impl FromStr for Usage {
     }
 }
 
+#[instrument(skip(cdb, ctx), fields(instance = %cdb.metadata.name.as_deref().unwrap_or_default(), trace_id))]
 pub async fn create_postgres_exporter_role(
     cdb: &CoreDB,
     ctx: Arc<Context>,
@@ -149,6 +150,7 @@ pub async fn create_postgres_exporter_role(
     }
 }
 
+#[instrument(skip(client, cdb, ns) fields(namespace = % ns, instance = % cdb.metadata.name.as_deref().unwrap_or_default()))]
 pub async fn reconcile_prom_configmap(cdb: &CoreDB, client: Client, ns: &str) -> Result<(), Error> {
     // set custom pg-prom metrics in configmap values if they are specified
     let coredb_name = cdb

@@ -13,7 +13,7 @@ use kube::{
 use std::sync::Arc;
 
 use crate::{apis::coredb_types::CoreDB, errors::OperatorError, Context};
-use tracing::log::{debug, error, info, warn};
+use tracing::{debug, error, info, instrument, warn};
 
 fn postgres_ingress_route_tcp(
     name: String,
@@ -69,6 +69,7 @@ fn postgres_ingress_route_tcp(
 // 3) We should allow for additional ingress route tcp to be created for different use cases
 //    For example read-only endpoints, we should not accidentally handle these other
 //    IngressRouteTCP in this code, so we check that we are working with the correct type of Service.
+#[instrument(skip(cdb, ctx) fields(instance = %cdb.name_any()))]
 pub async fn reconcile_postgres_ing_route_tcp(
     cdb: &CoreDB,
     ctx: Arc<Context>,
