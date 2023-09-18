@@ -9,6 +9,8 @@ use crate::{
     stacks::types::Stack,
 };
 
+const DEFAULT_MAINTENANCE_WORK_MEM_MB: i32 = 64;
+
 #[derive(Clone, Debug, Serialize, Deserialize, ToSchema, JsonSchema, PartialEq)]
 #[serde(rename_all = "lowercase")]
 pub enum ConfigEngine {
@@ -64,30 +66,78 @@ pub fn standard_config_engine(stack: &Stack) -> Vec<PgConfig> {
 
 pub fn olap_config_engine(stack: &Stack) -> Vec<PgConfig> {
     let sys_mem_mb = parse_memory(stack).expect("no memory values");
+    let sys_storage_gb = parse_storage(stack).expect("no storage values");
+    let vcpu = parse_cpu(stack);
 
     let shared_buffer_val_mb = standard_shared_buffers(sys_mem_mb);
     let max_connections: i32 = olap_max_connections(sys_mem_mb as i32);
-    let work_mem = dynamic_work_mem(sys_mem_mb as i32, shared_buffer_val_mb, max_connections);
+    let work_mem = olap_work_mem(sys_mem_mb as i32, shared_buffer_val_mb, max_connections);
     let effective_cache_size_mb = dynamic_effective_cache_size_mb(sys_mem_mb as i32);
+    let maintenance_work_mem_mb = olap_maintenance_work_mem_mb(sys_mem_mb as i32);
+    let max_wal_size_gb: i32 = dynamic_max_wal_size(sys_storage_gb as i32);
+    let max_parallel_workers = olap_max_parallel_workers(vcpu);
+    let max_parallel_workers_per_gather = olap_max_parallel_workers_per_gather(vcpu);
 
     vec![
         PgConfig {
-            name: "shared_buffers".to_owned(),
-            value: ConfigValue::Single(format!("{shared_buffer_val_mb}MB")),
+            name: "effective_cache_size".to_owned(),
+            value: ConfigValue::Single(format!("{effective_cache_size_mb}MB")),
+        },
+        PgConfig {
+            name: "maintenance_work_mem".to_owned(),
+            value: ConfigValue::Single(format!("{maintenance_work_mem_mb}MB")),
         },
         PgConfig {
             name: "max_connections".to_owned(),
             value: ConfigValue::Single(max_connections.to_string()),
         },
         PgConfig {
+            name: "max_parallel_workers".to_owned(),
+            value: ConfigValue::Single(max_parallel_workers.to_string()),
+        },
+        PgConfig {
+            name: "max_parallel_workers_per_gather".to_owned(),
+            value: ConfigValue::Single(max_parallel_workers_per_gather.to_string()),
+        },
+        PgConfig {
+            name: "max_wal_size".to_owned(),
+            value: ConfigValue::Single(format!("{max_wal_size_gb}GB")),
+        },
+        PgConfig {
+            name: "shared_buffers".to_owned(),
+            value: ConfigValue::Single(format!("{shared_buffer_val_mb}MB")),
+        },
+        PgConfig {
             name: "work_mem".to_owned(),
             value: ConfigValue::Single(format!("{work_mem}MB")),
         },
-        PgConfig {
-            name: "effective_cache_size".to_owned(),
-            value: ConfigValue::Single(format!("{effective_cache_size_mb}MB")),
-        },
     ]
+}
+
+// olap formula for max_parallel_workers_per_gather
+fn olap_max_parallel_workers_per_gather(cpu: i32) -> i32 {
+    // higher of default (2) or 0.5 * cpu
+    i32::max((cpu as f64 * 0.5).floor() as i32, 2)
+}
+
+fn olap_max_parallel_workers(cpu: i32) -> i32 {
+    // higher of the default (8) or 2 * cpu
+    i32::max(2 * cpu, 8)
+}
+
+// returns work_mem value in MB
+fn olap_work_mem(sys_mem_mb: i32, shared_buffers_mb: i32, max_connections: i32) -> i32 {
+    (sys_mem_mb - shared_buffers_mb) / (max_connections / 2)
+}
+
+// olap formula for maintenance_work_mem
+fn olap_maintenance_work_mem_mb(sys_mem_mb: i32) -> i32 {
+    // max of the default 64MB and 10% of system memory
+    const MAINTENANCE_WORK_MEM_RATIO: f64 = 0.10;
+    i32::max(
+        DEFAULT_MAINTENANCE_WORK_MEM_MB,
+        (sys_mem_mb as f64 * MAINTENANCE_WORK_MEM_RATIO).floor() as i32,
+    )
 }
 
 // general purpose formula for maintenance_work_mem
@@ -206,6 +256,18 @@ fn split_string(input: &str) -> Result<(f64, String), ValueError> {
     } else {
         Err(ValueError::Invalid(format!("Invalid string format: {}", input)))
     }
+}
+
+// returns the vCPU count
+fn parse_cpu(stack: &Stack) -> i32 {
+    stack
+        .infrastructure
+        .as_ref()
+        .expect("infra required for a configuration engine")
+        .cpu
+        .to_string()
+        .parse::<i32>()
+        .expect("failed parsing cpu")
 }
 
 #[cfg(test)]
