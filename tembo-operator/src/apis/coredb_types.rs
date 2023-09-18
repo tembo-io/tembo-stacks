@@ -1,4 +1,4 @@
-use crate::{extensions::types::ExtensionStatus, stacks::types::Stack};
+use crate::{cloudnativepg, extensions::types::ExtensionStatus, stacks::types::Stack};
 use k8s_openapi::{
     api::core::v1::ResourceRequirements,
     apimachinery::pkg::{api::resource::Quantity, apis::meta::v1::ObjectMeta},
@@ -17,6 +17,7 @@ use crate::{
     apis::postgres_parameters::ConfigValue,
     extensions::types::{Extension, TrunkInstall, TrunkInstallStatus},
 };
+use cloudnativepg::poolers::PoolerSpec;
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use std::collections::{BTreeMap, BTreeSet};
@@ -37,6 +38,13 @@ pub struct Backup {
     pub retentionPolicy: Option<String>,
     #[serde(default = "defaults::default_backup_schedule")]
     pub schedule: Option<String>,
+}
+
+#[derive(Deserialize, Serialize, Clone, Debug, JsonSchema, Default)]
+#[allow(non_snake_case)]
+pub struct ConnPooler {
+    pub enabled: Option<bool>,
+    pub pooler: Option<PoolerSpec>,
 }
 
 /// Generate the Kubernetes wrapper struct `CoreDB` from our Spec and Status struct
@@ -102,6 +110,8 @@ pub struct CoreDBSpec {
     pub runtime_config: Option<Vec<PgConfig>>,
     // configuration overrides, typically defined by the user
     pub override_configs: Option<Vec<PgConfig>>,
+    // Connection pooler configuration
+    pub connPooler: Option<ConnPooler>,
 }
 
 impl CoreDBSpec {
@@ -233,7 +243,6 @@ pub struct CoreDBStatus {
     pub resources: Option<ResourceRequirements>,
     pub runtime_config: Option<Vec<PgConfig>>,
 }
-
 
 #[cfg(test)]
 mod tests {
