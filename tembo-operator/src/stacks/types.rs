@@ -1,3 +1,4 @@
+use k8s_openapi::api::core::v1::ResourceRequirements;
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
@@ -120,12 +121,41 @@ pub struct ComputeTemplate {
 }
 
 
-// defines a sidecar container
+// defines a app container
 #[derive(Clone, Debug, Serialize, Deserialize, ToSchema, JsonSchema, PartialEq)]
 pub struct Service {
     pub image: String,
-    pub command: String,
-    pub ports: Vec<BTreeMap<String, String>>,
+    pub args: Option<Vec<String>>,
+    pub command: Option<Vec<String>>,
+    pub env: Option<BTreeMap<String, String>>,
+    pub ports: Option<Vec<BTreeMap<String, String>>>,
+    pub resources: Option<ResourceRequirements>,
+    pub probes: Option<Probes>,
+    pub metrics: Option<Metrics>,
+}
+
+
+#[allow(non_snake_case)]
+#[derive(Clone, Debug, Serialize, Deserialize, ToSchema, JsonSchema, PartialEq)]
+pub struct Ingress {
+    enabled: bool,
+    containerPort: u32,
+    path: String,
+}
+
+#[allow(non_snake_case)]
+#[derive(Clone, Debug, Serialize, Deserialize, ToSchema, JsonSchema, PartialEq)]
+pub struct Probes {
+    livenessProbe: String,
+    readinessProbe: String,
+}
+
+#[allow(non_snake_case)]
+#[derive(Clone, Debug, Serialize, Deserialize, ToSchema, JsonSchema, PartialEq)]
+pub struct Metrics {
+    enabled: bool,
+    port: String,
+    path: String,
 }
 
 #[cfg(test)]
