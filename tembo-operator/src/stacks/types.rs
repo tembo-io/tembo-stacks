@@ -1,6 +1,6 @@
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
-use std::{collections::BTreeMap, default};
+use std::collections::BTreeMap;
 use utoipa::ToSchema;
 
 use crate::{
@@ -10,12 +10,6 @@ use crate::{
     postgres_exporter::QueryConfig,
     stacks::config_engines::{olap_config_engine, standard_config_engine, ConfigEngine},
 };
-
-#[derive(Clone, Debug, Serialize, Deserialize, JsonSchema)]
-pub struct StackLeg {
-    pub name: StackType,
-    pub postgres_config: Option<Vec<PgConfig>>,
-}
 
 #[derive(Clone, Debug, Default, Serialize, Deserialize, JsonSchema, PartialEq, ToSchema)]
 pub enum StackType {
