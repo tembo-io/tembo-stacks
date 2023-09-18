@@ -388,4 +388,49 @@ mod tests {
         let error_val: Result<(f64, String), ValueError> = split_string("Gi10");
         assert!(error_val.is_err());
     }
+
+    #[test]
+    fn test_olap_config_engine() {
+        let stack = Stack {
+            name: "test".to_owned(),
+            compute_templates: None,
+            infrastructure: Some(Infrastructure {
+                provider: CloudProvider::Aws,
+                instance_type: InstanceTypes::GeneralPurpose,
+                region: "us-east-1".to_owned(),
+                cpu: Cpu::_4,
+                memory: Memory::_16Gi,
+                storage_size: Storage::_10gi,
+                storage_class: StorageClass::Gp3,
+            }),
+            image: None,
+            extensions: None,
+            trunk_installs: None,
+            description: None,
+            stack_version: None,
+            postgres_config_engine: Some(ConfigEngine::Standard),
+            services: None,
+            postgres_config: None,
+            postgres_metrics: None,
+        };
+        let configs = olap_config_engine(&stack);
+
+        assert_eq!(configs[0].name, "effective_cache_size");
+        assert_eq!(configs[0].value.to_string(), "11468MB");
+        assert_eq!(configs[1].name, "maintenance_work_mem");
+        assert_eq!(configs[1].value.to_string(), "1638MB");
+        assert_eq!(configs[2].name, "max_connections");
+        assert_eq!(configs[2].value.to_string(), "100");
+        assert_eq!(configs[3].name, "max_parallel_workers");
+        assert_eq!(configs[3].value.to_string(), "8");
+        assert_eq!(configs[4].name, "max_parallel_workers_per_gather");
+        assert_eq!(configs[4].value.to_string(), "2");
+        assert_eq!(configs[5].name, "max_wal_size");
+        assert_eq!(configs[5].value.to_string(), "2GB");
+        assert_eq!(configs[6].name, "shared_buffers");
+        assert_eq!(configs[6].value.to_string(), "4096MB");
+        assert_eq!(configs[7].name, "work_mem");
+        assert_eq!(configs[7].value.to_string(), "245MB");
+    }
+
 }
