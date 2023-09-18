@@ -414,7 +414,6 @@ spec:
                       properties:
                         command:
                           type: string
-                        config: {}
                         image:
                           type: string
                         ports:
@@ -425,7 +424,6 @@ spec:
                           type: array
                       required:
                       - command
-                      - config
                       - image
                       - ports
                       type: object

@@ -126,7 +126,6 @@ pub struct Service {
     pub image: String,
     pub command: String,
     pub ports: Vec<BTreeMap<String, String>>,
-    pub config: serde_json::Value,
 }
 
 #[cfg(test)]
