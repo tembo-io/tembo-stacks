@@ -11,12 +11,6 @@ use crate::{
     stacks::config_engines::{olap_config_engine, standard_config_engine, ConfigEngine},
 };
 
-#[derive(Clone, Debug, Serialize, Deserialize, JsonSchema)]
-pub struct StackLeg {
-    pub name: StackType,
-    pub postgres_config: Option<Vec<PgConfig>>,
-}
-
 #[derive(Clone, Debug, Default, Serialize, Deserialize, JsonSchema, PartialEq, ToSchema)]
 pub enum StackType {
     Standard,
@@ -61,9 +55,9 @@ pub struct Stack {
     pub name: String,
     pub compute_templates: Option<Vec<ComputeTemplate>>,
     pub description: Option<String>,
-    #[serde(default = "default_image")]
-    pub image: String,
-    pub stack_version: String,
+    #[serde(default = "default_stack_image")]
+    pub image: Option<String>,
+    pub stack_version: Option<String>,
     pub trunk_installs: Option<Vec<TrunkInstall>>,
     pub extensions: Option<Vec<Extension>>,
     // postgres metric definition specific to the Stack
@@ -86,6 +80,10 @@ impl Stack {
             None => Some(standard_config_engine(self)),
         }
     }
+}
+
+fn default_stack_image() -> Option<String> {
+    Some(default_image())
 }
 
 fn default_config_engine() -> Option<ConfigEngine> {
@@ -128,7 +126,6 @@ pub struct Service {
     pub image: String,
     pub command: String,
     pub ports: Vec<BTreeMap<String, String>>,
-    pub config: serde_json::Value,
 }
 
 #[cfg(test)]
