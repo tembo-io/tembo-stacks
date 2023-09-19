@@ -395,13 +395,9 @@ mod tests {
             name: "test".to_owned(),
             compute_templates: None,
             infrastructure: Some(Infrastructure {
-                provider: CloudProvider::Aws,
-                instance_type: InstanceTypes::GeneralPurpose,
-                region: "us-east-1".to_owned(),
-                cpu: Cpu::_4,
-                memory: Memory::_16Gi,
-                storage_size: Storage::_10gi,
-                storage_class: StorageClass::Gp3,
+                cpu: "4".to_string(),
+                memory: "16Gi".to_string(),
+                storage: "10Gi".to_string(),
             }),
             image: None,
             extensions: None,
@@ -432,5 +428,4 @@ mod tests {
         assert_eq!(configs[7].name, "work_mem");
         assert_eq!(configs[7].value.to_string(), "245MB");
     }
-
 }
