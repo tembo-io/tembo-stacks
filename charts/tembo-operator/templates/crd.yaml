@@ -50,10 +50,11 @@ spec:
                     type: string
                 type: object
               connPooler:
-                nullable: true
+                default:
+                  enabled: false
+                  pooler: null
                 properties:
                   enabled:
-                    nullable: true
                     type: boolean
                   pooler:
                     nullable: true
@@ -3977,6 +3978,8 @@ spec:
                     - pgbouncer
                     - type
                     type: object
+                required:
+                - enabled
                 type: object
               extensions:
                 default: []

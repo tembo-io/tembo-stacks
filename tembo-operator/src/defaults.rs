@@ -5,6 +5,7 @@ use crate::{
     apis::coredb_types::{Backup, ServiceAccountTemplate},
     extensions::types::{Extension, TrunkInstall},
 };
+use crate::apis::coredb_types::ConnPooler;
 
 pub fn default_replicas() -> i32 {
     1
@@ -117,4 +118,11 @@ pub fn default_retention_policy() -> Option<String> {
 pub fn default_backup_schedule() -> Option<String> {
     // Every day at midnight
     Some("0 0 * * *".to_owned())
+}
+
+pub fn default_conn_pooler() -> ConnPooler {
+    ConnPooler {
+        enabled: false,
+        pooler: None,
+    }
 }

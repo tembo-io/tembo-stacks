@@ -43,7 +43,7 @@ pub struct Backup {
 #[derive(Deserialize, Serialize, Clone, Debug, JsonSchema, Default)]
 #[allow(non_snake_case)]
 pub struct ConnPooler {
-    pub enabled: Option<bool>,
+    pub enabled: bool,
     pub pooler: Option<PoolerSpec>,
 }
 
@@ -111,7 +111,8 @@ pub struct CoreDBSpec {
     // configuration overrides, typically defined by the user
     pub override_configs: Option<Vec<PgConfig>>,
     // Connection pooler configuration
-    pub connPooler: Option<ConnPooler>,
+    #[serde(default = "defaults::default_conn_pooler")]
+    pub connPooler: ConnPooler,
 }
 
 impl CoreDBSpec {

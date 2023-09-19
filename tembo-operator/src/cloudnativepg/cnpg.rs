@@ -33,6 +33,7 @@ use kube::{
 use std::{collections::BTreeMap, sync::Arc};
 use tokio::time::Duration;
 use tracing::{debug, error, info, instrument, warn};
+use crate::cloudnativepg::poolers::{Pooler, PoolerCluster, PoolerPgbouncer, PoolerPgbouncerPoolMode, PoolerSpec, PoolerType};
 
 pub struct PostgresConfig {
     pub postgres_parameters: Option<BTreeMap<String, String>>,
@@ -639,6 +640,69 @@ pub async fn reconcile_cnpg(cdb: &CoreDB, ctx: Arc<Context>) -> Result<(), Actio
         })?;
     debug!("Applied");
     // If restart is required, then we should trigger the restart above
+
+    // If connPooler.enabled is true, then we should reconcile custom resource Pooler
+    if cdb.spec.connPooler.enabled {
+        debug!("ConnPooler is enabled, reconciling custom resource Pooler");
+        reconcile_pooler(cdb, ctx.clone()).await?;
+    } else {
+        debug!("ConnPooler is disabled, skipping reconciliation of custom resource Pooler");
+    }
+
+    Ok(())
+}
+
+// Reconcile a Pooler
+async fn reconcile_pooler(cdb: &CoreDB, ctx: Arc<Context>) -> Result<(), Action> {
+    let pooler = Pooler {
+        metadata: ObjectMeta {
+            name: Some(cdb.name_any() + "-pooler"),
+            namespace: Some(cdb.namespace().unwrap()),
+            ..ObjectMeta::default()
+        },
+        spec: PoolerSpec {
+            cluster: PoolerCluster {
+                name: cdb.name_any(),
+            },
+            deployment_strategy: None,
+            instances: 1,
+            monitoring: None,
+            pgbouncer: PoolerPgbouncer {
+                auth_query: None,
+                auth_query_secret: None,
+                parameters: None,
+                paused: None,
+                pg_hba: None,
+                pool_mode: PoolerPgbouncerPoolMode::Session,
+            },
+            template: None,
+            r#type: PoolerType::Rw,
+        },
+        status: None,
+    };
+    let client = ctx.client.clone();
+    let name = pooler
+        .metadata
+        .name
+        .clone()
+        .expect("Pooler should always have a name");
+    let namespace = pooler
+        .metadata
+        .namespace
+        .clone()
+        .expect("Pooler should always have a namespace");
+    let pooler_api: Api<Pooler> = Api::namespaced(client.clone(), namespace.as_str());
+
+    debug!("Patching Pooler");
+    let ps = PatchParams::apply("cntrlr");
+    let _o = pooler_api
+        .patch(&name, &ps, &Patch::Apply(&pooler))
+        .await
+        .map_err(|e| {
+            error!("Error patching Pooler: {}", e);
+            Action::requeue(Duration::from_secs(300))
+        })?;
+
     Ok(())
 }
 
