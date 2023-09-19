@@ -11,11 +11,11 @@ This code repository is our entire "data plane" codebase. You can use it to self
 
 ## Current stacks
 
-- Standard
-- OLTP
-- OLAP
-- Enterprise LLM
-- Messaging
+- [https://tembo.io/docs/tembo-stacks/standard](Standard) - a default configuration of Postgres
+- [https://tembo.io/docs/tembo-stacks/oltp](OLTP) - for low-latency, high-concurrency transactional applications
+- [https://tembo.io/docs/tembo-stacks/olap](OLAP) - tuned for online analytical processing
+- [https://tembo.io/docs/tembo-stacks/enterprise-llm](Enterprise LLM) - latest machine learning and large language model toolchains pre-installed and enabled
+- [https://tembo.io/docs/tembo-stacks/message-queue](Message Queue) - send, read, and retain messages between applications without losing data loss or requiring all systems in a distributed system to be available
 
 ## Try on Tembo Cloud
 
