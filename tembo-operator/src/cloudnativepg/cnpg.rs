@@ -539,6 +539,14 @@ pub async fn reconcile_cnpg(cdb: &CoreDB, ctx: Arc<Context>) -> Result<(), Actio
         .expect("CNPG Cluster should always have a name");
     let cluster_api: Api<Cluster> = Api::namespaced(ctx.client.clone(), namespace.as_str());
 
+    if let Some(restarted_at) = cdb.annotations().get("coredbs.coredb.io/restartedAt") {
+        // Forward the `restartedAt` annotation from CoreDB over to the CNPG cluster
+        let mut cluster_annotations = cluster.metadata.annotations.unwrap_or_default();
+        cluster_annotations.insert("kubectl.kubernetes.io/restartedAt".into(), restarted_at.to_owned());
+
+        cluster.metadata.annotations = Some(cluster_annotations);
+    }
+
     let mut _restart_required = false;
 
     match cluster
