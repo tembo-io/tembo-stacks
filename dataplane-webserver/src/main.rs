@@ -31,7 +31,9 @@ async fn main() -> std::io::Result<()> {
 
     #[derive(OpenApi)]
     #[openapi(
-        paths(metrics::query_range),
+        paths(metrics::query_range,
+              secrets::get_secret,
+              secrets::get_secret_names),
         components(schemas()),
         modifiers(&SecurityAddon),
         security(("jwt_token" = [])),
