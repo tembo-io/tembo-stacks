@@ -86,8 +86,8 @@ pub async fn get_secret_names() -> Result<HttpResponse, Error> {
         ("secret_name", example="readonly-role", description = "Secret name"),
     ),
     responses(
-        (status = 200, description = "Secret content in JSON, values base64 encoded", body = Value,
-        example = json!({ "password": "c3Y1dWxpM2dSM1hQYmp3eg==", "username": "cmVhZG9ubHk=" })),
+        (status = 200, description = "Secret content in JSON", body = Value,
+        example = json!({ "password": "sv5uli3gR3XPbjwz", "username": "postgres" })),
         (status = 403, description = "Not authorized for query"),
     )
 )]
