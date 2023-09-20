@@ -12,6 +12,6 @@ COPY . .
 
 RUN cargo build --release
 
-COPY /build/target/release/dataplane_webserver /usr/local/bin/dataplane_webserver
+RUN cp /build/target/release/dataplane_webserver /usr/local/bin/dataplane_webserver
 
 CMD ["/usr/local/bin/dataplane_webserver"]
