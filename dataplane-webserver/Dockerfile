@@ -1,6 +1,8 @@
 FROM quay.io/coredb/rust:1.71.0-slim-buster
 
-RUN apt-get install -y pkg-config libssl-dev
+RUN apt-get update \
+    && apt-get install -y pkg-config libssl-dev \
+    && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /build
 
@@ -10,10 +12,6 @@ COPY . .
 
 RUN cargo build --release
 
-FROM quay.io/coredb/rust:1.71.0-slim-buster
-
-RUN apt-get install -y pkg-config libssl-dev
-
-COPY --from=builder /build/target/release/dataplane_webserver /usr/local/bin/dataplane_webserver
+COPY /build/target/release/dataplane_webserver /usr/local/bin/dataplane_webserver
 
 CMD ["/usr/local/bin/dataplane_webserver"]
