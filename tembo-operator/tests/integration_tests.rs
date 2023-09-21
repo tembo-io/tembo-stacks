@@ -2659,7 +2659,7 @@ mod test {
         let deployments: Api<Deployment> = Api::namespaced(client.clone(), &namespace);
         let lp = ListParams::default().labels(format!("coredb.io/name={}", name).as_str());
         let deployments_list = deployments.list(&lp).await.expect("could not get deployments");
-        println1("Deployments: {:?}", deployments_list);
+        println!("Deployments: {:?}", deployments_list);
         // two AppService deployments. the postgres exporter is disabled
         assert!(deployments_list.items.len() == 2);
         let app_0 = deployments_list.items[0].clone();
