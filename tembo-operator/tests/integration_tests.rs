@@ -2672,6 +2672,8 @@ mod test {
         assert_eq!(app_0.metadata.name.unwrap(), "test-app-0");
         assert_eq!(app_1.metadata.name.unwrap(), "test-app-1");
 
+        // TODO: test delete of Deployment resource
+
         // CLEANUP TEST
         // Cleanup CoreDB
         coredbs.delete(name, &Default::default()).await.unwrap();
