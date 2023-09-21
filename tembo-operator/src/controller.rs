@@ -580,7 +580,8 @@ impl CoreDB {
             .clone()
             .expect("CoreDB should have a namespace");
         let backup: Api<Backup> = Api::namespaced(client, &namespace);
-        let lp = ListParams::default();
+        let cluster_name = self.metadata.name.clone().unwrap_or_default();
+        let lp = ListParams::default().labels(&format!("cnpg.io/cluster={}", cluster_name));
         let backup_list = backup.list(&lp).await.map_err(|e| {
             error!("Error getting backups: {:?}", e);
             Action::requeue(Duration::from_secs(300))
