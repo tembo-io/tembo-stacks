@@ -12,8 +12,8 @@ use log::info;
 
 use dataplane_webserver::routes::{metrics, secrets};
 use utoipa::openapi::security::{HttpAuthScheme, HttpBuilder, SecurityScheme};
-use utoipa_redoc::{Redoc, Servable};
 use utoipa::{Modify, OpenApi};
+use utoipa_redoc::{Redoc, Servable};
 
 use utoipa_swagger_ui::{SwaggerUi, Url};
 
