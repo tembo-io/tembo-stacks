@@ -3,8 +3,10 @@ use futures::stream::StreamExt;
 
 use crate::{
     apis::coredb_types::{CoreDB, CoreDBStatus},
-    cloudnativepg::backups::Backup,
-    cloudnativepg::cnpg::{cnpg_cluster_from_cdb, reconcile_cnpg, reconcile_cnpg_scheduled_backup},
+    cloudnativepg::{
+        backups::Backup,
+        cnpg::{cnpg_cluster_from_cdb, reconcile_cnpg, reconcile_cnpg_scheduled_backup},
+    },
     config::Config,
     deployment_postgres_exporter::reconcile_prometheus_exporter_deployment,
     exec::{ExecCommand, ExecOutput},
