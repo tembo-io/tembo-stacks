@@ -46,6 +46,10 @@ impl<'de> Deserialize<'de> for PortMapping {
     }
 }
 
+// required to have a custom JsonSchema trait implementation to support
+// the custom Deserialize trait implementation above.
+// PortMapping is represented as a string in the Schema, but deserializes
+// to the PortMapping struct
 impl JsonSchema for PortMapping {
     fn schema_name() -> String {
         "PortMapping".to_owned()

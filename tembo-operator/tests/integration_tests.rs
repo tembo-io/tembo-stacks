@@ -2605,8 +2605,6 @@ mod test {
     async fn functional_test_app_service() {
         // Initialize the Kubernetes client
         let client = kube_client().await;
-        let state = State::default();
-        let context = state.create_context(client.clone());
 
         // Configurations
         let mut rng = rand::thread_rng();
@@ -2621,10 +2619,6 @@ mod test {
         };
 
         let kind = "CoreDB";
-        let replicas = 2;
-
-        // Create a pod we can use to run commands in the cluster
-        let pods: Api<Pod> = Api::namespaced(client.clone(), &namespace);
 
         // Apply a basic configuration of CoreDB
         println!("Creating CoreDB resource {}", name);
@@ -2659,12 +2653,13 @@ mod test {
         let params = PatchParams::apply("tembo-integration-test");
         let patch = Patch::Apply(&coredb_json);
         coredbs.patch(name, &params, &patch).await.unwrap();
-        thread::sleep(Duration::from_millis(500));
+        thread::sleep(Duration::from_millis(2000));
 
         // assert we created two Deployments, with the names we provided
         let deployments: Api<Deployment> = Api::namespaced(client.clone(), &namespace);
         let lp = ListParams::default().labels(format!("coredb.io/name={}", name).as_str());
         let deployments_list = deployments.list(&lp).await.expect("could not get deployments");
+        println1("Deployments: {:?}", deployments_list);
         // two AppService deployments. the postgres exporter is disabled
         assert!(deployments_list.items.len() == 2);
         let app_0 = deployments_list.items[0].clone();
