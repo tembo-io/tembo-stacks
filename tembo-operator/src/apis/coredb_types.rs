@@ -27,7 +27,6 @@ pub struct Stack {
     pub postgres_config: Option<Vec<PgConfig>>,
 }
 
-
 #[derive(Deserialize, Serialize, Clone, Debug, JsonSchema, Default)]
 pub struct ServiceAccountTemplate {
     pub metadata: Option<ObjectMeta>,
@@ -240,7 +239,6 @@ pub struct CoreDBStatus {
     pub resources: Option<ResourceRequirements>,
     pub runtime_config: Option<Vec<PgConfig>>,
 }
-
 
 #[cfg(test)]
 mod tests {

@@ -541,10 +541,7 @@ pub async fn reconcile_cnpg(cdb: &CoreDB, ctx: Arc<Context>) -> Result<(), Actio
     if let Some(restarted_at) = cdb.annotations().get(RESTARTED_AT) {
         // Forward the `restartedAt` annotation from CoreDB over to the CNPG cluster
         let mut cluster_annotations = cluster.metadata.annotations.unwrap_or_default();
-        cluster_annotations.insert(
-            RESTARTED_AT.into(),
-            restarted_at.to_owned(),
-        );
+        cluster_annotations.insert(RESTARTED_AT.into(), restarted_at.to_owned());
 
         cluster.metadata.annotations = Some(cluster_annotations);
     }

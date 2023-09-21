@@ -9,7 +9,6 @@ use crate::aws::cloudformation::{AWSConfigState, CloudFormationParams};
 use aws_sdk_cloudformation::config::Region;
 use controller::{
     apis::coredb_types::{CoreDB, CoreDBSpec},
-    cloudnativepg::clusters::Cluster,
 };
 use errors::ConductorError;
 use k8s_openapi::api::apps::v1::StatefulSet;
