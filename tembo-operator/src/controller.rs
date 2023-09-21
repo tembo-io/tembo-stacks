@@ -283,7 +283,7 @@ impl CoreDB {
                 trunk_installs: self.status.clone().and_then(|f| f.trunk_installs),
                 resources: Some(self.spec.resources.clone()),
                 runtime_config: self.spec.runtime_config.clone(),
-                first_recoverability_time: self.status.clone().and_then(|f| f.first_recoverability_time),
+                first_recoverability_time: self.status.as_ref().and_then(|f| f.first_recoverability_time),
             },
         };
 
