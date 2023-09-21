@@ -1,4 +1,4 @@
-use crate::{app_service::types::AppService, extensions::types::ExtensionStatus, stacks::types::Stack};
+use crate::{app_service::types::AppService, extensions::types::ExtensionStatus};
 
 use k8s_openapi::{
     api::core::v1::ResourceRequirements,
