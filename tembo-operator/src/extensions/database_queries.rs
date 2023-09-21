@@ -4,9 +4,10 @@ use crate::{
         types,
         types::{ExtensionInstallLocation, ExtensionInstallLocationStatus, ExtensionStatus},
     },
-    Context,
+    Context, RESTARTED_AT,
 };
-use kube::runtime::controller::Action;
+use chrono::{DateTime, Utc};
+use kube::{runtime::controller::Action, ResourceExt};
 use lazy_static::lazy_static;
 use regex::Regex;
 use std::{collections::HashMap, sync::Arc, time::Duration};
@@ -134,6 +135,49 @@ pub async fn list_extensions(cdb: &CoreDB, ctx: Arc<Context>, database: &str) ->
         .await?;
     let result_string = psql_out.stdout.unwrap();
     Ok(parse_extensions(&result_string))
+}
+
+/// Returns Ok if the given database is running (i.e. not restarting)
+pub async fn is_not_restarting(cdb: &CoreDB, ctx: Arc<Context>, database: &str) -> Result<(), Action> {
+    let Some(restarted_at) = cdb.annotations().get(RESTARTED_AT) else {
+        // No restartedAt annotation, so we're not restarting
+        return Ok(());
+    };
+
+    let restarted_requested_at: DateTime<Utc> = DateTime::parse_from_rfc3339(restarted_at)
+        .map_err(|err| {
+            tracing::error!("Failed to deserialize DateTime from `restartedAt`: {err}");
+
+            Action::requeue(Duration::from_secs(300))
+        })?
+        .into();
+
+    let pg_postmaster_start_time = cdb
+        .psql(
+            "select pg_postmaster_start_time();".to_owned(),
+            database.to_owned(),
+            ctx,
+        )
+        .await?
+        .stdout
+        .unwrap();
+
+    let server_started_at: DateTime<Utc> = DateTime::parse_from_rfc3339(&pg_postmaster_start_time)
+        .map_err(|err| {
+            tracing::error!("Failed to deserialize DateTime from `pg_postmaster_start_time`: {err}");
+
+            Action::requeue(Duration::from_secs(300))
+        })?
+        .into();
+
+    if server_started_at >= restarted_requested_at {
+        // Server started after the moment we requested it to restart,
+        // meaning the restart is done
+        Ok(())
+    } else {
+        // Server hasn't even started restarting yet
+        Err(Action::requeue(Duration::from_secs(2)))
+    }
 }
 
 pub fn parse_extensions(psql_str: &str) -> Vec<ExtRow> {

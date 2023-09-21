@@ -7,6 +7,7 @@ use crate::{
     config::Config,
     deployment_postgres_exporter::reconcile_prometheus_exporter_deployment,
     exec::{ExecCommand, ExecOutput},
+    extensions::database_queries::{is_not_restarting, list_databases},
     ingress::reconcile_postgres_ing_route_tcp,
     psql::{PsqlCommand, PsqlOutput},
     secret::{reconcile_postgres_role_secret, reconcile_secret},
@@ -255,6 +256,15 @@ impl CoreDB {
 
         let span = span!(Level::INFO, "status_update");
         let _enter = span.enter();
+
+        // Check if Postgres is already running in all databases
+        {
+            let databases = list_databases(self, ctx.clone()).await?;
+
+            for database in databases {
+                is_not_restarting(self, ctx.clone(), &database).await?;
+            }
+        }
 
         let new_status = match self.spec.stop {
             false => {
