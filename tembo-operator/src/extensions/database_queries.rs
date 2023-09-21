@@ -176,7 +176,7 @@ pub async fn is_not_restarting(cdb: &CoreDB, ctx: Arc<Context>, database: &str) 
         Ok(())
     } else {
         // Server hasn't even started restarting yet
-        Err(Action::requeue(Duration::from_secs(2)))
+        Err(Action::requeue(Duration::from_secs(5)))
     }
 }
 
