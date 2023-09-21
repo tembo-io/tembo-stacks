@@ -22,8 +22,3 @@ spec:
       value: 'pg_cron,pg_stat_statements'
     - name: pg_stat_statements.track
       value: top
-  services:
-    - image: strm/helloworld-http:latest
-      ports:
-        "80": "80"
-        "20": "20"
