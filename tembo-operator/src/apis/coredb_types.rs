@@ -22,6 +22,13 @@ use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use std::collections::{BTreeMap, BTreeSet};
 
+#[derive(Clone, Default, Debug, Serialize, Deserialize, JsonSchema)]
+pub struct Stack {
+    pub name: String,
+    pub postgres_config: Option<Vec<PgConfig>>,
+}
+
+
 #[derive(Deserialize, Serialize, Clone, Debug, JsonSchema, Default)]
 pub struct ServiceAccountTemplate {
     pub metadata: Option<ObjectMeta>,
