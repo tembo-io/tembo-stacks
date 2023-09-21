@@ -1,10 +1,7 @@
 use crate::{apis::coredb_types::CoreDB, Context, Error, Result};
 use k8s_openapi::{
     api::{
-        apps::{
-            self,
-            v1::{Deployment, DeploymentSpec},
-        },
+        apps::v1::{Deployment, DeploymentSpec},
         core::v1::{
             Container, ContainerPort, EnvVar, HTTPGetAction, PodSpec, PodTemplateSpec, Probe, SecurityContext,
         },
@@ -78,7 +75,7 @@ fn generate_deployment(appsvc: &AppService, namespace: &str, oref: OwnerReferenc
     let container_ports: Option<Vec<ContainerPort>> = match appsvc.ports.as_ref() {
         Some(ports) => {
             let container_ports: Vec<ContainerPort> = ports
-                .into_iter()
+                .iter()
                 .map(|pm| ContainerPort {
                     container_port: pm.container as i32,
                     host_port: Some(pm.host as i32),
@@ -98,19 +95,15 @@ fn generate_deployment(appsvc: &AppService, namespace: &str, oref: OwnerReferenc
         ..SecurityContext::default()
     };
 
-    let env_vars: Option<Vec<EnvVar>> = match appsvc.env.clone() {
-        Some(env) => Some(
-            env.into_iter()
-                .map(|(k, v)| EnvVar {
-                    name: k,
-                    value: Some(v),
-                    ..EnvVar::default()
-                })
-                .collect(),
-        ),
-        None => None,
-    };
-
+    let env_vars: Option<Vec<EnvVar>> = appsvc.env.clone().map(|env| {
+        env.into_iter()
+            .map(|(k, v)| EnvVar {
+                name: k,
+                value: Some(v),
+                ..EnvVar::default()
+            })
+            .collect()
+    });
     // TODO: Container VolumeMounts, currently not in scope
     // TODO: PodSpec volumes, currently not in scope
 

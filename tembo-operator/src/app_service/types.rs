@@ -1,13 +1,9 @@
 use crate::ingress_route_tcp_crd::IngressRouteTCPSpec;
 use k8s_openapi::api::core::v1::ResourceRequirements;
-use schemars::{
-    schema::{Schema, SchemaObject},
-    JsonSchema,
-};
-use serde::{Deserialize, Serialize};
-use std::{collections::BTreeMap, str::FromStr};
+use schemars::JsonSchema;
+use serde::{Deserialize, Deserializer, Serialize};
+use std::collections::BTreeMap;
 use utoipa::ToSchema;
-
 // defines a app container
 #[derive(Clone, Debug, Serialize, Deserialize, ToSchema, JsonSchema)]
 pub struct AppService {
@@ -30,8 +26,10 @@ pub struct PortMapping {
     pub container: u16,
 }
 
-use serde::Deserializer;
 
+// attempting to keep the CRD clean
+// this enables ports to be defined as "8080:8081" instead of
+// {"host": "8080", "container": "8081}
 impl<'de> Deserialize<'de> for PortMapping {
     fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
     where
