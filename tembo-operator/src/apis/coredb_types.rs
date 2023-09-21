@@ -1,4 +1,5 @@
-use crate::{extensions::types::ExtensionStatus, stacks::types::{Stack, Service}};
+use crate::{app_service::types::AppService, extensions::types::ExtensionStatus, stacks::types::Stack};
+
 use k8s_openapi::{
     api::core::v1::ResourceRequirements,
     apimachinery::pkg::{api::resource::Quantity, apis::meta::v1::ObjectMeta},
@@ -102,9 +103,8 @@ pub struct CoreDBSpec {
     pub runtime_config: Option<Vec<PgConfig>>,
     // configuration overrides, typically defined by the user
     pub override_configs: Option<Vec<PgConfig>>,
-  
-    // configuration overrides, typically defined by the user
-    pub services: Option<Vec<Service>>,
+
+    pub app_services: Option<Vec<AppService>>,
 }
 
 impl CoreDBSpec {

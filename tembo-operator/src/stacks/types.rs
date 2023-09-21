@@ -1,9 +1,3 @@
-use k8s_openapi::api::core::v1::ResourceRequirements;
-use schemars::JsonSchema;
-use serde::{Deserialize, Serialize};
-use std::collections::BTreeMap;
-use utoipa::ToSchema;
-
 use crate::{
     apis::postgres_parameters::PgConfig,
     defaults::default_image,
@@ -11,6 +5,9 @@ use crate::{
     postgres_exporter::QueryConfig,
     stacks::config_engines::{olap_config_engine, standard_config_engine, ConfigEngine},
 };
+use schemars::JsonSchema;
+use serde::{Deserialize, Serialize};
+use utoipa::ToSchema;
 
 #[derive(Clone, Debug, Default, Serialize, Deserialize, JsonSchema, PartialEq, ToSchema)]
 pub enum StackType {
@@ -68,7 +65,6 @@ pub struct Stack {
     #[serde(default = "default_config_engine")]
     pub postgres_config_engine: Option<ConfigEngine>,
     // external application services
-    pub services: Option<Vec<Service>>,
     pub infrastructure: Option<Infrastructure>,
 }
 
@@ -120,43 +116,6 @@ pub struct ComputeTemplate {
     pub memory: String,
 }
 
-
-// defines a app container
-#[derive(Clone, Debug, Serialize, Deserialize, ToSchema, JsonSchema, PartialEq)]
-pub struct Service {
-    pub image: String,
-    pub args: Option<Vec<String>>,
-    pub command: Option<Vec<String>>,
-    pub env: Option<BTreeMap<String, String>>,
-    pub ports: Option<Vec<BTreeMap<String, String>>>,
-    pub resources: Option<ResourceRequirements>,
-    pub probes: Option<Probes>,
-    pub metrics: Option<Metrics>,
-}
-
-
-#[allow(non_snake_case)]
-#[derive(Clone, Debug, Serialize, Deserialize, ToSchema, JsonSchema, PartialEq)]
-pub struct Ingress {
-    enabled: bool,
-    containerPort: u32,
-    path: String,
-}
-
-#[allow(non_snake_case)]
-#[derive(Clone, Debug, Serialize, Deserialize, ToSchema, JsonSchema, PartialEq)]
-pub struct Probes {
-    livenessProbe: String,
-    readinessProbe: String,
-}
-
-#[allow(non_snake_case)]
-#[derive(Clone, Debug, Serialize, Deserialize, ToSchema, JsonSchema, PartialEq)]
-pub struct Metrics {
-    enabled: bool,
-    port: String,
-    path: String,
-}
 
 #[cfg(test)]
 mod tests {
