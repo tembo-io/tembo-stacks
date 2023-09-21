@@ -17,6 +17,7 @@ use crate::{
     apis::postgres_parameters::ConfigValue,
     extensions::types::{Extension, TrunkInstall, TrunkInstallStatus},
 };
+use chrono::{DateTime, Utc};
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use std::collections::{BTreeMap, BTreeSet};
@@ -238,6 +239,7 @@ pub struct CoreDBStatus {
     pub storage: Option<Quantity>,
     pub resources: Option<ResourceRequirements>,
     pub runtime_config: Option<Vec<PgConfig>>,
+    pub first_recoverability_time: Option<DateTime<Utc>>,
 }
 
 #[cfg(test)]
