@@ -3,6 +3,7 @@ use futures::stream::StreamExt;
 
 use crate::{
     apis::coredb_types::{CoreDB, CoreDBStatus},
+    app_service::manager::reconcile_app_services,
     cloudnativepg::cnpg::{cnpg_cluster_from_cdb, reconcile_cnpg, reconcile_cnpg_scheduled_backup},
     config::Config,
     deployment_postgres_exporter::reconcile_prometheus_exporter_deployment,
@@ -168,6 +169,11 @@ impl CoreDB {
                 warn!("DATA_PLANE_BASEDOMAIN is not set, skipping reconciliation of IngressRouteTCP");
             }
         };
+
+        reconcile_app_services(self, ctx.clone()).await.map_err(|e| {
+            error!("Error reconciling AppService deployment: {:?}", e);
+            Action::requeue(Duration::from_secs(5))
+        })?;
 
         if self.spec.postgresExporterEnabled
             && self

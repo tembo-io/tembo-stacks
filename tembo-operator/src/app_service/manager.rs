@@ -1,12 +1,18 @@
 use crate::{apis::coredb_types::CoreDB, Context, Error, Result};
 use k8s_openapi::{
     api::{
-        apps::v1::{Deployment, DeploymentSpec},
+        apps::{
+            self,
+            v1::{Deployment, DeploymentSpec},
+        },
         core::v1::{
             Container, ContainerPort, EnvVar, HTTPGetAction, PodSpec, PodTemplateSpec, Probe, SecurityContext,
         },
     },
-    apimachinery::pkg::{apis::meta::v1::LabelSelector, util::intstr::IntOrString},
+    apimachinery::pkg::{
+        apis::meta::v1::{LabelSelector, OwnerReference},
+        util::intstr::IntOrString,
+    },
 };
 use kube::{
     api::{Api, ObjectMeta, Patch, PatchParams, ResourceExt},
@@ -14,29 +20,33 @@ use kube::{
 };
 use std::{collections::BTreeMap, sync::Arc};
 
-// TODO: run this for every app_service
-pub async fn reconcile_app_services(cdb: &CoreDB, ctx: Arc<Context>) -> Result<(), Error> {
-    let appsvc = cdb.spec.app_services.clone().unwrap()[0].clone();
+use super::types::AppService;
+use tracing::*;
 
-    let client = ctx.client.clone();
-    let ns = cdb.namespace().unwrap();
-    let name = format!("{}-{}", cdb.name_any(), appsvc.name);
+// private wrapper to hold the AppService and the name of the Deployment
+struct AppDeployment {
+    deployment: Deployment,
+    name: String,
+}
+
+// creates a single Deployment given an AppService
+fn generate_deployment(appsvc: &AppService, namespace: &str, oref: OwnerReference) -> AppDeployment {
+    // namespace and owner name are the same
+
     let mut labels: BTreeMap<String, String> = BTreeMap::new();
-    let deployment_api: Api<Deployment> = Api::namespaced(client, &ns);
-    let oref = cdb.controller_owner_ref(&()).unwrap();
-    labels.insert("app".to_owned(), name.clone());
+    labels.insert("app".to_owned(), appsvc.name.clone());
     labels.insert("component".to_owned(), "AppService".to_string());
-    labels.insert("coredb.io/name".to_owned(), cdb.name_any());
+    labels.insert("coredb.io/name".to_owned(), namespace.to_owned());
 
     let deployment_metadata = ObjectMeta {
-        name: Some(name.to_owned()),
-        namespace: Some(ns.to_owned()),
+        name: Some(appsvc.name.to_owned()),
+        namespace: Some(namespace.to_owned()),
         labels: Some(labels.clone()),
         owner_references: Some(vec![oref]),
         ..ObjectMeta::default()
     };
 
-    let (readiness_probe, liveness_probe) = match appsvc.probes {
+    let (readiness_probe, liveness_probe) = match appsvc.probes.clone() {
         Some(probes) => {
             let readiness_probe = Probe {
                 http_get: Some(HTTPGetAction {
@@ -65,14 +75,14 @@ pub async fn reconcile_app_services(cdb: &CoreDB, ctx: Arc<Context>) -> Result<(
     };
 
     // container port mapping
-    let container_ports: Option<Vec<ContainerPort>> = match appsvc.ports {
+    let container_ports: Option<Vec<ContainerPort>> = match appsvc.ports.as_ref() {
         Some(ports) => {
             let container_ports: Vec<ContainerPort> = ports
                 .into_iter()
                 .map(|pm| ContainerPort {
                     container_port: pm.container as i32,
                     host_port: Some(pm.host as i32),
-                    name: Some(name.clone()),
+                    name: Some(appsvc.name.clone()),
                     protocol: Some("TCP".to_string()),
                     ..ContainerPort::default()
                 })
@@ -88,7 +98,7 @@ pub async fn reconcile_app_services(cdb: &CoreDB, ctx: Arc<Context>) -> Result<(
         ..SecurityContext::default()
     };
 
-    let env_vars: Option<Vec<EnvVar>> = match appsvc.env {
+    let env_vars: Option<Vec<EnvVar>> = match appsvc.env.clone() {
         Some(env) => Some(
             env.into_iter()
                 .map(|(k, v)| EnvVar {
@@ -106,10 +116,10 @@ pub async fn reconcile_app_services(cdb: &CoreDB, ctx: Arc<Context>) -> Result<(
 
     let pod_spec = PodSpec {
         containers: vec![Container {
-            args: appsvc.args,
+            args: appsvc.args.clone(),
             env: env_vars,
-            image: Some(appsvc.image),
-            name: name.clone(),
+            image: Some(appsvc.image.clone()),
+            name: appsvc.name.clone(),
             ports: container_ports,
             readiness_probe,
             liveness_probe,
@@ -119,13 +129,11 @@ pub async fn reconcile_app_services(cdb: &CoreDB, ctx: Arc<Context>) -> Result<(
         ..PodSpec::default()
     };
 
-    // Generate the PodTemplateSpec for the DeploymentSpec
     let pod_template_spec = PodTemplateSpec {
         metadata: Some(deployment_metadata.clone()),
         spec: Some(pod_spec),
     };
 
-    // Generate the DeploymentSpec for the Deployment
     let deployment_spec = DeploymentSpec {
         selector: LabelSelector {
             match_labels: Some(labels.clone()),
@@ -134,19 +142,48 @@ pub async fn reconcile_app_services(cdb: &CoreDB, ctx: Arc<Context>) -> Result<(
         template: pod_template_spec,
         ..DeploymentSpec::default()
     };
+    AppDeployment {
+        deployment: Deployment {
+            metadata: deployment_metadata,
+            spec: Some(deployment_spec),
+            ..Deployment::default()
+        },
+        name: appsvc.name.clone(),
+    }
+}
 
-    // Generate the Deployment for Prometheus Exporter
-    let deployment = Deployment {
-        metadata: deployment_metadata,
-        spec: Some(deployment_spec),
-        ..Deployment::default()
+pub async fn reconcile_app_services(cdb: &CoreDB, ctx: Arc<Context>) -> Result<(), Error> {
+    let client = ctx.client.clone();
+    let ns = cdb.namespace().unwrap();
+    let oref = cdb.controller_owner_ref(&()).unwrap();
+    let deployments: Vec<AppDeployment> = match cdb.spec.app_services.clone() {
+        Some(app_services) => app_services
+            .into_iter()
+            .map(|appsvc| generate_deployment(&appsvc, &ns, oref.clone()))
+            .collect(),
+        None => {
+            debug!("No AppServices found in Instance: {}", ns);
+            return Ok(());
+        }
     };
 
+    let deployment_api: Api<Deployment> = Api::namespaced(client, &ns);
     let ps = PatchParams::apply("cntrlr").force();
-    let _o = deployment_api
-        .patch(&name, &ps, &Patch::Apply(&deployment))
-        .await
-        .map_err(Error::KubeError)?;
-
+    for ad in deployments {
+        match deployment_api
+            .patch(&ad.name, &ps, &Patch::Apply(&ad.deployment))
+            .await
+            .map_err(Error::KubeError)
+        {
+            Ok(_) => {
+                debug!("Successfully reconciled AppService: {}", ad.name);
+            }
+            Err(e) => {
+                // is here a better way to surface failures without completely stopping all reconciliation of AppService?
+                error!("deployment: {:?}", ad.deployment);
+                error!("Failed to reconcile AppService: {}, error: {}", ad.name, e);
+            }
+        }
+    }
     Ok(())
 }

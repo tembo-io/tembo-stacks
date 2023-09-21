@@ -1,6 +1,9 @@
 use crate::ingress_route_tcp_crd::IngressRouteTCPSpec;
 use k8s_openapi::api::core::v1::ResourceRequirements;
-use schemars::JsonSchema;
+use schemars::{
+    schema::{Schema, SchemaObject},
+    JsonSchema,
+};
 use serde::{Deserialize, Serialize};
 use std::{collections::BTreeMap, str::FromStr};
 use utoipa::ToSchema;
@@ -13,6 +16,7 @@ pub struct AppService {
     pub args: Option<Vec<String>>,
     pub command: Option<Vec<String>>,
     pub env: Option<BTreeMap<String, String>>,
+    // PortMapping is in format of String "host:container"
     pub ports: Option<Vec<PortMapping>>,
     pub resources: Option<ResourceRequirements>,
     pub probes: Option<Probes>,
@@ -20,38 +24,44 @@ pub struct AppService {
     pub ingress: Option<IngressRouteTCPSpec>,
 }
 
-#[derive(Clone, Debug, Serialize, Deserialize, ToSchema, JsonSchema)]
+#[derive(Clone, Debug, PartialEq, Serialize, ToSchema)]
 pub struct PortMapping {
     pub host: u16,
     pub container: u16,
 }
 
-// this allows us to construct ports as a Vec<String>, then work with them as a Vec<PortMapping>
-impl FromStr for PortMapping {
-    type Err = &'static str;
+use serde::Deserializer;
 
-    fn from_str(s: &str) -> Result<Self, Self::Err> {
+impl<'de> Deserialize<'de> for PortMapping {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        let s: &str = Deserialize::deserialize(deserializer)?;
         let parts: Vec<&str> = s.split(':').collect();
         if parts.len() != 2 {
-            return Err("Invalid format");
+            return Err(serde::de::Error::custom("invalid port mapping"));
         }
-
-        let host = parts[0].parse::<u16>().map_err(|_| "Invalid host port")?;
-        let container = parts[1].parse::<u16>().map_err(|_| "Invalid container port")?;
-
+        let host = parts[0].parse().map_err(serde::de::Error::custom)?;
+        let container = parts[1].parse().map_err(serde::de::Error::custom)?;
         Ok(PortMapping { host, container })
     }
 }
 
-fn main() {
-    let input = vec!["8080:8080", "8081:8081"];
-    let port_mappings: Result<Vec<PortMapping>, &str> = input.iter().map(|s| s.parse()).collect();
+impl JsonSchema for PortMapping {
+    fn schema_name() -> String {
+        "PortMapping".to_owned()
+    }
 
-    match port_mappings {
-        Ok(mappings) => println!("{:?}", mappings),
-        Err(e) => println!("Error: {}", e),
+    fn json_schema(_gen: &mut schemars::gen::SchemaGenerator) -> schemars::schema::Schema {
+        let schema = schemars::schema::SchemaObject {
+            instance_type: Some(schemars::schema::InstanceType::String.into()),
+            ..Default::default()
+        };
+        schema.into()
     }
 }
+
 
 #[allow(non_snake_case)]
 #[derive(Clone, Debug, Serialize, Deserialize, ToSchema, JsonSchema, PartialEq)]
@@ -82,13 +92,13 @@ mod tests {
     use super::*;
 
     #[test]
-    fn test_port_mapping() {
-        let input = vec!["8080:8080", "8081:8081"];
-        let port_mappings: Result<Vec<PortMapping>, &str> = input.iter().map(|s| s.parse()).collect();
-
-        match port_mappings {
-            Ok(mappings) => println!("{:?}", mappings),
-            Err(e) => println!("Error: {}", e),
-        }
+    fn test_deserialize_port_mapping() {
+        let input = r#""8080:8081""#;
+        let expected = PortMapping {
+            host: 8080,
+            container: 8081,
+        };
+        let actual: PortMapping = serde_json::from_str(input).unwrap();
+        assert_eq!(actual, expected);
     }
 }
