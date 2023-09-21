@@ -2599,4 +2599,97 @@ mod test {
         // Delete namespace
         let _ = delete_namespace(client.clone(), &namespace).await;
     }
+
+    #[tokio::test]
+    #[ignore]
+    async fn functional_test_app_service() {
+        // Initialize the Kubernetes client
+        let client = kube_client().await;
+        let state = State::default();
+        let context = state.create_context(client.clone());
+
+        // Configurations
+        let mut rng = rand::thread_rng();
+        let suffix = rng.gen_range(0..100000);
+        let name = &format!("test-coredb-{}", suffix);
+        let namespace = match create_namespace(client.clone(), name).await {
+            Ok(namespace) => namespace,
+            Err(e) => {
+                eprintln!("Error creating namespace: {}", e);
+                std::process::exit(1);
+            }
+        };
+
+        let kind = "CoreDB";
+        let replicas = 2;
+
+        // Create a pod we can use to run commands in the cluster
+        let pods: Api<Pod> = Api::namespaced(client.clone(), &namespace);
+
+        // Apply a basic configuration of CoreDB
+        println!("Creating CoreDB resource {}", name);
+        let coredbs: Api<CoreDB> = Api::namespaced(client.clone(), &namespace);
+        // generate an instance w/ 2 services
+        let coredb_json = serde_json::json!({
+            "apiVersion": API_VERSION,
+            "kind": kind,
+            "metadata": {
+                "name": name
+            },
+            "spec": {
+                "app_services": [
+                    {
+                        "name": "test-app-0",
+                        "image": "crccheck/hello-world:latest",
+                        "ports": [
+                            "80:8000"
+                        ]
+                    },
+                    {
+                        "name": "test-app-1",
+                        "image": "crccheck/hello-world:latest",
+                        "ports": [
+                            "81:8000"
+                        ]
+                    }
+                ],
+                "postgresExporterEnabled": false
+            }
+        });
+        let params = PatchParams::apply("tembo-integration-test");
+        let patch = Patch::Apply(&coredb_json);
+        coredbs.patch(name, &params, &patch).await.unwrap();
+        thread::sleep(Duration::from_millis(500));
+
+        // assert we created two Deployments, with the names we provided
+        let deployments: Api<Deployment> = Api::namespaced(client.clone(), &namespace);
+        let lp = ListParams::default().labels(format!("coredb.io/name={}", name).as_str());
+        let deployments_list = deployments.list(&lp).await.expect("could not get deployments");
+        // two AppService deployments. the postgres exporter is disabled
+        assert!(deployments_list.items.len() == 2);
+        let app_0 = deployments_list.items[0].clone();
+        let app_1 = deployments_list.items[1].clone();
+        assert_eq!(app_0.metadata.name.unwrap(), "test-app-0");
+        assert_eq!(app_1.metadata.name.unwrap(), "test-app-1");
+
+        // CLEANUP TEST
+        // Cleanup CoreDB
+        coredbs.delete(name, &Default::default()).await.unwrap();
+        println!("Waiting for CoreDB to be deleted: {}", &name);
+        let _assert_coredb_deleted = tokio::time::timeout(
+            Duration::from_secs(TIMEOUT_SECONDS_COREDB_DELETED),
+            await_condition(coredbs.clone(), name, conditions::is_deleted("")),
+        )
+        .await
+        .unwrap_or_else(|_| {
+            panic!(
+                "CoreDB {} was not deleted after waiting {} seconds",
+                name, TIMEOUT_SECONDS_COREDB_DELETED
+            )
+        });
+        println!("CoreDB resource deleted {}", name);
+
+        // Delete namespace
+        let _ = delete_namespace(client.clone(), &namespace).await;
+    }
 }
