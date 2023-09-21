@@ -22,7 +22,7 @@ use crate::{
     config::Config,
     defaults::{default_image, default_llm_image},
     trunk::extensions_that_require_load,
-    Context,
+    Context, RESTARTED_AT,
 };
 use k8s_openapi::{api::core::v1::Pod, apimachinery::pkg::apis::meta::v1::ObjectMeta};
 use kube::{
@@ -537,6 +537,18 @@ pub async fn reconcile_cnpg(cdb: &CoreDB, ctx: Arc<Context>) -> Result<(), Actio
         .name
         .clone()
         .expect("CNPG Cluster should always have a name");
+
+    if let Some(restarted_at) = cdb.annotations().get(RESTARTED_AT) {
+        // Forward the `restartedAt` annotation from CoreDB over to the CNPG cluster
+        let mut cluster_annotations = cluster.metadata.annotations.unwrap_or_default();
+        cluster_annotations.insert(
+            RESTARTED_AT.into(),
+            restarted_at.to_owned(),
+        );
+
+        cluster.metadata.annotations = Some(cluster_annotations);
+    }
+
     let cluster_api: Api<Cluster> = Api::namespaced(ctx.client.clone(), namespace.as_str());
 
     let mut _restart_required = false;
