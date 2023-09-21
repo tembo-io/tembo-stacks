@@ -405,7 +405,7 @@ pub async fn restart_cnpg(
     namespace: &str,
     cluster_name: &str,
 ) -> Result<(), ConductorError> {
-    let cluster: Api<Cluster> = Api::namespaced(client, namespace);
+    let cluster: Api<CoreDB> = Api::namespaced(client, namespace);
     let restart = Utc::now()
         .to_rfc3339_opts(SecondsFormat::Secs, true)
         .to_string();
