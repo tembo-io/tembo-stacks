@@ -257,14 +257,8 @@ impl CoreDB {
         let span = span!(Level::INFO, "status_update");
         let _enter = span.enter();
 
-        // Check if Postgres is already running in all databases
-        {
-            let databases = list_databases(self, ctx.clone()).await?;
-
-            for database in databases {
-                is_not_restarting(self, ctx.clone(), &database).await?;
-            }
-        }
+        // Check if Postgres is already running
+        is_not_restarting(self, ctx.clone(), "postgres").await?;
 
         let new_status = match self.spec.stop {
             false => {
