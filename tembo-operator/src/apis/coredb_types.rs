@@ -237,7 +237,6 @@ pub struct CoreDBStatus {
     pub runtime_config: Option<Vec<PgConfig>>,
 }
 
-
 #[cfg(test)]
 mod tests {
     use super::*;

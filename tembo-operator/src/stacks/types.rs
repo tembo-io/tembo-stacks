@@ -47,7 +47,6 @@ impl StackType {
     }
 }
 
-
 #[derive(Clone, Debug, Default, Serialize, Deserialize, JsonSchema, PartialEq, ToSchema)]
 pub struct Stack {
     pub name: String,
@@ -115,7 +114,6 @@ pub struct ComputeTemplate {
     pub cpu: String,
     pub memory: String,
 }
-
 
 #[cfg(test)]
 mod tests {
