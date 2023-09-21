@@ -12,8 +12,8 @@ use k8s_openapi::{
     },
 };
 use kube::{
-    api::{Api, ObjectMeta, Patch, PatchParams, ResourceExt},
-    Resource,
+    api::{Api, ListParams, ObjectMeta, Patch, PatchParams, ResourceExt},
+    Client, Resource,
 };
 use std::{collections::BTreeMap, sync::Arc};
 
@@ -145,23 +145,82 @@ fn generate_deployment(appsvc: &AppService, namespace: &str, oref: OwnerReferenc
     }
 }
 
+// gets all names of AppService Deployments in the namespace that have the label "component=AppService"
+async fn get_appservice_deployments(client: &Client, namespace: &str) -> Result<Vec<String>, Error> {
+    let deployent_api: Api<Deployment> = Api::namespaced(client.clone(), namespace);
+    let lp = ListParams::default().labels("component=AppService").timeout(10);
+    let deployments = deployent_api.list(&lp).await.map_err(Error::KubeError)?;
+    Ok(deployments
+        .items
+        .iter()
+        .map(|d| d.metadata.name.to_owned().expect("no name on resource"))
+        .collect())
+}
+
+// determines AppService deployments
+fn appservice_to_delete(desired: Vec<String>, actual: Vec<String>) -> Option<Vec<String>> {
+    let mut to_delete: Vec<String> = Vec::new();
+    for a in actual {
+        // if actual not in desired, put it in the delete vev
+        if !desired.contains(&a) {
+            to_delete.push(a);
+        }
+    }
+    if to_delete.is_empty() {
+        None
+    } else {
+        Some(to_delete)
+    }
+}
+
+
 pub async fn reconcile_app_services(cdb: &CoreDB, ctx: Arc<Context>) -> Result<(), Error> {
     let client = ctx.client.clone();
     let ns = cdb.namespace().unwrap();
     let oref = cdb.controller_owner_ref(&()).unwrap();
-    let deployments: Vec<AppDeployment> = match cdb.spec.app_services.clone() {
-        Some(app_services) => app_services
-            .into_iter()
-            .map(|appsvc| generate_deployment(&appsvc, &ns, oref.clone()))
-            .collect(),
+    let deployment_api: Api<Deployment> = Api::namespaced(client.clone(), &ns);
+
+    let desired_deployments = match cdb.spec.app_services.clone() {
+        Some(appsvcs) => appsvcs.iter().map(|a| a.name.clone()).collect(),
+        None => {
+            debug!("No AppServices found in Instance: {}", ns);
+            vec![]
+        }
+    };
+    let actual_deployments = get_appservice_deployments(&client, &ns).await?;
+
+    // reap any deployments that are no longer desired
+    match appservice_to_delete(desired_deployments, actual_deployments) {
+        Some(to_delete) => {
+            for d in to_delete {
+                match deployment_api.delete(&d, &Default::default()).await {
+                    Ok(_) => {
+                        debug!("Successfully deleted AppService: {}", d);
+                    }
+                    Err(e) => {
+                        error!("Failed to delete AppService: {}, error: {}", d, e);
+                    }
+                }
+            }
+        }
+        None => {}
+    }
+
+    let appsvcs = match cdb.spec.app_services.clone() {
+        Some(appsvcs) => appsvcs,
         None => {
             debug!("No AppServices found in Instance: {}", ns);
             return Ok(());
         }
     };
 
-    let deployment_api: Api<Deployment> = Api::namespaced(client, &ns);
+    let deployments: Vec<AppDeployment> = appsvcs
+        .iter()
+        .map(|appsvc| generate_deployment(&appsvc, &ns, oref.clone()))
+        .collect();
+
     let ps = PatchParams::apply("cntrlr").force();
+    // apply desired deployments
     for ad in deployments {
         match deployment_api
             .patch(&ad.name, &ps, &Patch::Apply(&ad.deployment))
@@ -173,10 +232,10 @@ pub async fn reconcile_app_services(cdb: &CoreDB, ctx: Arc<Context>) -> Result<(
             }
             Err(e) => {
                 // is here a better way to surface failures without completely stopping all reconciliation of AppService?
-                error!("deployment: {:?}", ad.deployment);
                 error!("Failed to reconcile AppService: {}, error: {}", ad.name, e);
             }
         }
     }
+
     Ok(())
 }
