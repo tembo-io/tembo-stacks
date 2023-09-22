@@ -350,7 +350,7 @@ pub async fn toggle_extension(
 mod tests {
     use crate::{
         apis::postgres_parameters::PgConfig,
-        extensions::database_queries::{
+        pkg::utils::database_queries::{
             check_input, parse_config_params, parse_extensions, parse_sql_output,
         },
     };

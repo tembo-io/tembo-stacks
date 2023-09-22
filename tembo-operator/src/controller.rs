@@ -34,9 +34,10 @@ use kube::{
 };
 
 use crate::{
+    apis::postgres_parameters::PgConfig,
     extensions::reconcile_extensions,
     ingress::reconcile_extra_postgres_ing_route_tcp,
-    pkg::utils::database_queries,
+    pkg::utils::database_queries::list_config_params,
     postgres_exporter::reconcile_prom_configmap,
     trunk::{extensions_that_require_load, reconcile_trunk_configmap},
 };
@@ -265,12 +266,7 @@ impl CoreDB {
 
                 let recovery_time = self.get_recovery_time(ctx.clone()).await?;
 
-                let current_config_values = database_queries::list_config_params(self, ctx.clone())
-                    .await
-                    .map_err(|e| {
-                        error!("Error getting current postgres config: {:?}", e);
-                        Action::requeue(Duration::from_secs(300))
-                    })?;
+                let current_config_values = get_current_config_values(self, ctx.clone()).await?;
                 CoreDBStatus {
                     running: true,
                     extensionsUpdating: false,
@@ -283,12 +279,7 @@ impl CoreDB {
                 }
             }
             true => {
-                let current_config_values = database_queries::list_config_params(self, ctx.clone())
-                    .await
-                    .map_err(|e| {
-                        error!("Error getting current postgres config: {:?}", e);
-                        Action::requeue(Duration::from_secs(300))
-                    })?;
+                let current_config_values = get_current_config_values(self, ctx.clone()).await?;
                 CoreDBStatus {
                     running: false,
                     extensionsUpdating: false,
@@ -655,6 +646,15 @@ pub async fn get_current_coredb_resource(cdb: &CoreDB, ctx: Arc<Context>) -> Res
         Action::requeue(Duration::from_secs(10))
     })?;
     Ok(coredb.clone())
+}
+
+// Get current config values
+pub async fn get_current_config_values(cdb: &CoreDB, ctx: Arc<Context>) -> Result<Vec<PgConfig>, Action> {
+    let cfg = list_config_params(cdb, ctx.clone()).await.map_err(|e| {
+        error!("Error getting current postgres config: {:?}", e);
+        Action::requeue(Duration::from_secs(300))
+    })?;
+    Ok(cfg)
 }
 
 pub async fn patch_cdb_status_merge(
