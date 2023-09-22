@@ -1,15 +1,13 @@
 use crate::config;
-use actix_web::{Error, get, HttpRequest, HttpResponse, web};
-use log::{debug, error, info, warn};
-use promql_parser::parser;
-use promql_parser::parser::{Expr, VectorSelector};
-use promql_parser::util::{ExprVisitor, walk_expr};
-use reqwest::{Client, StatusCode, Url};
-use serde::Deserialize;
-use serde_json::Value;
-use std::time::{Duration, SystemTime};
 use crate::metrics::expression_validator::NamespaceVisitor;
 use crate::metrics::types::RangeQuery;
+use actix_web::{get, web, Error, HttpRequest, HttpResponse};
+use log::{debug, error, info, warn};
+use promql_parser::parser;
+use promql_parser::util::walk_expr;
+use reqwest::{Client, StatusCode, Url};
+use serde_json::Value;
+use std::time::{Duration, SystemTime};
 
 #[utoipa::path(
     context_path = "/{namespace}/metrics",

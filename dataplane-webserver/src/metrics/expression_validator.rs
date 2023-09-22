@@ -1,10 +1,6 @@
-use log::{debug, error, info, warn};
-use promql_parser::parser;
 use promql_parser::parser::{Expr, VectorSelector};
-use promql_parser::util::{ExprVisitor, walk_expr};
-use serde::Deserialize;
-use serde_json::Value;
-use std::time::{Duration, SystemTime};
+use promql_parser::util::ExprVisitor;
+
 use promql_parser::label::MatchOp;
 
 // https://prometheus.io/docs/prometheus/latest/querying/api/
