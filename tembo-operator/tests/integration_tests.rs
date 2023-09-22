@@ -2637,14 +2637,34 @@ mod test {
                         "image": "crccheck/hello-world:latest",
                         "ports": [
                             "80:8000"
-                        ]
+                        ],
+                        "resources": {
+                            "requests": {
+                                "cpu": "100m",
+                                "memory": "256Mi"
+                            },
+                            "limits": {
+                                "cpu": "100m",
+                                "memory": "256Mi"
+                            }
+                        }
                     },
                     {
                         "name": "test-app-1",
                         "image": "crccheck/hello-world:latest",
                         "ports": [
                             "81:8000"
-                        ]
+                        ],
+                        "resources": {
+                            "requests": {
+                                "cpu": "50m",
+                                "memory": "128Mi"
+                            },
+                            "limits": {
+                                "cpu": "50m",
+                                "memory": "128Mi"
+                            }
+                        }
                     }
                 ],
                 "postgresExporterEnabled": false
@@ -2673,15 +2693,80 @@ mod test {
             thread::sleep(Duration::from_millis(2000));
         }
         assert!(passed_retry, "failed to get deployments after {} retries", retry);
-        println!("Deployments: {:?}", deployment_items);
         // two AppService deployments. the postgres exporter is disabled
         assert!(deployment_items.len() == 2);
+
         let app_0 = deployment_items[0].clone();
         let app_1 = deployment_items[1].clone();
         assert_eq!(app_0.metadata.name.unwrap(), "test-app-0");
         assert_eq!(app_1.metadata.name.unwrap(), "test-app-1");
 
-        // TODO: test delete of Deployment resource
+        // Assert resources in first AppService
+        // select the pod
+        let selector_map = app_0
+            .spec
+            .as_ref()
+            .and_then(|s| s.selector.match_labels.as_ref())
+            .expect("Deployment should have a selector");
+        let selector = selector_map
+            .iter()
+            .map(|(k, v)| format!("{}={}", k, v))
+            .collect::<Vec<_>>()
+            .join(",");
+        let lp = ListParams::default().labels(&selector);
+        let pods: Api<Pod> = Api::namespaced(client.clone(), &namespace);
+        // Fetch and print all the pods matching the label selector
+        let pod_list = pods.list(&lp).await.unwrap();
+        assert_eq!(pod_list.items.len(), 1);
+        let app_0_pod = pod_list.items[0].clone();
+        let app_0_container = app_0_pod.spec.unwrap().containers[0].clone();
+
+        let expected: ResourceRequirements = serde_json::from_value(serde_json::json!({
+            "requests": {
+                "cpu": "100m",
+                "memory": "256Mi"
+            },
+            "limits": {
+                "cpu": "100m",
+                "memory": "256Mi"
+            }
+        }))
+        .unwrap();
+        let app_0_resources = app_0_container.resources.unwrap();
+        assert_eq!(app_0_resources, expected);
+
+
+        // Assert resources in second AppService
+        let selector_map = app_1
+            .spec
+            .as_ref()
+            .and_then(|s| s.selector.match_labels.as_ref())
+            .expect("Deployment should have a selector");
+        let selector = selector_map
+            .iter()
+            .map(|(k, v)| format!("{}={}", k, v))
+            .collect::<Vec<_>>()
+            .join(",");
+        let lp = ListParams::default().labels(&selector);
+        let pod_list = pods.list(&lp).await.unwrap();
+        assert_eq!(pod_list.items.len(), 1);
+        let app_1_pod = pod_list.items[0].clone();
+        let app_1_container = app_1_pod.spec.unwrap().containers[0].clone();
+
+        let expected: ResourceRequirements = serde_json::from_value(serde_json::json!({
+            "requests": {
+                "cpu": "50m",
+                "memory": "128Mi"
+            },
+            "limits": {
+                "cpu": "50m",
+                "memory": "128Mi"
+            }
+        }))
+        .unwrap();
+        let app_1_resources = app_1_container.resources.unwrap();
+        assert_eq!(app_1_resources, expected);
+
 
         // CLEANUP TEST
         // Cleanup CoreDB

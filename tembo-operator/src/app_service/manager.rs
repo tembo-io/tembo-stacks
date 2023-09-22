@@ -114,6 +114,7 @@ fn generate_deployment(appsvc: &AppService, namespace: &str, oref: OwnerReferenc
             image: Some(appsvc.image.clone()),
             name: appsvc.name.clone(),
             ports: container_ports,
+            resources: appsvc.resources.clone(),
             readiness_probe,
             liveness_probe,
             security_context: Some(security_context),
@@ -190,20 +191,17 @@ pub async fn reconcile_app_services(cdb: &CoreDB, ctx: Arc<Context>) -> Result<(
     let actual_deployments = get_appservice_deployments(&client, &ns).await?;
 
     // reap any deployments that are no longer desired
-    match appservice_to_delete(desired_deployments, actual_deployments) {
-        Some(to_delete) => {
-            for d in to_delete {
-                match deployment_api.delete(&d, &Default::default()).await {
-                    Ok(_) => {
-                        debug!("Successfully deleted AppService: {}", d);
-                    }
-                    Err(e) => {
-                        error!("Failed to delete AppService: {}, error: {}", d, e);
-                    }
+    if let Some(to_delete) = appservice_to_delete(desired_deployments, actual_deployments) {
+        for d in to_delete {
+            match deployment_api.delete(&d, &Default::default()).await {
+                Ok(_) => {
+                    debug!("Successfully deleted AppService: {}", d);
+                }
+                Err(e) => {
+                    error!("Failed to delete AppService: {}, error: {}", d, e);
                 }
             }
         }
-        None => {}
     }
 
     let appsvcs = match cdb.spec.app_services.clone() {
@@ -216,7 +214,7 @@ pub async fn reconcile_app_services(cdb: &CoreDB, ctx: Arc<Context>) -> Result<(
 
     let deployments: Vec<AppDeployment> = appsvcs
         .iter()
-        .map(|appsvc| generate_deployment(&appsvc, &ns, oref.clone()))
+        .map(|appsvc| generate_deployment(appsvc, &ns, oref.clone()))
         .collect();
 
     let ps = PatchParams::apply("cntrlr").force();
