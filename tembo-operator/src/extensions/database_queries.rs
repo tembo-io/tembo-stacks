@@ -139,6 +139,7 @@ pub async fn list_extensions(cdb: &CoreDB, ctx: Arc<Context>, database: &str) ->
 
 /// Returns Ok if the given database is running (i.e. not restarting)
 pub async fn is_not_restarting(cdb: &CoreDB, ctx: Arc<Context>, database: &str) -> Result<(), Action> {
+    let cdb_name = cdb.name_any();
     let Some(restarted_at) = cdb.annotations().get(RESTARTED_AT) else {
         // No restartedAt annotation, so we're not restarting
         return Ok(());
@@ -146,7 +147,7 @@ pub async fn is_not_restarting(cdb: &CoreDB, ctx: Arc<Context>, database: &str) 
 
     let restarted_requested_at: DateTime<Utc> = DateTime::parse_from_rfc3339(restarted_at)
         .map_err(|err| {
-            tracing::error!("Failed to deserialize DateTime from `restartedAt`: {err}");
+            tracing::error!("{cdb_name}: Failed to deserialize DateTime from `restartedAt`: {err}");
 
             Action::requeue(Duration::from_secs(300))
         })?
@@ -160,11 +161,15 @@ pub async fn is_not_restarting(cdb: &CoreDB, ctx: Arc<Context>, database: &str) 
         )
         .await?
         .stdout
-        .unwrap();
+        .ok_or_else(|| {
+            tracing::error!("{cdb_name}: select pg_postmaster_start_time() had no stdout");
+    
+            Action::requeue(Duration::from_secs(300))
+        })?;
 
     let server_started_at: DateTime<Utc> = DateTime::parse_from_rfc3339(&pg_postmaster_start_time)
         .map_err(|err| {
-            tracing::error!("Failed to deserialize DateTime from `pg_postmaster_start_time`: {err}");
+            tracing::error!("{cdb_name}: Failed to deserialize DateTime from `pg_postmaster_start_time`: {err}");
 
             Action::requeue(Duration::from_secs(300))
         })?
