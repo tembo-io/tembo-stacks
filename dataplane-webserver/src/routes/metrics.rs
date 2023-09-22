@@ -1,24 +1,17 @@
 use crate::config;
-use actix_web::{get, web, Error, HttpRequest, HttpResponse};
+use actix_web::{Error, get, HttpRequest, HttpResponse, web};
 use log::{debug, error, info, warn};
 use promql_parser::label::MatchOp;
 use promql_parser::parser;
 use promql_parser::parser::{Expr, VectorSelector};
-use promql_parser::util::{walk_expr, ExprVisitor};
+use promql_parser::util::{ExprVisitor, walk_expr};
 use reqwest::{Client, StatusCode, Url};
 use serde::Deserialize;
 use serde_json::Value;
 use std::time::{Duration, SystemTime};
+use crate::metrics::types::RangeQuery;
 
 // https://prometheus.io/docs/prometheus/latest/querying/api/
-
-#[derive(Deserialize)]
-pub struct RangeQuery {
-    query: String,
-    start: f64,
-    end: Option<f64>,
-    step: Option<String>,
-}
 
 struct NamespaceVisitor {
     namespace: String,
