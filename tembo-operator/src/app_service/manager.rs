@@ -13,9 +13,10 @@ use k8s_openapi::{
 };
 use kube::{
     api::{Api, ListParams, ObjectMeta, Patch, PatchParams, ResourceExt},
+    runtime::controller::Action,
     Client, Resource,
 };
-use std::{collections::BTreeMap, sync::Arc};
+use std::{collections::BTreeMap, sync::Arc, time::Duration};
 
 use super::types::AppService;
 use tracing::*;
@@ -175,7 +176,7 @@ fn appservice_to_delete(desired: Vec<String>, actual: Vec<String>) -> Option<Vec
 }
 
 
-pub async fn reconcile_app_services(cdb: &CoreDB, ctx: Arc<Context>) -> Result<(), Error> {
+pub async fn reconcile_app_services(cdb: &CoreDB, ctx: Arc<Context>) -> Result<(), Action> {
     let client = ctx.client.clone();
     let ns = cdb.namespace().unwrap();
     let oref = cdb.controller_owner_ref(&()).unwrap();
@@ -188,17 +189,32 @@ pub async fn reconcile_app_services(cdb: &CoreDB, ctx: Arc<Context>) -> Result<(
             vec![]
         }
     };
-    let actual_deployments = get_appservice_deployments(&client, &ns).await?;
+    // TODO: we can improve our overall error handling design
+    // for app_service reconciliation, not stop all reconciliation if an operation on a single AppService fails
+    // however, we do want to requeue if there are any error
+    // currently there are no expected errors in this path
+    // for simplicity, we will return a requeue Action if there are errors
+    let mut has_errors: bool = false;
+
+    let actual_deployments = match get_appservice_deployments(&client, &ns).await {
+        Ok(deployments) => deployments,
+        Err(e) => {
+            has_errors = true;
+            error!("ns: {}, failed to get AppService Deployments: {}", ns, e);
+            vec![]
+        }
+    };
 
     // reap any deployments that are no longer desired
     if let Some(to_delete) = appservice_to_delete(desired_deployments, actual_deployments) {
         for d in to_delete {
             match deployment_api.delete(&d, &Default::default()).await {
                 Ok(_) => {
-                    debug!("Successfully deleted AppService: {}", d);
+                    debug!("ns: {}, successfully deleted AppService: {}", ns, d);
                 }
                 Err(e) => {
-                    error!("Failed to delete AppService: {}, error: {}", d, e);
+                    has_errors = true;
+                    error!("ns: {}, Failed to delete AppService: {}, error: {}", ns, d, e);
                 }
             }
         }
@@ -207,7 +223,7 @@ pub async fn reconcile_app_services(cdb: &CoreDB, ctx: Arc<Context>) -> Result<(
     let appsvcs = match cdb.spec.app_services.clone() {
         Some(appsvcs) => appsvcs,
         None => {
-            debug!("No AppServices found in Instance: {}", ns);
+            debug!("ns: {}, No AppServices found in spec", ns);
             return Ok(());
         }
     };
@@ -226,14 +242,21 @@ pub async fn reconcile_app_services(cdb: &CoreDB, ctx: Arc<Context>) -> Result<(
             .map_err(Error::KubeError)
         {
             Ok(_) => {
-                debug!("Successfully reconciled AppService: {}", ad.name);
+                debug!("ns: {}, successfully reconciled AppService: {}", ns, ad.name);
             }
             Err(e) => {
                 // is here a better way to surface failures without completely stopping all reconciliation of AppService?
-                error!("Failed to reconcile AppService: {}, error: {}", ad.name, e);
+                has_errors = true;
+                error!(
+                    "ns: {}, failed to reconcile AppService: {}, error: {}",
+                    ns, ad.name, e
+                );
             }
         }
     }
 
+    if has_errors {
+        return Err(Action::requeue(Duration::from_secs(300)));
+    }
     Ok(())
 }

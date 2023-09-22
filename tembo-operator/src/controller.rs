@@ -167,10 +167,7 @@ impl CoreDB {
             }
         };
 
-        reconcile_app_services(self, ctx.clone()).await.map_err(|e| {
-            error!("Error reconciling AppService deployment: {:?}", e);
-            Action::requeue(Duration::from_secs(5))
-        })?;
+        reconcile_app_services(self, ctx.clone()).await?;
 
         if self.spec.postgresExporterEnabled
             && self
