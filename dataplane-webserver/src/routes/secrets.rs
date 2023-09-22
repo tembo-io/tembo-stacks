@@ -4,30 +4,11 @@ use k8s_openapi::ByteString;
 use kube::{Api, Client};
 use lazy_static::lazy_static;
 use log::error;
-use serde;
-use serde::Serialize;
+
+use crate::secrets::types::AvailableSecret;
 use std::collections::BTreeMap;
 use std::ops::Deref;
 use utoipa::ToSchema;
-
-type SecretNameFormatter = Box<dyn Fn(&str) -> String + Send + Sync>;
-
-#[derive(Serialize, ToSchema)]
-pub struct AvailableSecret {
-    /// The name of an available secret
-    name: String,
-    /// For this secret, available keys
-    possible_keys: Vec<String>,
-    // All secrets need a string formatting function
-    #[serde(skip)]
-    formatter: SecretNameFormatter,
-}
-
-impl AvailableSecret {
-    fn kube_secret_name(&self, instance_name: &str) -> String {
-        (self.formatter)(instance_name)
-    }
-}
 
 lazy_static! {
     static ref SECRETS_ALLOW_LIST: Vec<AvailableSecret> = {
