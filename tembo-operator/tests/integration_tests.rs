@@ -2820,6 +2820,35 @@ mod test {
         assert_eq!(app_0.metadata.name.unwrap(), "test-app-0");
 
 
+        // Delete all of them
+        let coredb_json = serde_json::json!({
+            "apiVersion": API_VERSION,
+            "kind": kind,
+            "metadata": {
+                "name": name
+            },
+            "spec": {
+                "postgresExporterEnabled": false
+            }
+        });
+        let params = PatchParams::apply("tembo-integration-test");
+        let patch = Patch::Apply(&coredb_json);
+        coredbs.patch(name, &params, &patch).await.unwrap();
+        let lp = ListParams::default().labels(format!("coredb.io/name={}", name).as_str());
+        let deployment_items: Vec<Deployment> = Vec::new();
+        let mut passed_retry = false;
+        let retry = 10;
+        for _ in 0..retry {
+            let deployments_list = deployments.list(&lp).await.expect("could not get deployments");
+            if deployments_list.items.is_empty() {
+                passed_retry = true;
+                break;
+            }
+            thread::sleep(Duration::from_millis(2000));
+        }
+        assert!(passed_retry, "failed to get deployments after {} retries", retry);
+        assert!(deployment_items.is_empty());
+
         // CLEANUP TEST
         // Cleanup CoreDB
         coredbs.delete(name, &Default::default()).await.unwrap();
