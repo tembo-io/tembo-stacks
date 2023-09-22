@@ -54,26 +54,6 @@ mod test {
     const TIMEOUT_SECONDS_POD_DELETED: u64 = 120;
     const TIMEOUT_SECONDS_COREDB_DELETED: u64 = 120;
 
-    async fn retry<F, T>(f: F, max_retries: u32, delay: Duration) -> Result<T, Error>
-    where
-        F: Fn() -> Result<T, Error> + std::marker::Send + std::marker::Sync,
-        T: std::marker::Send,
-    {
-        for i in 0..max_retries {
-            match f() {
-                Ok(result) => return Ok(result),
-                Err(err) => {
-                    if i == max_retries - 1 {
-                        return Err(err);
-                    } else {
-                        tokio::time::sleep(delay).await;
-                    }
-                }
-            }
-        }
-        unreachable!();
-    }
-
     async fn kube_client() -> Client {
         // Get the name of the currently selected namespace
         let kube_config = Config::infer()
