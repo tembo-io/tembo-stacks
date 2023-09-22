@@ -1,10 +1,21 @@
 use chrono::{DateTime, Utc};
 use futures::stream::StreamExt;
 
-use crate::{apis::coredb_types::{CoreDB, CoreDBStatus}, cloudnativepg::{
-    backups::Backup,
-    cnpg::{cnpg_cluster_from_cdb, reconcile_cnpg, reconcile_cnpg_scheduled_backup},
-}, config::Config, deployment_postgres_exporter::reconcile_prometheus_exporter_deployment, exec::{ExecCommand, ExecOutput}, ingress::reconcile_postgres_ing_route_tcp, psql::{PsqlCommand, PsqlOutput}, secret::{reconcile_postgres_role_secret, reconcile_secret}, service::reconcile_prometheus_exporter_service, telemetry, Error, Metrics, Result, extensions};
+use crate::{
+    apis::coredb_types::{CoreDB, CoreDBStatus},
+    cloudnativepg::{
+        backups::Backup,
+        cnpg::{cnpg_cluster_from_cdb, reconcile_cnpg, reconcile_cnpg_scheduled_backup},
+    },
+    config::Config,
+    deployment_postgres_exporter::reconcile_prometheus_exporter_deployment,
+    exec::{ExecCommand, ExecOutput},
+    ingress::reconcile_postgres_ing_route_tcp,
+    psql::{PsqlCommand, PsqlOutput},
+    secret::{reconcile_postgres_role_secret, reconcile_secret},
+    service::reconcile_prometheus_exporter_service,
+    telemetry, Error, Metrics, Result,
+};
 use k8s_openapi::{
     api::core::v1::{Namespace, Pod},
     apimachinery::pkg::util::intstr::IntOrString,
@@ -25,6 +36,7 @@ use kube::{
 use crate::{
     extensions::reconcile_extensions,
     ingress::reconcile_extra_postgres_ing_route_tcp,
+    pkg::utils::database_queries,
     postgres_exporter::reconcile_prom_configmap,
     trunk::{extensions_that_require_load, reconcile_trunk_configmap},
 };
@@ -253,13 +265,12 @@ impl CoreDB {
 
                 let recovery_time = self.get_recovery_time(ctx.clone()).await?;
 
-                let current_config_values = extensions::database_queries::list_config_params(self, ctx.clone())
+                let current_config_values = database_queries::list_config_params(self, ctx.clone())
                     .await
                     .map_err(|e| {
                         error!("Error getting current postgres config: {:?}", e);
                         Action::requeue(Duration::from_secs(300))
                     })?;
-                println!("current_config_values: {:?}", current_config_values);
                 CoreDBStatus {
                     running: true,
                     extensionsUpdating: false,
@@ -272,13 +283,12 @@ impl CoreDB {
                 }
             }
             true => {
-                let current_config_values = extensions::database_queries::list_config_params(self, ctx.clone())
+                let current_config_values = database_queries::list_config_params(self, ctx.clone())
                     .await
                     .map_err(|e| {
                         error!("Error getting current postgres config: {:?}", e);
                         Action::requeue(Duration::from_secs(300))
                     })?;
-                println!("current_config_values: {:?}", current_config_values);
                 CoreDBStatus {
                     running: false,
                     extensionsUpdating: false,
@@ -289,7 +299,7 @@ impl CoreDB {
                     runtime_config: Some(current_config_values),
                     first_recoverability_time: self.status.as_ref().and_then(|f| f.first_recoverability_time),
                 }
-            },
+            }
         };
 
         debug!("Updating CoreDB status to {:?} for {}", new_status, name.clone());

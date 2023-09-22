@@ -17,6 +17,7 @@ pub use metrics::Metrics;
 mod config;
 pub mod defaults;
 mod errors;
+mod pkg;
 
 pub mod cloudnativepg;
 mod deployment_postgres_exporter;

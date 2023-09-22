@@ -1,19 +1,23 @@
 use crate::{
-    apis::coredb_types::CoreDB,
+    apis::{
+        coredb_types::CoreDB,
+        postgres_parameters::{ConfigValue, PgConfig},
+    },
     extensions::{
         types,
         types::{ExtensionInstallLocation, ExtensionInstallLocationStatus, ExtensionStatus},
     },
     Context,
-    apis::postgres_parameters::PgConfig,
 };
 use kube::runtime::controller::Action;
 use lazy_static::lazy_static;
 use regex::Regex;
-use std::{collections::HashMap, sync::Arc, time::Duration};
-use std::collections::BTreeSet;
+use std::{
+    collections::{BTreeSet, HashMap},
+    sync::Arc,
+    time::Duration,
+};
 use tracing::{debug, error, info, warn};
-use crate::apis::postgres_parameters::ConfigValue;
 
 lazy_static! {
     static ref VALID_INPUT: Regex = Regex::new(r"^[a-zA-Z]([a-zA-Z0-9]*[-_]?)*[a-zA-Z0-9]+$").unwrap();
@@ -344,8 +348,12 @@ pub async fn toggle_extension(
 
 #[cfg(test)]
 mod tests {
-    use crate::apis::postgres_parameters::PgConfig;
-    use crate::extensions::database_queries::{check_input, parse_config_params, parse_extensions, parse_sql_output};
+    use crate::{
+        apis::postgres_parameters::PgConfig,
+        extensions::database_queries::{
+            check_input, parse_config_params, parse_extensions, parse_sql_output,
+        },
+    };
 
     #[test]
     fn test_parse_databases() {
@@ -440,7 +448,6 @@ mod tests {
             name: "archive_mode".to_owned(),
             value: "off".parse().unwrap(),
         });
-
     }
 
     #[test]
