@@ -2609,8 +2609,8 @@ mod test {
         // Configurations
         let mut rng = rand::thread_rng();
         let suffix = rng.gen_range(0..100000);
-        let name = &format!("test-coredb-{}", suffix);
-        let namespace = match create_namespace(client.clone(), name).await {
+        let cdb_name = &format!("test-coredb-{}", suffix);
+        let namespace = match create_namespace(client.clone(), cdb_name).await {
             Ok(namespace) => namespace,
             Err(e) => {
                 eprintln!("Error creating namespace: {}", e);
@@ -2621,14 +2621,14 @@ mod test {
         let kind = "CoreDB";
 
         // Apply a basic configuration of CoreDB
-        println!("Creating CoreDB resource {}", name);
+        println!("Creating CoreDB resource {}", cdb_name);
         let coredbs: Api<CoreDB> = Api::namespaced(client.clone(), &namespace);
         // generate an instance w/ 2 services
         let coredb_json = serde_json::json!({
             "apiVersion": API_VERSION,
             "kind": kind,
             "metadata": {
-                "name": name
+                "name": cdb_name
             },
             "spec": {
                 "appServices": [
@@ -2672,13 +2672,13 @@ mod test {
         });
         let params = PatchParams::apply("tembo-integration-test");
         let patch = Patch::Apply(&coredb_json);
-        coredbs.patch(name, &params, &patch).await.unwrap();
+        coredbs.patch(cdb_name, &params, &patch).await.unwrap();
 
         thread::sleep(Duration::from_millis(2000));
 
         // assert we created two Deployments, with the names we provided
         let deployments: Api<Deployment> = Api::namespaced(client.clone(), &namespace);
-        let lp = ListParams::default().labels(format!("coredb.io/name={}", name).as_str());
+        let lp = ListParams::default().labels(format!("coredb.io/name={}", cdb_name).as_str());
 
         let mut deployment_items: Vec<Deployment> = Vec::new();
         let mut passed_retry = false;
@@ -2698,8 +2698,8 @@ mod test {
 
         let app_0 = deployment_items[0].clone();
         let app_1 = deployment_items[1].clone();
-        assert_eq!(app_0.metadata.name.unwrap(), "test-app-0");
-        assert_eq!(app_1.metadata.name.unwrap(), "test-app-1");
+        assert_eq!(app_0.metadata.name.unwrap(), format!("{cdb_name}-test-app-0"));
+        assert_eq!(app_1.metadata.name.unwrap(), format!("{cdb_name}-test-app-1"));
 
         // Assert resources in first AppService
         // select the pod
@@ -2772,7 +2772,7 @@ mod test {
             "apiVersion": API_VERSION,
             "kind": kind,
             "metadata": {
-                "name": name
+                "name": cdb_name
             },
             "spec": {
                 "appServices": [
@@ -2799,9 +2799,9 @@ mod test {
         });
         let params = PatchParams::apply("tembo-integration-test");
         let patch = Patch::Apply(&coredb_json);
-        coredbs.patch(name, &params, &patch).await.unwrap();
+        coredbs.patch(cdb_name, &params, &patch).await.unwrap();
 
-        let lp = ListParams::default().labels(format!("coredb.io/name={}", name).as_str());
+        let lp = ListParams::default().labels(format!("coredb.io/name={}", cdb_name).as_str());
         let mut deployment_items: Vec<Deployment> = Vec::new();
         let mut passed_retry = false;
         let retry = 10;
@@ -2817,15 +2817,14 @@ mod test {
         assert!(passed_retry, "failed to get deployments after {} retries", retry);
         assert!(deployment_items.len() == 1);
         let app_0 = deployment_items[0].clone();
-        assert_eq!(app_0.metadata.name.unwrap(), "test-app-0");
-
+        assert_eq!(app_0.metadata.name.unwrap(), format!("{cdb_name}-test-app-0"));
 
         // Delete all of them
         let coredb_json = serde_json::json!({
             "apiVersion": API_VERSION,
             "kind": kind,
             "metadata": {
-                "name": name
+                "name": cdb_name
             },
             "spec": {
                 "postgresExporterEnabled": false
@@ -2833,8 +2832,8 @@ mod test {
         });
         let params = PatchParams::apply("tembo-integration-test");
         let patch = Patch::Apply(&coredb_json);
-        coredbs.patch(name, &params, &patch).await.unwrap();
-        let lp = ListParams::default().labels(format!("coredb.io/name={}", name).as_str());
+        coredbs.patch(cdb_name, &params, &patch).await.unwrap();
+        let lp = ListParams::default().labels(format!("coredb.io/name={}", cdb_name).as_str());
         let deployment_items: Vec<Deployment> = Vec::new();
         let mut passed_retry = false;
         let retry = 10;
@@ -2851,20 +2850,20 @@ mod test {
 
         // CLEANUP TEST
         // Cleanup CoreDB
-        coredbs.delete(name, &Default::default()).await.unwrap();
-        println!("Waiting for CoreDB to be deleted: {}", &name);
+        coredbs.delete(cdb_name, &Default::default()).await.unwrap();
+        println!("Waiting for CoreDB to be deleted: {}", &cdb_name);
         let _assert_coredb_deleted = tokio::time::timeout(
             Duration::from_secs(TIMEOUT_SECONDS_COREDB_DELETED),
-            await_condition(coredbs.clone(), name, conditions::is_deleted("")),
+            await_condition(coredbs.clone(), cdb_name, conditions::is_deleted("")),
         )
         .await
         .unwrap_or_else(|_| {
             panic!(
                 "CoreDB {} was not deleted after waiting {} seconds",
-                name, TIMEOUT_SECONDS_COREDB_DELETED
+                cdb_name, TIMEOUT_SECONDS_COREDB_DELETED
             )
         });
-        println!("CoreDB resource deleted {}", name);
+        println!("CoreDB resource deleted {}", cdb_name);
 
         // Delete namespace
         let _ = delete_namespace(client.clone(), &namespace).await;

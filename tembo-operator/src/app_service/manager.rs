@@ -28,16 +28,22 @@ struct AppDeployment {
 }
 
 // creates a single Deployment given an AppService
-fn generate_deployment(appsvc: &AppService, namespace: &str, oref: OwnerReference) -> AppDeployment {
-    // namespace and owner name are the same
+fn generate_deployment(
+    appsvc: &AppService,
+    cdb_name: String,
+    namespace: &str,
+    oref: OwnerReference,
+) -> AppDeployment {
+    // namespace, coredbname and owner name are the same
 
+    let name = format!("{cdb_name}-{}", appsvc.name.clone());
     let mut labels: BTreeMap<String, String> = BTreeMap::new();
-    labels.insert("app".to_owned(), appsvc.name.clone());
+    labels.insert("app".to_owned(), name.clone());
     labels.insert("component".to_owned(), "AppService".to_string());
     labels.insert("coredb.io/name".to_owned(), namespace.to_owned());
 
     let deployment_metadata = ObjectMeta {
-        name: Some(appsvc.name.to_owned()),
+        name: Some(name.clone()),
         namespace: Some(namespace.to_owned()),
         labels: Some(labels.clone()),
         owner_references: Some(vec![oref]),
@@ -143,7 +149,7 @@ fn generate_deployment(appsvc: &AppService, namespace: &str, oref: OwnerReferenc
             spec: Some(deployment_spec),
             ..Deployment::default()
         },
-        name: appsvc.name.clone(),
+        name,
     }
 }
 
@@ -230,7 +236,7 @@ pub async fn reconcile_app_services(cdb: &CoreDB, ctx: Arc<Context>) -> Result<(
 
     let deployments: Vec<AppDeployment> = appsvcs
         .iter()
-        .map(|appsvc| generate_deployment(appsvc, &ns, oref.clone()))
+        .map(|appsvc| generate_deployment(appsvc, cdb.name_any(), &ns, oref.clone()))
         .collect();
 
     let ps = PatchParams::apply("cntrlr").force();
