@@ -1,4 +1,3 @@
-use crate::ingress_route_tcp_crd::IngressRouteTCPSpec;
 use k8s_openapi::api::core::v1::ResourceRequirements;
 use schemars::JsonSchema;
 use serde::{Deserialize, Deserializer, Serialize};
@@ -17,7 +16,6 @@ pub struct AppService {
     pub resources: Option<ResourceRequirements>,
     pub probes: Option<Probes>,
     pub metrics: Option<Metrics>,
-    pub ingress: Option<IngressRouteTCPSpec>,
 }
 
 #[derive(Clone, Debug, PartialEq, Serialize, ToSchema)]
