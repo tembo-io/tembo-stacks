@@ -41,12 +41,10 @@ mod test {
         Api, Client, Config, Error,
     };
     use rand::Rng;
-    use std::{str, sync::Arc, thread, time::Duration};
-    use std::collections::BTreeSet;
-    use std::thread::sleep;
+    use std::{collections::BTreeSet, str, sync::Arc, thread, thread::sleep, time::Duration};
 
-    use tokio::io::AsyncReadExt;
     use controller::apis::postgres_parameters::{ConfigValue, PgConfig};
+    use tokio::io::AsyncReadExt;
 
     const API_VERSION: &str = "coredb.io/v1alpha1";
     // Timeout settings while waiting for an event
@@ -2704,8 +2702,6 @@ mod test {
 
         pod_ready_and_running(pods.clone(), pod_name.clone()).await;
 
-        let coredb_resource = coredbs.patch(name, &params, &patch).await.unwrap();
-
         let pods: Api<Pod> = Api::namespaced(client.clone(), &namespace);
         let lp =
             ListParams::default().labels(format!("app=postgres-exporter,coredb.io/name={}", name).as_str());
@@ -2714,7 +2710,10 @@ mod test {
         println!("Exporter pod name: {}", &exporter_pod_name);
 
         pod_ready_and_running(pods.clone(), exporter_pod_name.clone()).await;
-        sleep(Duration::from_secs(5));
+
+        // TODO(ianstanton) wait for status.runtime_config to be populated & updated with correct configs
+        sleep(Duration::from_secs(60));
+        let coredb_resource = coredbs.patch(name, &params, &patch).await.unwrap();
         // Assert status contains configs
         let mut found_configs = false;
         let expected_config = ConfigValue::Multiple(BTreeSet::from_iter(vec![
@@ -2723,6 +2722,7 @@ mod test {
         ]));
         for config in coredb_resource.status.unwrap().runtime_config.unwrap() {
             if config.name == "shared_preload_libraries" {
+                println!("Found shared_preload_libraries config: {:?}", config);
                 found_configs = true;
                 assert_eq!(config.value, expected_config);
             }
@@ -2738,13 +2738,13 @@ mod test {
             Duration::from_secs(TIMEOUT_SECONDS_COREDB_DELETED),
             await_condition(coredbs.clone(), name, conditions::is_deleted("")),
         )
-            .await
-            .unwrap_or_else(|_| {
-                panic!(
-                    "CoreDB {} was not deleted after waiting {} seconds",
-                    name, TIMEOUT_SECONDS_COREDB_DELETED
-                )
-            });
+        .await
+        .unwrap_or_else(|_| {
+            panic!(
+                "CoreDB {} was not deleted after waiting {} seconds",
+                name, TIMEOUT_SECONDS_COREDB_DELETED
+            )
+        });
         println!("CoreDB resource deleted {}", name);
 
         // Delete namespace
