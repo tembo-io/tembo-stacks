@@ -1,21 +1,10 @@
 use chrono::{DateTime, Utc};
 use futures::stream::StreamExt;
 
-use crate::{
-    apis::coredb_types::{CoreDB, CoreDBStatus},
-    cloudnativepg::{
-        backups::Backup,
-        cnpg::{cnpg_cluster_from_cdb, reconcile_cnpg, reconcile_cnpg_scheduled_backup},
-    },
-    config::Config,
-    deployment_postgres_exporter::reconcile_prometheus_exporter_deployment,
-    exec::{ExecCommand, ExecOutput},
-    ingress::reconcile_postgres_ing_route_tcp,
-    psql::{PsqlCommand, PsqlOutput},
-    secret::{reconcile_postgres_role_secret, reconcile_secret},
-    service::reconcile_prometheus_exporter_service,
-    telemetry, Error, Metrics, Result,
-};
+use crate::{apis::coredb_types::{CoreDB, CoreDBStatus}, cloudnativepg::{
+    backups::Backup,
+    cnpg::{cnpg_cluster_from_cdb, reconcile_cnpg, reconcile_cnpg_scheduled_backup},
+}, config::Config, deployment_postgres_exporter::reconcile_prometheus_exporter_deployment, exec::{ExecCommand, ExecOutput}, ingress::reconcile_postgres_ing_route_tcp, psql::{PsqlCommand, PsqlOutput}, secret::{reconcile_postgres_role_secret, reconcile_secret}, service::reconcile_prometheus_exporter_service, telemetry, Error, Metrics, Result, extensions};
 use k8s_openapi::{
     api::core::v1::{Namespace, Pod},
     apimachinery::pkg::util::intstr::IntOrString,
@@ -264,6 +253,13 @@ impl CoreDB {
 
                 let recovery_time = self.get_recovery_time(ctx.clone()).await?;
 
+                let current_config_values = extensions::database_queries::list_config_params(self, ctx.clone())
+                    .await
+                    .map_err(|e| {
+                        error!("Error getting current postgres config: {:?}", e);
+                        Action::requeue(Duration::from_secs(300))
+                    })?;
+                println!("current_config_values: {:?}", current_config_values);
                 CoreDBStatus {
                     running: true,
                     extensionsUpdating: false,
@@ -271,19 +267,28 @@ impl CoreDB {
                     extensions: Some(extensions),
                     trunk_installs: Some(trunk_installs),
                     resources: Some(self.spec.resources.clone()),
-                    runtime_config: self.spec.runtime_config.clone(),
+                    runtime_config: Some(current_config_values),
                     first_recoverability_time: recovery_time,
                 }
             }
-            true => CoreDBStatus {
-                running: false,
-                extensionsUpdating: false,
-                storage: Some(self.spec.storage.clone()),
-                extensions: self.status.clone().and_then(|f| f.extensions),
-                trunk_installs: self.status.clone().and_then(|f| f.trunk_installs),
-                resources: Some(self.spec.resources.clone()),
-                runtime_config: self.spec.runtime_config.clone(),
-                first_recoverability_time: self.status.as_ref().and_then(|f| f.first_recoverability_time),
+            true => {
+                let current_config_values = extensions::database_queries::list_config_params(self, ctx.clone())
+                    .await
+                    .map_err(|e| {
+                        error!("Error getting current postgres config: {:?}", e);
+                        Action::requeue(Duration::from_secs(300))
+                    })?;
+                println!("current_config_values: {:?}", current_config_values);
+                CoreDBStatus {
+                    running: false,
+                    extensionsUpdating: false,
+                    storage: Some(self.spec.storage.clone()),
+                    extensions: self.status.clone().and_then(|f| f.extensions),
+                    trunk_installs: self.status.clone().and_then(|f| f.trunk_installs),
+                    resources: Some(self.spec.resources.clone()),
+                    runtime_config: Some(current_config_values),
+                    first_recoverability_time: self.status.as_ref().and_then(|f| f.first_recoverability_time),
+                }
             },
         };
 

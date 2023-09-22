@@ -5,6 +5,7 @@ use crate::{
         types::{ExtensionInstallLocation, ExtensionInstallLocationStatus, ExtensionStatus},
     },
     Context,
+    apis::postgres_parameters::PgConfig,
 };
 use kube::runtime::controller::Action;
 use lazy_static::lazy_static;
@@ -136,6 +137,15 @@ pub async fn list_extensions(cdb: &CoreDB, ctx: Arc<Context>, database: &str) ->
     Ok(parse_extensions(&result_string))
 }
 
+/// List all configuration parameters
+pub async fn list_config_params(cdb: &CoreDB, ctx: Arc<Context>) -> Result<Vec<PgConfig>, Action> {
+    let psql_out = cdb
+        .psql("SHOW ALL;".to_owned(), "postgres".to_owned(), ctx)
+        .await?;
+    let result_string = psql_out.stdout.unwrap();
+    Ok(parse_config_params(&result_string))
+}
+
 pub fn parse_extensions(psql_str: &str) -> Vec<ExtRow> {
     let mut extensions = vec![];
     for line in psql_str.lines().skip(2) {
@@ -186,6 +196,27 @@ pub fn parse_sql_output(psql_str: &str) -> Vec<String> {
     debug!("Found {} results", num_results);
     results
 }
+
+/// Parse the output of `SHOW ALL` to get the parameter and its value. Return Vec<PgConfig>
+pub fn parse_config_params(psql_str: &str) -> Vec<PgConfig> {
+    let mut results = vec![];
+    for line in psql_str.lines().skip(2) {
+        let fields: Vec<&str> = line.split('|').map(|s| s.trim()).collect();
+        if fields.len() < 17 {
+            debug!("Done:{:?}", fields);
+            continue;
+        }
+        let config = PgConfig {
+            name: fields[0].to_owned(),
+            value: fields[1].to_owned().parse().unwrap(),
+        };
+        results.push(config);
+    }
+    let num_results = results.len();
+    debug!("Found {} results", num_results);
+    results
+}
+
 
 /// list databases then get all extensions from each database
 pub async fn get_all_extensions(cdb: &CoreDB, ctx: Arc<Context>) -> Result<Vec<ExtensionStatus>, Action> {
@@ -297,7 +328,8 @@ pub async fn toggle_extension(
 
 #[cfg(test)]
 mod tests {
-    use crate::extensions::database_queries::{check_input, parse_extensions, parse_sql_output};
+    use crate::apis::postgres_parameters::PgConfig;
+    use crate::extensions::database_queries::{check_input, parse_config_params, parse_extensions, parse_sql_output};
 
     #[test]
     fn test_parse_databases() {
@@ -364,6 +396,35 @@ mod tests {
             ext[8].description,
             "connect to other PostgreSQL databases from within a database".to_owned()
         );
+    }
+
+    #[test]
+    fn test_parse_config_params() {
+        let config_psql = "        name        | setting | unit | category | short_desc | extra_desc | context | vartype | source | min_val | max_val | enumvals | boot_val | reset_val | sourcefile | sourceline | pending_restart
+        ---------------------+---------+------+----------+------------+------------+---------+---------+--------+---------+---------+----------+----------+-----------+------------+------------+-----------------
+         allow_system_table_mods | off     |      | Developer |            |            | postmas | bool    |        |         |         |          | off      | off       |            |            | f
+         application_name      |         |      |          |            |            | user    | string  |        |         |         |          |          |           |            |            |
+         archive_command       |         |      |          |            |            | sighup  | string  |        |         |         |          |          |           |            |            |
+         archive_mode          | off     |      |          |            |            | sighup  | enum    |        |         |         | on,off   | off      | off       |            |            | f";
+        let config = parse_config_params(config_psql);
+        assert_eq!(config.len(), 4);
+        assert_eq!(config[0], PgConfig {
+            name: "allow_system_table_mods".to_owned(),
+            value: "off".parse().unwrap(),
+        });
+        assert_eq!(config[1], PgConfig {
+            name: "application_name".to_owned(),
+            value: "".parse().unwrap(),
+        });
+        assert_eq!(config[2], PgConfig {
+            name: "archive_command".to_owned(),
+            value: "".parse().unwrap(),
+        });
+        assert_eq!(config[3], PgConfig {
+            name: "archive_mode".to_owned(),
+            value: "off".parse().unwrap(),
+        });
+
     }
 
     #[test]
