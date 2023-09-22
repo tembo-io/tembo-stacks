@@ -10,7 +10,7 @@ use crate::{
     config::Config,
     deployment_postgres_exporter::reconcile_prometheus_exporter_deployment,
     exec::{ExecCommand, ExecOutput},
-    extensions::database_queries::{is_not_restarting, list_databases},
+    extensions::database_queries::is_not_restarting,
     ingress::reconcile_postgres_ing_route_tcp,
     psql::{PsqlCommand, PsqlOutput},
     secret::{reconcile_postgres_role_secret, reconcile_secret},
