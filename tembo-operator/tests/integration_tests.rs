@@ -2631,7 +2631,7 @@ mod test {
                 "name": name
             },
             "spec": {
-                "app_services": [
+                "appServices": [
                     {
                         "name": "test-app-0",
                         "image": "crccheck/hello-world:latest",
@@ -2775,7 +2775,7 @@ mod test {
                 "name": name
             },
             "spec": {
-                "app_services": [
+                "appServices": [
                     {
                         "name": "test-app-0",
                         "image": "crccheck/hello-world:latest",

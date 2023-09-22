@@ -110,7 +110,7 @@ pub struct CoreDBSpec {
     pub runtime_config: Option<Vec<PgConfig>>,
     // configuration overrides, typically defined by the user
     pub override_configs: Option<Vec<PgConfig>>,
-
+    #[serde(rename = "appServices")]
     pub app_services: Option<Vec<AppService>>,
 }
 

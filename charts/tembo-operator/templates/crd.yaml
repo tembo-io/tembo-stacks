@@ -25,7 +25,7 @@ spec:
 
               This provides a hook for generating the CRD yaml (in crdgen.rs)
             properties:
-              app_services:
+              appServices:
                 items:
                   properties:
                     args:
