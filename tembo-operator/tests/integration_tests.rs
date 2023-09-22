@@ -2767,6 +2767,58 @@ mod test {
         let app_1_resources = app_1_container.resources.unwrap();
         assert_eq!(app_1_resources, expected);
 
+        // Delete one
+        let coredb_json = serde_json::json!({
+            "apiVersion": API_VERSION,
+            "kind": kind,
+            "metadata": {
+                "name": name
+            },
+            "spec": {
+                "app_services": [
+                    {
+                        "name": "test-app-0",
+                        "image": "crccheck/hello-world:latest",
+                        "ports": [
+                            "80:8000"
+                        ],
+                        "resources": {
+                            "requests": {
+                                "cpu": "100m",
+                                "memory": "256Mi"
+                            },
+                            "limits": {
+                                "cpu": "100m",
+                                "memory": "256Mi"
+                            }
+                        }
+                    },
+                ],
+                "postgresExporterEnabled": false
+            }
+        });
+        let params = PatchParams::apply("tembo-integration-test");
+        let patch = Patch::Apply(&coredb_json);
+        coredbs.patch(name, &params, &patch).await.unwrap();
+
+        let lp = ListParams::default().labels(format!("coredb.io/name={}", name).as_str());
+        let mut deployment_items: Vec<Deployment> = Vec::new();
+        let mut passed_retry = false;
+        let retry = 10;
+        for _ in 0..retry {
+            let deployments_list = deployments.list(&lp).await.expect("could not get deployments");
+            if deployments_list.items.len() == 1 {
+                deployment_items.extend(deployments_list.items);
+                passed_retry = true;
+                break;
+            }
+            thread::sleep(Duration::from_millis(2000));
+        }
+        assert!(passed_retry, "failed to get deployments after {} retries", retry);
+        assert!(deployment_items.len() == 1);
+        let app_0 = deployment_items[0].clone();
+        assert_eq!(app_0.metadata.name.unwrap(), "test-app-0");
+
 
         // CLEANUP TEST
         // Cleanup CoreDB
