@@ -54,6 +54,26 @@ mod test {
     const TIMEOUT_SECONDS_POD_DELETED: u64 = 120;
     const TIMEOUT_SECONDS_COREDB_DELETED: u64 = 120;
 
+    async fn retry<F, T>(f: F, max_retries: u32, delay: Duration) -> Result<T, Error>
+    where
+        F: Fn() -> Result<T, Error> + std::marker::Send + std::marker::Sync,
+        T: std::marker::Send,
+    {
+        for i in 0..max_retries {
+            match f() {
+                Ok(result) => return Ok(result),
+                Err(err) => {
+                    if i == max_retries - 1 {
+                        return Err(err);
+                    } else {
+                        tokio::time::sleep(delay).await;
+                    }
+                }
+            }
+        }
+        unreachable!();
+    }
+
     async fn kube_client() -> Client {
         // Get the name of the currently selected namespace
         let kube_config = Config::infer()
@@ -2653,17 +2673,31 @@ mod test {
         let params = PatchParams::apply("tembo-integration-test");
         let patch = Patch::Apply(&coredb_json);
         coredbs.patch(name, &params, &patch).await.unwrap();
+
         thread::sleep(Duration::from_millis(2000));
 
         // assert we created two Deployments, with the names we provided
         let deployments: Api<Deployment> = Api::namespaced(client.clone(), &namespace);
         let lp = ListParams::default().labels(format!("coredb.io/name={}", name).as_str());
-        let deployments_list = deployments.list(&lp).await.expect("could not get deployments");
-        println!("Deployments: {:?}", deployments_list);
+
+        let mut deployment_items: Vec<Deployment> = Vec::new();
+        let mut passed_retry = false;
+        let retry = 10;
+        for _ in 0..retry {
+            let deployments_list = deployments.list(&lp).await.expect("could not get deployments");
+            if deployments_list.items.len() == 2 {
+                deployment_items.extend(deployments_list.items);
+                passed_retry = true;
+                break;
+            }
+            thread::sleep(Duration::from_millis(2000));
+        }
+        assert!(passed_retry, "failed to get deployments after {} retries", retry);
+        println!("Deployments: {:?}", deployment_items);
         // two AppService deployments. the postgres exporter is disabled
-        assert!(deployments_list.items.len() == 2);
-        let app_0 = deployments_list.items[0].clone();
-        let app_1 = deployments_list.items[1].clone();
+        assert!(deployment_items.len() == 2);
+        let app_0 = deployment_items[0].clone();
+        let app_1 = deployment_items[1].clone();
         assert_eq!(app_0.metadata.name.unwrap(), "test-app-0");
         assert_eq!(app_1.metadata.name.unwrap(), "test-app-1");
 
