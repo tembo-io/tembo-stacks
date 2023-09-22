@@ -11,7 +11,9 @@ use kube::runtime::controller::Action;
 use lazy_static::lazy_static;
 use regex::Regex;
 use std::{collections::HashMap, sync::Arc, time::Duration};
+use std::collections::BTreeSet;
 use tracing::{debug, error, info, warn};
+use crate::apis::postgres_parameters::ConfigValue;
 
 lazy_static! {
     static ref VALID_INPUT: Regex = Regex::new(r"^[a-zA-Z]([a-zA-Z0-9]*[-_]?)*[a-zA-Z0-9]+$").unwrap();
@@ -202,18 +204,32 @@ pub fn parse_config_params(psql_str: &str) -> Vec<PgConfig> {
     let mut results = vec![];
     for line in psql_str.lines().skip(2) {
         let fields: Vec<&str> = line.split('|').map(|s| s.trim()).collect();
-        if fields.len() < 17 {
-            debug!("Done:{:?}", fields);
+        if fields.len() < 2 {
+            debug!("Skipping last line:{:?}", fields);
+            continue;
+        }
+        // If value is multiple, Set as ConfigValue::Multiple
+        if fields[1].contains(',') {
+            let values: BTreeSet<String> = fields[1].split(',').map(|s| s.trim().to_owned()).collect();
+            let config = PgConfig {
+                name: fields[0].to_owned(),
+                value: ConfigValue::Multiple(values),
+            };
+            results.push(config);
             continue;
         }
         let config = PgConfig {
             name: fields[0].to_owned(),
-            value: fields[1].to_owned().parse().unwrap(),
+            value: ConfigValue::Single(fields[1].to_owned()),
         };
         results.push(config);
     }
     let num_results = results.len();
-    debug!("Found {} results", num_results);
+    debug!("Found {} config values", num_results);
+    // Log config values to debug
+    for result in &results {
+        debug!("Config value: {:?}", result);
+    }
     results
 }
 
