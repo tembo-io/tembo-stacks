@@ -163,13 +163,15 @@ pub async fn is_not_restarting(cdb: &CoreDB, ctx: Arc<Context>, database: &str) 
         .stdout
         .ok_or_else(|| {
             tracing::error!("{cdb_name}: select pg_postmaster_start_time() had no stdout");
-    
+
             Action::requeue(Duration::from_secs(300))
         })?;
 
     let server_started_at: DateTime<Utc> = DateTime::parse_from_rfc3339(&pg_postmaster_start_time)
         .map_err(|err| {
-            tracing::error!("{cdb_name}: Failed to deserialize DateTime from `pg_postmaster_start_time`: {err}");
+            tracing::error!(
+                "{cdb_name}: Failed to deserialize DateTime from `pg_postmaster_start_time`: {err}"
+            );
 
             Action::requeue(Duration::from_secs(300))
         })?
