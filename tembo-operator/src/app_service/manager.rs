@@ -3,7 +3,8 @@ use k8s_openapi::{
     api::{
         apps::v1::{Deployment, DeploymentSpec},
         core::v1::{
-            Container, ContainerPort, EnvVar, HTTPGetAction, PodSpec, PodTemplateSpec, Probe, SecurityContext,
+            Container, ContainerPort, EnvVar, HTTPGetAction, PodSpec, PodTemplateSpec, Probe,
+            SecurityContext, Service, ServicePort, ServiceSpec,
         },
     },
     apimachinery::pkg::{
@@ -22,28 +23,91 @@ use super::types::AppService;
 use tracing::*;
 
 // private wrapper to hold the AppService and the name of the Deployment
-struct AppDeployment {
+struct AppServiceResources {
     deployment: Deployment,
     name: String,
+    service: Service,
 }
 
-// creates a single Deployment given an AppService
-fn generate_deployment(
+// generates Kubernetes Deployment and Service templates for a AppService
+fn generate_resource(
     appsvc: &AppService,
     cdb_name: String,
     namespace: &str,
     oref: OwnerReference,
-) -> AppDeployment {
-    // namespace, coredbname and owner name are the same
-
+) -> AppServiceResources {
     let name = format!("{cdb_name}-{}", appsvc.name.clone());
+    let service = generate_service(appsvc, cdb_name.clone(), namespace, oref.clone());
+    let deployment = generate_deployment(appsvc, cdb_name, namespace, oref);
+    AppServiceResources {
+        deployment,
+        name,
+        service,
+    }
+}
+
+// templates the Kubernetes Service for an AppService
+fn generate_service(
+    appsvc: &AppService,
+    resource_name: String,
+    namespace: &str,
+    oref: OwnerReference,
+) -> Service {
+    let mut selector_labels: BTreeMap<String, String> = BTreeMap::new();
+    selector_labels.insert("app".to_owned(), resource_name.clone());
+    selector_labels.insert("component".to_owned(), "AppService".to_string());
+    selector_labels.insert("coredb.io/name".to_owned(), namespace.to_owned());
+
+    let mut labels = selector_labels.clone();
+    labels.insert("component".to_owned(), "AppService".to_owned());
+
+    let ports = match appsvc.ports.as_ref() {
+        Some(ports) => {
+            let ports: Vec<ServicePort> = ports
+                .iter()
+                .map(|pm| ServicePort {
+                    port: pm.container as i32,
+                    name: Some(appsvc.name.clone()),
+                    target_port: Some(IntOrString::String(appsvc.name.clone())),
+                    ..ServicePort::default()
+                })
+                .collect();
+            Some(ports)
+        }
+        None => None,
+    };
+    Service {
+        metadata: ObjectMeta {
+            name: Some(resource_name.to_owned()),
+            namespace: Some(namespace.to_owned()),
+            labels: Some(labels.clone()),
+            owner_references: Some(vec![oref]),
+            ..ObjectMeta::default()
+        },
+        spec: Some(ServiceSpec {
+            ports,
+            selector: Some(selector_labels.clone()),
+            ..ServiceSpec::default()
+        }),
+        ..Service::default()
+    }
+}
+
+
+// templates a single Kubernetes Deployment for an AppService
+fn generate_deployment(
+    appsvc: &AppService,
+    resource_name: String,
+    namespace: &str,
+    oref: OwnerReference,
+) -> Deployment {
     let mut labels: BTreeMap<String, String> = BTreeMap::new();
-    labels.insert("app".to_owned(), name.clone());
+    labels.insert("app".to_owned(), resource_name.clone());
     labels.insert("component".to_owned(), "AppService".to_string());
     labels.insert("coredb.io/name".to_owned(), namespace.to_owned());
 
     let deployment_metadata = ObjectMeta {
-        name: Some(name.clone()),
+        name: Some(resource_name.clone()),
         namespace: Some(namespace.to_owned()),
         labels: Some(labels.clone()),
         owner_references: Some(vec![oref]),
@@ -143,13 +207,10 @@ fn generate_deployment(
         template: pod_template_spec,
         ..DeploymentSpec::default()
     };
-    AppDeployment {
-        deployment: Deployment {
-            metadata: deployment_metadata,
-            spec: Some(deployment_spec),
-            ..Deployment::default()
-        },
-        name,
+    Deployment {
+        metadata: deployment_metadata,
+        spec: Some(deployment_spec),
+        ..Deployment::default()
     }
 }
 
@@ -179,6 +240,53 @@ fn appservice_to_delete(desired: Vec<String>, actual: Vec<String>) -> Option<Vec
     } else {
         Some(to_delete)
     }
+}
+
+async fn apply_resources(resources: Vec<AppServiceResources>, client: &Client, ns: &str) -> bool {
+    let deployment_api: Api<Deployment> = Api::namespaced(client.clone(), ns);
+    let service_api: Api<Service> = Api::namespaced(client.clone(), ns);
+    let ps = PatchParams::apply("cntrlr").force();
+
+    let mut has_errors: bool = false;
+
+    // apply desired resources
+    for rs in resources {
+        match deployment_api
+            .patch(&rs.name, &ps, &Patch::Apply(&rs.deployment))
+            .await
+            .map_err(Error::KubeError)
+        {
+            Ok(_) => {
+                debug!("ns: {}, applied AppService Deployment: {}", ns, rs.name);
+            }
+            Err(e) => {
+                // TODO: find a better way to handle single error without stopping all reconciliation of AppService
+                has_errors = true;
+                error!(
+                    "ns: {}, failed to apply AppService Deployment: {}, error: {}",
+                    ns, rs.name, e
+                );
+            }
+        }
+        match service_api
+            .patch(&rs.name, &ps, &Patch::Apply(&rs.service))
+            .await
+            .map_err(Error::KubeError)
+        {
+            Ok(_) => {
+                debug!("ns: {}, applied AppService Service: {}", ns, rs.name);
+            }
+            Err(e) => {
+                // TODO: find a better way to handle single erorr without stopping all reconciliation of AppService
+                has_errors = true;
+                error!(
+                    "ns: {}, failed to apply AppService Service: {}, error: {}",
+                    ns, rs.name, e
+                );
+            }
+        }
+    }
+    has_errors
 }
 
 
@@ -211,7 +319,7 @@ pub async fn reconcile_app_services(cdb: &CoreDB, ctx: Arc<Context>) -> Result<(
         }
     };
 
-    // reap any deployments that are no longer desired
+    // reap any AppService that are no longer desired
     if let Some(to_delete) = appservice_to_delete(desired_deployments, actual_deployments) {
         for d in to_delete {
             match deployment_api.delete(&d, &Default::default()).await {
@@ -234,34 +342,15 @@ pub async fn reconcile_app_services(cdb: &CoreDB, ctx: Arc<Context>) -> Result<(
         }
     };
 
-    let deployments: Vec<AppDeployment> = appsvcs
+    let resources: Vec<AppServiceResources> = appsvcs
         .iter()
-        .map(|appsvc| generate_deployment(appsvc, cdb.name_any(), &ns, oref.clone()))
+        .map(|appsvc| generate_resource(appsvc, cdb.name_any(), &ns, oref.clone()))
         .collect();
 
-    let ps = PatchParams::apply("cntrlr").force();
-    // apply desired deployments
-    for ad in deployments {
-        match deployment_api
-            .patch(&ad.name, &ps, &Patch::Apply(&ad.deployment))
-            .await
-            .map_err(Error::KubeError)
-        {
-            Ok(_) => {
-                debug!("ns: {}, successfully reconciled AppService: {}", ns, ad.name);
-            }
-            Err(e) => {
-                // is here a better way to surface failures without completely stopping all reconciliation of AppService?
-                has_errors = true;
-                error!(
-                    "ns: {}, failed to reconcile AppService: {}, error: {}",
-                    ns, ad.name, e
-                );
-            }
-        }
-    }
 
-    if has_errors {
+    let apply_errored = apply_resources(resources, &client, &ns).await;
+
+    if has_errors || apply_errored {
         return Err(Action::requeue(Duration::from_secs(300)));
     }
     Ok(())
