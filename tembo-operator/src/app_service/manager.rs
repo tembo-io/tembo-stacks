@@ -22,7 +22,7 @@ use std::{collections::BTreeMap, sync::Arc, time::Duration};
 use super::types::AppService;
 use tracing::*;
 
-// private wrapper to hold the AppService and the name of the Deployment
+// private wrapper to hold the AppService Resources
 struct AppServiceResources {
     deployment: Deployment,
     name: String,
