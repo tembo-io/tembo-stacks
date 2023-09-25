@@ -40,7 +40,10 @@ fn generate_resource(
     oref: OwnerReference,
 ) -> AppServiceResources {
     let name = format!("{cdb_name}-{}", appsvc.name.clone());
-    let service = appsvc.ports.as_ref().map(|_| generate_service(appsvc, name.clone(), namespace, oref.clone()));
+    let service = appsvc
+        .ports
+        .as_ref()
+        .map(|_| generate_service(appsvc, name.clone(), namespace, oref.clone()));
     let deployment = generate_deployment(appsvc, name.clone(), namespace, oref);
     AppServiceResources {
         deployment,
