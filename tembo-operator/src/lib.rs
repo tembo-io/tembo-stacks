@@ -19,7 +19,6 @@ mod config;
 pub mod defaults;
 mod errors;
 mod pkg;
-
 pub mod cloudnativepg;
 mod deployment_postgres_exporter;
 #[cfg(test)] pub mod fixtures;
