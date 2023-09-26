@@ -1,7 +1,7 @@
 use crate::{
     apis::coredb_types::CoreDB,
     extensions::{
-        kubernetes_queries, types,
+        database_queries, kubernetes_queries, types,
         types::{Extension, ExtensionInstallLocationStatus, ExtensionStatus},
     },
     get_current_coredb_resource, Context,
@@ -11,7 +11,7 @@ use kube::runtime::controller::Action;
 use crate::{
     apis::coredb_types::CoreDBStatus,
     extensions::{
-        database_queries, database_queries::list_shared_preload_libraries,
+        database_queries::list_shared_preload_libraries,
         kubernetes_queries::merge_location_status_into_extension_status_list, types::get_location_status,
     },
     trunk::extensions_that_require_load,
