@@ -15,15 +15,15 @@ mod exec;
 /// Metrics
 mod metrics;
 pub use metrics::Metrics;
+pub mod cloudnativepg;
 mod config;
 pub mod defaults;
-pub mod errors;
-mod pkg;
-pub mod cloudnativepg;
 mod deployment_postgres_exporter;
+pub mod errors;
 #[cfg(test)] pub mod fixtures;
 mod ingress;
 pub mod ingress_route_tcp_crd;
+mod pkg;
 pub mod psql;
 mod rbac;
 mod secret;
