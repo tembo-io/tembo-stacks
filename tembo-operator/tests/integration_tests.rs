@@ -2872,11 +2872,6 @@ mod test {
             .unwrap();
         assert!(service_items.is_empty());
         // should be no Services
-        let service_items: Vec<Service> = list_resources(client.clone(), cdb_name, &namespace, 0)
-            .await
-            .unwrap();
-        // One appService Services
-        assert!(service_items.is_empty());
 
         // CLEANUP TEST
         // Cleanup CoreDB
