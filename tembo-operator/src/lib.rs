@@ -23,7 +23,6 @@ pub mod errors;
 #[cfg(test)] pub mod fixtures;
 mod ingress;
 pub mod ingress_route_tcp_crd;
-mod pkg;
 pub mod psql;
 mod rbac;
 mod secret;

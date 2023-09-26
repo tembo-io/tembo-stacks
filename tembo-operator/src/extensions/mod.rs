@@ -1,3 +1,4 @@
+pub mod database_queries;
 pub mod install;
 pub mod kubernetes_queries;
 pub mod toggle;

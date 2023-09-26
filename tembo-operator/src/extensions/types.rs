@@ -1,4 +1,4 @@
-use crate::{apis::coredb_types::CoreDB, defaults, pkg::utils::database_queries::check_input};
+use crate::{apis::coredb_types::CoreDB, defaults, extensions::database_queries::check_input};
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use tracing::warn;

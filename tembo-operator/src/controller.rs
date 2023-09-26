@@ -36,9 +36,8 @@ use kube::{
 
 use crate::{
     apis::postgres_parameters::PgConfig,
-    extensions::reconcile_extensions,
+    extensions::{database_queries::list_config_params, reconcile_extensions},
     ingress::reconcile_extra_postgres_ing_route_tcp,
-    pkg::utils::database_queries::list_config_params,
     postgres_exporter::reconcile_prom_configmap,
     trunk::{extensions_that_require_load, reconcile_trunk_configmap},
 };
