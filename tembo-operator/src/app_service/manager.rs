@@ -35,19 +35,19 @@ const COMPONENT_NAME: &str = "appService";
 // generates Kubernetes Deployment and Service templates for a AppService
 fn generate_resource(
     appsvc: &AppService,
-    cdb_name: String,
+    coredb_name: &str,
     namespace: &str,
     oref: OwnerReference,
 ) -> AppServiceResources {
-    let name = format!("{cdb_name}-{}", appsvc.name.clone());
+    let resource_name = format!("{}-{}", coredb_name, appsvc.name.clone());
     let service = appsvc
         .ports
         .as_ref()
-        .map(|_| generate_service(appsvc, name.clone(), namespace, oref.clone()));
-    let deployment = generate_deployment(appsvc, name.clone(), namespace, oref);
+        .map(|_| generate_service(appsvc, coredb_name, &resource_name, namespace, oref.clone()));
+    let deployment = generate_deployment(appsvc, coredb_name, &resource_name, namespace, oref);
     AppServiceResources {
         deployment,
-        name,
+        name: resource_name,
         service,
     }
 }
@@ -55,14 +55,15 @@ fn generate_resource(
 // templates the Kubernetes Service for an AppService
 fn generate_service(
     appsvc: &AppService,
-    resource_name: String,
+    coredb_name: &str,
+    resource_name: &str,
     namespace: &str,
     oref: OwnerReference,
 ) -> Service {
     let mut selector_labels: BTreeMap<String, String> = BTreeMap::new();
-    selector_labels.insert("app".to_owned(), resource_name.clone());
+    selector_labels.insert("app".to_owned(), resource_name.to_string());
     selector_labels.insert("component".to_owned(), COMPONENT_NAME.to_string());
-    selector_labels.insert("coredb.io/name".to_owned(), namespace.to_owned());
+    selector_labels.insert("coredb.io/name".to_owned(), coredb_name.to_string());
 
     let mut labels = selector_labels.clone();
     labels.insert("component".to_owned(), COMPONENT_NAME.to_owned());
@@ -103,17 +104,18 @@ fn generate_service(
 // templates a single Kubernetes Deployment for an AppService
 fn generate_deployment(
     appsvc: &AppService,
-    resource_name: String,
+    coredb_name: &str,
+    resource_name: &str,
     namespace: &str,
     oref: OwnerReference,
 ) -> Deployment {
     let mut labels: BTreeMap<String, String> = BTreeMap::new();
-    labels.insert("app".to_owned(), resource_name.clone());
+    labels.insert("app".to_owned(), resource_name.to_string());
     labels.insert("component".to_owned(), COMPONENT_NAME.to_string());
-    labels.insert("coredb.io/name".to_owned(), namespace.to_owned());
+    labels.insert("coredb.io/name".to_owned(), coredb_name.to_string());
 
     let deployment_metadata = ObjectMeta {
-        name: Some(resource_name.clone()),
+        name: Some(resource_name.to_string()),
         namespace: Some(namespace.to_owned()),
         labels: Some(labels.clone()),
         owner_references: Some(vec![oref]),
@@ -221,8 +223,12 @@ fn generate_deployment(
 }
 
 // gets all names of AppService Deployments in the namespace that have the label "component=AppService"
-async fn get_appservice_deployments(client: &Client, namespace: &str) -> Result<Vec<String>, Error> {
-    let label_selector = format!("component={}", COMPONENT_NAME);
+async fn get_appservice_deployments(
+    client: &Client,
+    namespace: &str,
+    coredb_name: &str,
+) -> Result<Vec<String>, Error> {
+    let label_selector = format!("component={},coredb.io/name={}", COMPONENT_NAME, coredb_name);
     let deployent_api: Api<Deployment> = Api::namespaced(client.clone(), namespace);
     let lp = ListParams::default().labels(&label_selector).timeout(10);
     let deployments = deployent_api.list(&lp).await.map_err(Error::KubeError)?;
@@ -234,8 +240,12 @@ async fn get_appservice_deployments(client: &Client, namespace: &str) -> Result<
 }
 
 // gets all names of AppService Services in the namespace that have the label "component=AppService"
-async fn get_appservice_services(client: &Client, namespace: &str) -> Result<Vec<String>, Error> {
-    let label_selector = format!("component={}", COMPONENT_NAME);
+async fn get_appservice_services(
+    client: &Client,
+    namespace: &str,
+    coredb_name: &str,
+) -> Result<Vec<String>, Error> {
+    let label_selector = format!("component={},coredb.io/name={}", COMPONENT_NAME, coredb_name);
     let deployent_api: Api<Service> = Api::namespaced(client.clone(), namespace);
     let lp = ListParams::default().labels(&label_selector).timeout(10);
     let services = deployent_api.list(&lp).await.map_err(Error::KubeError)?;
@@ -316,10 +326,10 @@ async fn apply_resources(resources: Vec<AppServiceResources>, client: &Client, n
 pub async fn reconcile_app_services(cdb: &CoreDB, ctx: Arc<Context>) -> Result<(), Action> {
     let client = ctx.client.clone();
     let ns = cdb.namespace().unwrap();
+    let coredb_name = cdb.name_any();
     let oref = cdb.controller_owner_ref(&()).unwrap();
     let deployment_api: Api<Deployment> = Api::namespaced(client.clone(), &ns);
     let service_api: Api<Service> = Api::namespaced(client.clone(), &ns);
-
 
     let desired_deployments = match cdb.spec.app_services.clone() {
         Some(appsvcs) => appsvcs.iter().map(|a| a.name.clone()).collect(),
@@ -351,7 +361,7 @@ pub async fn reconcile_app_services(cdb: &CoreDB, ctx: Arc<Context>) -> Result<(
     // for simplicity, we will return a requeue Action if there are errors
     let mut has_errors: bool = false;
 
-    let actual_deployments = match get_appservice_deployments(&client, &ns).await {
+    let actual_deployments = match get_appservice_deployments(&client, &ns, &coredb_name).await {
         Ok(deployments) => deployments,
         Err(e) => {
             has_errors = true;
@@ -359,7 +369,7 @@ pub async fn reconcile_app_services(cdb: &CoreDB, ctx: Arc<Context>) -> Result<(
             vec![]
         }
     };
-    let actual_services = match get_appservice_services(&client, &ns).await {
+    let actual_services = match get_appservice_services(&client, &ns, &coredb_name).await {
         Ok(services) => services,
         Err(e) => {
             has_errors = true;
@@ -408,7 +418,7 @@ pub async fn reconcile_app_services(cdb: &CoreDB, ctx: Arc<Context>) -> Result<(
 
     let resources: Vec<AppServiceResources> = appsvcs
         .iter()
-        .map(|appsvc| generate_resource(appsvc, cdb.name_any(), &ns, oref.clone()))
+        .map(|appsvc| generate_resource(appsvc, &coredb_name, &ns, oref.clone()))
         .collect();
 
 
