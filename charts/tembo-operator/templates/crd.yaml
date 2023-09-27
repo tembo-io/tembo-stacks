@@ -45,6 +45,29 @@ spec:
                       type: object
                     image:
                       type: string
+                    ingress:
+                      nullable: true
+                      properties:
+                        enabled:
+                          type: boolean
+                        routes:
+                          items:
+                            properties:
+                              containerPort:
+                                format: uint32
+                                minimum: 0.0
+                                type: integer
+                              path:
+                                type: string
+                            required:
+                            - containerPort
+                            - path
+                            type: object
+                          type: array
+                      required:
+                      - enabled
+                      - routes
+                      type: object
                     metrics:
                       nullable: true
                       properties:
@@ -71,7 +94,7 @@ spec:
                       properties:
                         liveness:
                           properties:
-                            initial_delay_seconds:
+                            initialDelaySeconds:
                               format: uint32
                               minimum: 0.0
                               type: integer
@@ -80,13 +103,13 @@ spec:
                             port:
                               type: string
                           required:
-                          - initial_delay_seconds
+                          - initialDelaySeconds
                           - path
                           - port
                           type: object
                         readiness:
                           properties:
-                            initial_delay_seconds:
+                            initialDelaySeconds:
                               format: uint32
                               minimum: 0.0
                               type: integer
@@ -95,7 +118,7 @@ spec:
                             port:
                               type: string
                           required:
-                          - initial_delay_seconds
+                          - initialDelaySeconds
                           - path
                           - port
                           type: object
