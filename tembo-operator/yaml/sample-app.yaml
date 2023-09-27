@@ -3,32 +3,13 @@ kind: CoreDB
 metadata:
   name: sample-app
 spec:
-  stop: false
-  extensions:
-    - name: pg_stat_statements
-      locations: 
-        - enabled: true
-          database: postgres
-          schema: public
-          version: "1.10.0"
-    - name: pg_cron
-      locations: 
-        - enabled: true
-          database: postgres
-          schema: public
-          version: "1.5.2"
-  runtime_config:
-    - name: shared_preload_libraries
-      value: 'pg_cron,pg_stat_statements'
-    - name: pg_stat_statements.track
-      value: top
   appServices:
     - name: my-app
       image: crccheck/hello-world:latest
       ports:
-        - "80:80"
+        - "8000:8000"
       ingress:
         enabled: true
         routes:
-        - containerPort: 80
+        - containerPort: 8000
           path: /
