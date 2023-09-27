@@ -246,7 +246,6 @@ pub fn parse_config_params(psql_str: &str) -> Vec<PgConfig> {
     results
 }
 
-
 /// list databases then get all extensions from each database
 pub async fn get_all_extensions(cdb: &CoreDB, ctx: Arc<Context>) -> Result<Vec<ExtensionStatus>, Action> {
     let databases = list_databases(cdb, ctx.clone()).await?;

@@ -29,7 +29,6 @@ struct AppServiceResources {
     service: Option<Service>,
 }
 
-
 const COMPONENT_NAME: &str = "appService";
 
 // generates Kubernetes Deployment and Service templates for a AppService
@@ -99,7 +98,6 @@ fn generate_service(
         ..Service::default()
     }
 }
-
 
 // templates a single Kubernetes Deployment for an AppService
 fn generate_deployment(
@@ -322,7 +320,6 @@ async fn apply_resources(resources: Vec<AppServiceResources>, client: &Client, n
     has_errors
 }
 
-
 pub async fn reconcile_app_services(cdb: &CoreDB, ctx: Arc<Context>) -> Result<(), Action> {
     let client = ctx.client.clone();
     let ns = cdb.namespace().unwrap();
@@ -420,7 +417,6 @@ pub async fn reconcile_app_services(cdb: &CoreDB, ctx: Arc<Context>) -> Result<(
         .iter()
         .map(|appsvc| generate_resource(appsvc, &coredb_name, &ns, oref.clone()))
         .collect();
-
 
     let apply_errored = apply_resources(resources, &client, &ns).await;
 

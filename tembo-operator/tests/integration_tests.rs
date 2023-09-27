@@ -360,7 +360,6 @@ mod test {
         }
     }
 
-
     #[tokio::test]
     #[ignore]
     async fn functional_test_basic_cnpg() {
