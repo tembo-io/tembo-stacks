@@ -1,4 +1,5 @@
-use crate::{cloudnativepg, extensions::types::ExtensionStatus, stacks::types::Stack};
+use crate::{app_service::types::AppService, extensions::types::ExtensionStatus};
+
 use k8s_openapi::{
     api::core::v1::ResourceRequirements,
     apimachinery::pkg::{api::resource::Quantity, apis::meta::v1::ObjectMeta},
@@ -17,10 +18,17 @@ use crate::{
     apis::postgres_parameters::ConfigValue,
     extensions::types::{Extension, TrunkInstall, TrunkInstallStatus},
 };
-use cloudnativepg::poolers::PoolerSpec;
+use chrono::{DateTime, Utc};
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use std::collections::{BTreeMap, BTreeSet};
+use crate::cloudnativepg::poolers::PoolerSpec;
+
+#[derive(Clone, Default, Debug, Serialize, Deserialize, JsonSchema)]
+pub struct Stack {
+    pub name: String,
+    pub postgres_config: Option<Vec<PgConfig>>,
+}
 
 #[derive(Deserialize, Serialize, Clone, Debug, JsonSchema, Default)]
 pub struct ServiceAccountTemplate {
@@ -113,6 +121,8 @@ pub struct CoreDBSpec {
     // Connection pooler configuration
     #[serde(default = "defaults::default_conn_pooler")]
     pub connPooler: ConnPooler,
+    #[serde(rename = "appServices")]
+    pub app_services: Option<Vec<AppService>>,
 }
 
 impl CoreDBSpec {
@@ -243,6 +253,7 @@ pub struct CoreDBStatus {
     pub storage: Option<Quantity>,
     pub resources: Option<ResourceRequirements>,
     pub runtime_config: Option<Vec<PgConfig>>,
+    pub first_recoverability_time: Option<DateTime<Utc>>,
 }
 
 #[cfg(test)]

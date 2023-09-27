@@ -3,6 +3,7 @@ pub mod controller;
 pub use crate::controller::*;
 pub mod apis;
 
+pub mod app_service;
 pub mod configmap;
 pub mod extensions;
 pub mod postgres_exporter;
@@ -16,7 +17,7 @@ mod metrics;
 pub use metrics::Metrics;
 mod config;
 pub mod defaults;
-mod errors;
+pub mod errors;
 
 pub mod cloudnativepg;
 mod deployment_postgres_exporter;
