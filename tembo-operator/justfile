@@ -48,7 +48,7 @@ install-minio:
 	  --namespace minio \
 		--create-namespace \
 		--values=./testdata/minio.yaml \
-		&& kubectl -n minio wait pods --for=condition=Ready --timeout=300s --all --all-namespaces \
+		&& kubectl -n minio wait pods --for=condition=Ready --timeout=300s --all \
 		&& kubectl apply -f ./testdata/minio-secret.yaml \
 		&& kubectl apply -f ./testdata/minio-bucket-job.yaml \
 		&& kubectl -n minio wait --for=condition=complete job/minio-create-backup-bucket --timeout=300s\
