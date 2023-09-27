@@ -15,6 +15,7 @@ use crate::{
             ClusterResources, ClusterServiceAccountTemplate, ClusterServiceAccountTemplateMetadata,
             ClusterSpec, ClusterStorage, ClusterSuperuserSecret,
         },
+        poolers::{Pooler, PoolerCluster, PoolerPgbouncer, PoolerPgbouncerPoolMode, PoolerSpec, PoolerType},
         scheduledbackups::{
             ScheduledBackup, ScheduledBackupBackupOwnerReference, ScheduledBackupCluster, ScheduledBackupSpec,
         },
@@ -33,7 +34,6 @@ use kube::{
 use std::{collections::BTreeMap, sync::Arc};
 use tokio::time::Duration;
 use tracing::{debug, error, info, instrument, warn};
-use crate::cloudnativepg::poolers::{Pooler, PoolerCluster, PoolerPgbouncer, PoolerPgbouncerPoolMode, PoolerSpec, PoolerType};
 
 pub struct PostgresConfig {
     pub postgres_parameters: Option<BTreeMap<String, String>>,
@@ -663,9 +663,7 @@ async fn reconcile_pooler(cdb: &CoreDB, ctx: Arc<Context>) -> Result<(), Action>
             ..ObjectMeta::default()
         },
         spec: PoolerSpec {
-            cluster: PoolerCluster {
-                name: cdb.name_any(),
-            },
+            cluster: PoolerCluster { name: cdb.name_any() },
             deployment_strategy: None,
             instances: 1,
             monitoring: None,

@@ -16,13 +16,13 @@ use kube::CustomResource;
 
 use crate::{
     apis::postgres_parameters::ConfigValue,
+    cloudnativepg::poolers::PoolerSpec,
     extensions::types::{Extension, TrunkInstall, TrunkInstallStatus},
 };
 use chrono::{DateTime, Utc};
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use std::collections::{BTreeMap, BTreeSet};
-use crate::cloudnativepg::poolers::PoolerSpec;
 
 #[derive(Clone, Default, Debug, Serialize, Deserialize, JsonSchema)]
 pub struct Stack {
@@ -52,7 +52,8 @@ pub struct Backup {
 #[allow(non_snake_case)]
 pub struct ConnPooler {
     pub enabled: bool,
-    pub pooler: Option<PoolerSpec>,
+    // TODO(ianstanton) create a slimmed-down version of PoolerSpec before exposing in spec
+    // pub pooler: Option<PoolerSpec>,
 }
 
 /// Generate the Kubernetes wrapper struct `CoreDB` from our Spec and Status struct

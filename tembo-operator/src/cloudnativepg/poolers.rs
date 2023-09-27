@@ -2,20 +2,29 @@
 // kopium command: kopium -D JsonSchema poolers.postgresql.cnpg.io
 // kopium version: 0.15.0
 
+use k8s_openapi::apimachinery::pkg::util::intstr::IntOrString;
 use kube::CustomResource;
 use schemars::JsonSchema;
-use serde::{Serialize, Deserialize};
+use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
-use k8s_openapi::apimachinery::pkg::util::intstr::IntOrString;
 
 #[derive(CustomResource, Serialize, Deserialize, Clone, Debug, JsonSchema)]
-#[kube(group = "postgresql.cnpg.io", version = "v1", kind = "Pooler", plural = "poolers")]
+#[kube(
+    group = "postgresql.cnpg.io",
+    version = "v1",
+    kind = "Pooler",
+    plural = "poolers"
+)]
 #[kube(namespaced)]
 #[kube(status = "PoolerStatus")]
 #[kube(schema = "disabled")]
 pub struct PoolerSpec {
     pub cluster: PoolerCluster,
-    #[serde(default, skip_serializing_if = "Option::is_none", rename = "deploymentStrategy")]
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        rename = "deploymentStrategy"
+    )]
     pub deployment_strategy: Option<PoolerDeploymentStrategy>,
     pub instances: i32,
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -101,20 +110,36 @@ pub struct PoolerTemplateMetadata {
 
 #[derive(Serialize, Deserialize, Clone, Debug, JsonSchema)]
 pub struct PoolerTemplateSpec {
-    #[serde(default, skip_serializing_if = "Option::is_none", rename = "activeDeadlineSeconds")]
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        rename = "activeDeadlineSeconds"
+    )]
     pub active_deadline_seconds: Option<i64>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub affinity: Option<PoolerTemplateSpecAffinity>,
-    #[serde(default, skip_serializing_if = "Option::is_none", rename = "automountServiceAccountToken")]
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        rename = "automountServiceAccountToken"
+    )]
     pub automount_service_account_token: Option<bool>,
     pub containers: Vec<PoolerTemplateSpecContainers>,
     #[serde(default, skip_serializing_if = "Option::is_none", rename = "dnsConfig")]
     pub dns_config: Option<PoolerTemplateSpecDnsConfig>,
     #[serde(default, skip_serializing_if = "Option::is_none", rename = "dnsPolicy")]
     pub dns_policy: Option<String>,
-    #[serde(default, skip_serializing_if = "Option::is_none", rename = "enableServiceLinks")]
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        rename = "enableServiceLinks"
+    )]
     pub enable_service_links: Option<bool>,
-    #[serde(default, skip_serializing_if = "Option::is_none", rename = "ephemeralContainers")]
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        rename = "ephemeralContainers"
+    )]
     pub ephemeral_containers: Option<Vec<PoolerTemplateSpecEphemeralContainers>>,
     #[serde(default, skip_serializing_if = "Option::is_none", rename = "hostAliases")]
     pub host_aliases: Option<Vec<PoolerTemplateSpecHostAliases>>,
@@ -144,7 +169,11 @@ pub struct PoolerTemplateSpec {
     pub preemption_policy: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub priority: Option<i32>,
-    #[serde(default, skip_serializing_if = "Option::is_none", rename = "priorityClassName")]
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        rename = "priorityClassName"
+    )]
     pub priority_class_name: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none", rename = "readinessGates")]
     pub readiness_gates: Option<Vec<PoolerTemplateSpecReadinessGates>>,
@@ -162,19 +191,39 @@ pub struct PoolerTemplateSpec {
     pub security_context: Option<PoolerTemplateSpecSecurityContext>,
     #[serde(default, skip_serializing_if = "Option::is_none", rename = "serviceAccount")]
     pub service_account: Option<String>,
-    #[serde(default, skip_serializing_if = "Option::is_none", rename = "serviceAccountName")]
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        rename = "serviceAccountName"
+    )]
     pub service_account_name: Option<String>,
-    #[serde(default, skip_serializing_if = "Option::is_none", rename = "setHostnameAsFQDN")]
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        rename = "setHostnameAsFQDN"
+    )]
     pub set_hostname_as_fqdn: Option<bool>,
-    #[serde(default, skip_serializing_if = "Option::is_none", rename = "shareProcessNamespace")]
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        rename = "shareProcessNamespace"
+    )]
     pub share_process_namespace: Option<bool>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub subdomain: Option<String>,
-    #[serde(default, skip_serializing_if = "Option::is_none", rename = "terminationGracePeriodSeconds")]
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        rename = "terminationGracePeriodSeconds"
+    )]
     pub termination_grace_period_seconds: Option<i64>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub tolerations: Option<Vec<PoolerTemplateSpecTolerations>>,
-    #[serde(default, skip_serializing_if = "Option::is_none", rename = "topologySpreadConstraints")]
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        rename = "topologySpreadConstraints"
+    )]
     pub topology_spread_constraints: Option<Vec<PoolerTemplateSpecTopologySpreadConstraints>>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub volumes: Option<Vec<PoolerTemplateSpecVolumes>>,
@@ -192,15 +241,26 @@ pub struct PoolerTemplateSpecAffinity {
 
 #[derive(Serialize, Deserialize, Clone, Debug, JsonSchema)]
 pub struct PoolerTemplateSpecAffinityNodeAffinity {
-    #[serde(default, skip_serializing_if = "Option::is_none", rename = "preferredDuringSchedulingIgnoredDuringExecution")]
-    pub preferred_during_scheduling_ignored_during_execution: Option<Vec<PoolerTemplateSpecAffinityNodeAffinityPreferredDuringSchedulingIgnoredDuringExecution>>,
-    #[serde(default, skip_serializing_if = "Option::is_none", rename = "requiredDuringSchedulingIgnoredDuringExecution")]
-    pub required_during_scheduling_ignored_during_execution: Option<PoolerTemplateSpecAffinityNodeAffinityRequiredDuringSchedulingIgnoredDuringExecution>,
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        rename = "preferredDuringSchedulingIgnoredDuringExecution"
+    )]
+    pub preferred_during_scheduling_ignored_during_execution:
+        Option<Vec<PoolerTemplateSpecAffinityNodeAffinityPreferredDuringSchedulingIgnoredDuringExecution>>,
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        rename = "requiredDuringSchedulingIgnoredDuringExecution"
+    )]
+    pub required_during_scheduling_ignored_during_execution:
+        Option<PoolerTemplateSpecAffinityNodeAffinityRequiredDuringSchedulingIgnoredDuringExecution>,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, JsonSchema)]
 pub struct PoolerTemplateSpecAffinityNodeAffinityPreferredDuringSchedulingIgnoredDuringExecution {
-    pub preference: PoolerTemplateSpecAffinityNodeAffinityPreferredDuringSchedulingIgnoredDuringExecutionPreference,
+    pub preference:
+        PoolerTemplateSpecAffinityNodeAffinityPreferredDuringSchedulingIgnoredDuringExecutionPreference,
     pub weight: i32,
 }
 
@@ -213,7 +273,8 @@ pub struct PoolerTemplateSpecAffinityNodeAffinityPreferredDuringSchedulingIgnore
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, JsonSchema)]
-pub struct PoolerTemplateSpecAffinityNodeAffinityPreferredDuringSchedulingIgnoredDuringExecutionPreferenceMatchExpressions {
+pub struct PoolerTemplateSpecAffinityNodeAffinityPreferredDuringSchedulingIgnoredDuringExecutionPreferenceMatchExpressions
+{
     pub key: String,
     pub operator: String,
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -221,7 +282,8 @@ pub struct PoolerTemplateSpecAffinityNodeAffinityPreferredDuringSchedulingIgnore
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, JsonSchema)]
-pub struct PoolerTemplateSpecAffinityNodeAffinityPreferredDuringSchedulingIgnoredDuringExecutionPreferenceMatchFields {
+pub struct PoolerTemplateSpecAffinityNodeAffinityPreferredDuringSchedulingIgnoredDuringExecutionPreferenceMatchFields
+{
     pub key: String,
     pub operator: String,
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -231,7 +293,9 @@ pub struct PoolerTemplateSpecAffinityNodeAffinityPreferredDuringSchedulingIgnore
 #[derive(Serialize, Deserialize, Clone, Debug, JsonSchema)]
 pub struct PoolerTemplateSpecAffinityNodeAffinityRequiredDuringSchedulingIgnoredDuringExecution {
     #[serde(rename = "nodeSelectorTerms")]
-    pub node_selector_terms: Vec<PoolerTemplateSpecAffinityNodeAffinityRequiredDuringSchedulingIgnoredDuringExecutionNodeSelectorTerms>,
+    pub node_selector_terms: Vec<
+        PoolerTemplateSpecAffinityNodeAffinityRequiredDuringSchedulingIgnoredDuringExecutionNodeSelectorTerms,
+    >,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, JsonSchema)]
@@ -243,7 +307,8 @@ pub struct PoolerTemplateSpecAffinityNodeAffinityRequiredDuringSchedulingIgnored
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, JsonSchema)]
-pub struct PoolerTemplateSpecAffinityNodeAffinityRequiredDuringSchedulingIgnoredDuringExecutionNodeSelectorTermsMatchExpressions {
+pub struct PoolerTemplateSpecAffinityNodeAffinityRequiredDuringSchedulingIgnoredDuringExecutionNodeSelectorTermsMatchExpressions
+{
     pub key: String,
     pub operator: String,
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -251,7 +316,8 @@ pub struct PoolerTemplateSpecAffinityNodeAffinityRequiredDuringSchedulingIgnored
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, JsonSchema)]
-pub struct PoolerTemplateSpecAffinityNodeAffinityRequiredDuringSchedulingIgnoredDuringExecutionNodeSelectorTermsMatchFields {
+pub struct PoolerTemplateSpecAffinityNodeAffinityRequiredDuringSchedulingIgnoredDuringExecutionNodeSelectorTermsMatchFields
+{
     pub key: String,
     pub operator: String,
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -260,16 +326,27 @@ pub struct PoolerTemplateSpecAffinityNodeAffinityRequiredDuringSchedulingIgnored
 
 #[derive(Serialize, Deserialize, Clone, Debug, JsonSchema)]
 pub struct PoolerTemplateSpecAffinityPodAffinity {
-    #[serde(default, skip_serializing_if = "Option::is_none", rename = "preferredDuringSchedulingIgnoredDuringExecution")]
-    pub preferred_during_scheduling_ignored_during_execution: Option<Vec<PoolerTemplateSpecAffinityPodAffinityPreferredDuringSchedulingIgnoredDuringExecution>>,
-    #[serde(default, skip_serializing_if = "Option::is_none", rename = "requiredDuringSchedulingIgnoredDuringExecution")]
-    pub required_during_scheduling_ignored_during_execution: Option<Vec<PoolerTemplateSpecAffinityPodAffinityRequiredDuringSchedulingIgnoredDuringExecution>>,
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        rename = "preferredDuringSchedulingIgnoredDuringExecution"
+    )]
+    pub preferred_during_scheduling_ignored_during_execution:
+        Option<Vec<PoolerTemplateSpecAffinityPodAffinityPreferredDuringSchedulingIgnoredDuringExecution>>,
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        rename = "requiredDuringSchedulingIgnoredDuringExecution"
+    )]
+    pub required_during_scheduling_ignored_during_execution:
+        Option<Vec<PoolerTemplateSpecAffinityPodAffinityRequiredDuringSchedulingIgnoredDuringExecution>>,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, JsonSchema)]
 pub struct PoolerTemplateSpecAffinityPodAffinityPreferredDuringSchedulingIgnoredDuringExecution {
     #[serde(rename = "podAffinityTerm")]
-    pub pod_affinity_term: PoolerTemplateSpecAffinityPodAffinityPreferredDuringSchedulingIgnoredDuringExecutionPodAffinityTerm,
+    pub pod_affinity_term:
+        PoolerTemplateSpecAffinityPodAffinityPreferredDuringSchedulingIgnoredDuringExecutionPodAffinityTerm,
     pub weight: i32,
 }
 
@@ -294,7 +371,8 @@ pub struct PoolerTemplateSpecAffinityPodAffinityPreferredDuringSchedulingIgnored
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, JsonSchema)]
-pub struct PoolerTemplateSpecAffinityPodAffinityPreferredDuringSchedulingIgnoredDuringExecutionPodAffinityTermLabelSelectorMatchExpressions {
+pub struct PoolerTemplateSpecAffinityPodAffinityPreferredDuringSchedulingIgnoredDuringExecutionPodAffinityTermLabelSelectorMatchExpressions
+{
     pub key: String,
     pub operator: String,
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -310,7 +388,8 @@ pub struct PoolerTemplateSpecAffinityPodAffinityPreferredDuringSchedulingIgnored
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, JsonSchema)]
-pub struct PoolerTemplateSpecAffinityPodAffinityPreferredDuringSchedulingIgnoredDuringExecutionPodAffinityTermNamespaceSelectorMatchExpressions {
+pub struct PoolerTemplateSpecAffinityPodAffinityPreferredDuringSchedulingIgnoredDuringExecutionPodAffinityTermNamespaceSelectorMatchExpressions
+{
     pub key: String,
     pub operator: String,
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -320,9 +399,17 @@ pub struct PoolerTemplateSpecAffinityPodAffinityPreferredDuringSchedulingIgnored
 #[derive(Serialize, Deserialize, Clone, Debug, JsonSchema)]
 pub struct PoolerTemplateSpecAffinityPodAffinityRequiredDuringSchedulingIgnoredDuringExecution {
     #[serde(default, skip_serializing_if = "Option::is_none", rename = "labelSelector")]
-    pub label_selector: Option<PoolerTemplateSpecAffinityPodAffinityRequiredDuringSchedulingIgnoredDuringExecutionLabelSelector>,
-    #[serde(default, skip_serializing_if = "Option::is_none", rename = "namespaceSelector")]
-    pub namespace_selector: Option<PoolerTemplateSpecAffinityPodAffinityRequiredDuringSchedulingIgnoredDuringExecutionNamespaceSelector>,
+    pub label_selector: Option<
+        PoolerTemplateSpecAffinityPodAffinityRequiredDuringSchedulingIgnoredDuringExecutionLabelSelector,
+    >,
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        rename = "namespaceSelector"
+    )]
+    pub namespace_selector: Option<
+        PoolerTemplateSpecAffinityPodAffinityRequiredDuringSchedulingIgnoredDuringExecutionNamespaceSelector,
+    >,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub namespaces: Option<Vec<String>>,
     #[serde(rename = "topologyKey")]
@@ -338,7 +425,8 @@ pub struct PoolerTemplateSpecAffinityPodAffinityRequiredDuringSchedulingIgnoredD
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, JsonSchema)]
-pub struct PoolerTemplateSpecAffinityPodAffinityRequiredDuringSchedulingIgnoredDuringExecutionLabelSelectorMatchExpressions {
+pub struct PoolerTemplateSpecAffinityPodAffinityRequiredDuringSchedulingIgnoredDuringExecutionLabelSelectorMatchExpressions
+{
     pub key: String,
     pub operator: String,
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -354,7 +442,8 @@ pub struct PoolerTemplateSpecAffinityPodAffinityRequiredDuringSchedulingIgnoredD
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, JsonSchema)]
-pub struct PoolerTemplateSpecAffinityPodAffinityRequiredDuringSchedulingIgnoredDuringExecutionNamespaceSelectorMatchExpressions {
+pub struct PoolerTemplateSpecAffinityPodAffinityRequiredDuringSchedulingIgnoredDuringExecutionNamespaceSelectorMatchExpressions
+{
     pub key: String,
     pub operator: String,
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -363,10 +452,20 @@ pub struct PoolerTemplateSpecAffinityPodAffinityRequiredDuringSchedulingIgnoredD
 
 #[derive(Serialize, Deserialize, Clone, Debug, JsonSchema)]
 pub struct PoolerTemplateSpecAffinityPodAntiAffinity {
-    #[serde(default, skip_serializing_if = "Option::is_none", rename = "preferredDuringSchedulingIgnoredDuringExecution")]
-    pub preferred_during_scheduling_ignored_during_execution: Option<Vec<PoolerTemplateSpecAffinityPodAntiAffinityPreferredDuringSchedulingIgnoredDuringExecution>>,
-    #[serde(default, skip_serializing_if = "Option::is_none", rename = "requiredDuringSchedulingIgnoredDuringExecution")]
-    pub required_during_scheduling_ignored_during_execution: Option<Vec<PoolerTemplateSpecAffinityPodAntiAffinityRequiredDuringSchedulingIgnoredDuringExecution>>,
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        rename = "preferredDuringSchedulingIgnoredDuringExecution"
+    )]
+    pub preferred_during_scheduling_ignored_during_execution:
+        Option<Vec<PoolerTemplateSpecAffinityPodAntiAffinityPreferredDuringSchedulingIgnoredDuringExecution>>,
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        rename = "requiredDuringSchedulingIgnoredDuringExecution"
+    )]
+    pub required_during_scheduling_ignored_during_execution:
+        Option<Vec<PoolerTemplateSpecAffinityPodAntiAffinityRequiredDuringSchedulingIgnoredDuringExecution>>,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, JsonSchema)]
@@ -397,7 +496,8 @@ pub struct PoolerTemplateSpecAffinityPodAntiAffinityPreferredDuringSchedulingIgn
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, JsonSchema)]
-pub struct PoolerTemplateSpecAffinityPodAntiAffinityPreferredDuringSchedulingIgnoredDuringExecutionPodAffinityTermLabelSelectorMatchExpressions {
+pub struct PoolerTemplateSpecAffinityPodAntiAffinityPreferredDuringSchedulingIgnoredDuringExecutionPodAffinityTermLabelSelectorMatchExpressions
+{
     pub key: String,
     pub operator: String,
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -413,7 +513,8 @@ pub struct PoolerTemplateSpecAffinityPodAntiAffinityPreferredDuringSchedulingIgn
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, JsonSchema)]
-pub struct PoolerTemplateSpecAffinityPodAntiAffinityPreferredDuringSchedulingIgnoredDuringExecutionPodAffinityTermNamespaceSelectorMatchExpressions {
+pub struct PoolerTemplateSpecAffinityPodAntiAffinityPreferredDuringSchedulingIgnoredDuringExecutionPodAffinityTermNamespaceSelectorMatchExpressions
+{
     pub key: String,
     pub operator: String,
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -441,7 +542,8 @@ pub struct PoolerTemplateSpecAffinityPodAntiAffinityRequiredDuringSchedulingIgno
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, JsonSchema)]
-pub struct PoolerTemplateSpecAffinityPodAntiAffinityRequiredDuringSchedulingIgnoredDuringExecutionLabelSelectorMatchExpressions {
+pub struct PoolerTemplateSpecAffinityPodAntiAffinityRequiredDuringSchedulingIgnoredDuringExecutionLabelSelectorMatchExpressions
+{
     pub key: String,
     pub operator: String,
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -457,7 +559,8 @@ pub struct PoolerTemplateSpecAffinityPodAntiAffinityRequiredDuringSchedulingIgno
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, JsonSchema)]
-pub struct PoolerTemplateSpecAffinityPodAntiAffinityRequiredDuringSchedulingIgnoredDuringExecutionNamespaceSelectorMatchExpressions {
+pub struct PoolerTemplateSpecAffinityPodAntiAffinityRequiredDuringSchedulingIgnoredDuringExecutionNamespaceSelectorMatchExpressions
+{
     pub key: String,
     pub operator: String,
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -499,9 +602,17 @@ pub struct PoolerTemplateSpecContainers {
     pub stdin: Option<bool>,
     #[serde(default, skip_serializing_if = "Option::is_none", rename = "stdinOnce")]
     pub stdin_once: Option<bool>,
-    #[serde(default, skip_serializing_if = "Option::is_none", rename = "terminationMessagePath")]
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        rename = "terminationMessagePath"
+    )]
     pub termination_message_path: Option<String>,
-    #[serde(default, skip_serializing_if = "Option::is_none", rename = "terminationMessagePolicy")]
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        rename = "terminationMessagePolicy"
+    )]
     pub termination_message_policy: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub tty: Option<bool>,
@@ -697,7 +808,11 @@ pub struct PoolerTemplateSpecContainersLivenessProbe {
     pub grpc: Option<PoolerTemplateSpecContainersLivenessProbeGrpc>,
     #[serde(default, skip_serializing_if = "Option::is_none", rename = "httpGet")]
     pub http_get: Option<PoolerTemplateSpecContainersLivenessProbeHttpGet>,
-    #[serde(default, skip_serializing_if = "Option::is_none", rename = "initialDelaySeconds")]
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        rename = "initialDelaySeconds"
+    )]
     pub initial_delay_seconds: Option<i32>,
     #[serde(default, skip_serializing_if = "Option::is_none", rename = "periodSeconds")]
     pub period_seconds: Option<i32>,
@@ -705,7 +820,11 @@ pub struct PoolerTemplateSpecContainersLivenessProbe {
     pub success_threshold: Option<i32>,
     #[serde(default, skip_serializing_if = "Option::is_none", rename = "tcpSocket")]
     pub tcp_socket: Option<PoolerTemplateSpecContainersLivenessProbeTcpSocket>,
-    #[serde(default, skip_serializing_if = "Option::is_none", rename = "terminationGracePeriodSeconds")]
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        rename = "terminationGracePeriodSeconds"
+    )]
     pub termination_grace_period_seconds: Option<i64>,
     #[serde(default, skip_serializing_if = "Option::is_none", rename = "timeoutSeconds")]
     pub timeout_seconds: Option<i32>,
@@ -774,7 +893,11 @@ pub struct PoolerTemplateSpecContainersReadinessProbe {
     pub grpc: Option<PoolerTemplateSpecContainersReadinessProbeGrpc>,
     #[serde(default, skip_serializing_if = "Option::is_none", rename = "httpGet")]
     pub http_get: Option<PoolerTemplateSpecContainersReadinessProbeHttpGet>,
-    #[serde(default, skip_serializing_if = "Option::is_none", rename = "initialDelaySeconds")]
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        rename = "initialDelaySeconds"
+    )]
     pub initial_delay_seconds: Option<i32>,
     #[serde(default, skip_serializing_if = "Option::is_none", rename = "periodSeconds")]
     pub period_seconds: Option<i32>,
@@ -782,7 +905,11 @@ pub struct PoolerTemplateSpecContainersReadinessProbe {
     pub success_threshold: Option<i32>,
     #[serde(default, skip_serializing_if = "Option::is_none", rename = "tcpSocket")]
     pub tcp_socket: Option<PoolerTemplateSpecContainersReadinessProbeTcpSocket>,
-    #[serde(default, skip_serializing_if = "Option::is_none", rename = "terminationGracePeriodSeconds")]
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        rename = "terminationGracePeriodSeconds"
+    )]
     pub termination_grace_period_seconds: Option<i64>,
     #[serde(default, skip_serializing_if = "Option::is_none", rename = "timeoutSeconds")]
     pub timeout_seconds: Option<i32>,
@@ -852,7 +979,11 @@ pub struct PoolerTemplateSpecContainersResourcesClaims {
 
 #[derive(Serialize, Deserialize, Clone, Debug, JsonSchema)]
 pub struct PoolerTemplateSpecContainersSecurityContext {
-    #[serde(default, skip_serializing_if = "Option::is_none", rename = "allowPrivilegeEscalation")]
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        rename = "allowPrivilegeEscalation"
+    )]
     pub allow_privilege_escalation: Option<bool>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub capabilities: Option<PoolerTemplateSpecContainersSecurityContextCapabilities>,
@@ -860,7 +991,11 @@ pub struct PoolerTemplateSpecContainersSecurityContext {
     pub privileged: Option<bool>,
     #[serde(default, skip_serializing_if = "Option::is_none", rename = "procMount")]
     pub proc_mount: Option<String>,
-    #[serde(default, skip_serializing_if = "Option::is_none", rename = "readOnlyRootFilesystem")]
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        rename = "readOnlyRootFilesystem"
+    )]
     pub read_only_root_filesystem: Option<bool>,
     #[serde(default, skip_serializing_if = "Option::is_none", rename = "runAsGroup")]
     pub run_as_group: Option<i64>,
@@ -906,9 +1041,17 @@ pub struct PoolerTemplateSpecContainersSecurityContextSeccompProfile {
 
 #[derive(Serialize, Deserialize, Clone, Debug, JsonSchema)]
 pub struct PoolerTemplateSpecContainersSecurityContextWindowsOptions {
-    #[serde(default, skip_serializing_if = "Option::is_none", rename = "gmsaCredentialSpec")]
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        rename = "gmsaCredentialSpec"
+    )]
     pub gmsa_credential_spec: Option<String>,
-    #[serde(default, skip_serializing_if = "Option::is_none", rename = "gmsaCredentialSpecName")]
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        rename = "gmsaCredentialSpecName"
+    )]
     pub gmsa_credential_spec_name: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none", rename = "hostProcess")]
     pub host_process: Option<bool>,
@@ -926,7 +1069,11 @@ pub struct PoolerTemplateSpecContainersStartupProbe {
     pub grpc: Option<PoolerTemplateSpecContainersStartupProbeGrpc>,
     #[serde(default, skip_serializing_if = "Option::is_none", rename = "httpGet")]
     pub http_get: Option<PoolerTemplateSpecContainersStartupProbeHttpGet>,
-    #[serde(default, skip_serializing_if = "Option::is_none", rename = "initialDelaySeconds")]
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        rename = "initialDelaySeconds"
+    )]
     pub initial_delay_seconds: Option<i32>,
     #[serde(default, skip_serializing_if = "Option::is_none", rename = "periodSeconds")]
     pub period_seconds: Option<i32>,
@@ -934,7 +1081,11 @@ pub struct PoolerTemplateSpecContainersStartupProbe {
     pub success_threshold: Option<i32>,
     #[serde(default, skip_serializing_if = "Option::is_none", rename = "tcpSocket")]
     pub tcp_socket: Option<PoolerTemplateSpecContainersStartupProbeTcpSocket>,
-    #[serde(default, skip_serializing_if = "Option::is_none", rename = "terminationGracePeriodSeconds")]
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        rename = "terminationGracePeriodSeconds"
+    )]
     pub termination_grace_period_seconds: Option<i64>,
     #[serde(default, skip_serializing_if = "Option::is_none", rename = "timeoutSeconds")]
     pub timeout_seconds: Option<i32>,
@@ -1054,11 +1205,23 @@ pub struct PoolerTemplateSpecEphemeralContainers {
     pub stdin: Option<bool>,
     #[serde(default, skip_serializing_if = "Option::is_none", rename = "stdinOnce")]
     pub stdin_once: Option<bool>,
-    #[serde(default, skip_serializing_if = "Option::is_none", rename = "targetContainerName")]
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        rename = "targetContainerName"
+    )]
     pub target_container_name: Option<String>,
-    #[serde(default, skip_serializing_if = "Option::is_none", rename = "terminationMessagePath")]
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        rename = "terminationMessagePath"
+    )]
     pub termination_message_path: Option<String>,
-    #[serde(default, skip_serializing_if = "Option::is_none", rename = "terminationMessagePolicy")]
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        rename = "terminationMessagePolicy"
+    )]
     pub termination_message_policy: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub tty: Option<bool>,
@@ -1254,7 +1417,11 @@ pub struct PoolerTemplateSpecEphemeralContainersLivenessProbe {
     pub grpc: Option<PoolerTemplateSpecEphemeralContainersLivenessProbeGrpc>,
     #[serde(default, skip_serializing_if = "Option::is_none", rename = "httpGet")]
     pub http_get: Option<PoolerTemplateSpecEphemeralContainersLivenessProbeHttpGet>,
-    #[serde(default, skip_serializing_if = "Option::is_none", rename = "initialDelaySeconds")]
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        rename = "initialDelaySeconds"
+    )]
     pub initial_delay_seconds: Option<i32>,
     #[serde(default, skip_serializing_if = "Option::is_none", rename = "periodSeconds")]
     pub period_seconds: Option<i32>,
@@ -1262,7 +1429,11 @@ pub struct PoolerTemplateSpecEphemeralContainersLivenessProbe {
     pub success_threshold: Option<i32>,
     #[serde(default, skip_serializing_if = "Option::is_none", rename = "tcpSocket")]
     pub tcp_socket: Option<PoolerTemplateSpecEphemeralContainersLivenessProbeTcpSocket>,
-    #[serde(default, skip_serializing_if = "Option::is_none", rename = "terminationGracePeriodSeconds")]
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        rename = "terminationGracePeriodSeconds"
+    )]
     pub termination_grace_period_seconds: Option<i64>,
     #[serde(default, skip_serializing_if = "Option::is_none", rename = "timeoutSeconds")]
     pub timeout_seconds: Option<i32>,
@@ -1331,7 +1502,11 @@ pub struct PoolerTemplateSpecEphemeralContainersReadinessProbe {
     pub grpc: Option<PoolerTemplateSpecEphemeralContainersReadinessProbeGrpc>,
     #[serde(default, skip_serializing_if = "Option::is_none", rename = "httpGet")]
     pub http_get: Option<PoolerTemplateSpecEphemeralContainersReadinessProbeHttpGet>,
-    #[serde(default, skip_serializing_if = "Option::is_none", rename = "initialDelaySeconds")]
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        rename = "initialDelaySeconds"
+    )]
     pub initial_delay_seconds: Option<i32>,
     #[serde(default, skip_serializing_if = "Option::is_none", rename = "periodSeconds")]
     pub period_seconds: Option<i32>,
@@ -1339,7 +1514,11 @@ pub struct PoolerTemplateSpecEphemeralContainersReadinessProbe {
     pub success_threshold: Option<i32>,
     #[serde(default, skip_serializing_if = "Option::is_none", rename = "tcpSocket")]
     pub tcp_socket: Option<PoolerTemplateSpecEphemeralContainersReadinessProbeTcpSocket>,
-    #[serde(default, skip_serializing_if = "Option::is_none", rename = "terminationGracePeriodSeconds")]
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        rename = "terminationGracePeriodSeconds"
+    )]
     pub termination_grace_period_seconds: Option<i64>,
     #[serde(default, skip_serializing_if = "Option::is_none", rename = "timeoutSeconds")]
     pub timeout_seconds: Option<i32>,
@@ -1409,7 +1588,11 @@ pub struct PoolerTemplateSpecEphemeralContainersResourcesClaims {
 
 #[derive(Serialize, Deserialize, Clone, Debug, JsonSchema)]
 pub struct PoolerTemplateSpecEphemeralContainersSecurityContext {
-    #[serde(default, skip_serializing_if = "Option::is_none", rename = "allowPrivilegeEscalation")]
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        rename = "allowPrivilegeEscalation"
+    )]
     pub allow_privilege_escalation: Option<bool>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub capabilities: Option<PoolerTemplateSpecEphemeralContainersSecurityContextCapabilities>,
@@ -1417,7 +1600,11 @@ pub struct PoolerTemplateSpecEphemeralContainersSecurityContext {
     pub privileged: Option<bool>,
     #[serde(default, skip_serializing_if = "Option::is_none", rename = "procMount")]
     pub proc_mount: Option<String>,
-    #[serde(default, skip_serializing_if = "Option::is_none", rename = "readOnlyRootFilesystem")]
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        rename = "readOnlyRootFilesystem"
+    )]
     pub read_only_root_filesystem: Option<bool>,
     #[serde(default, skip_serializing_if = "Option::is_none", rename = "runAsGroup")]
     pub run_as_group: Option<i64>,
@@ -1463,9 +1650,17 @@ pub struct PoolerTemplateSpecEphemeralContainersSecurityContextSeccompProfile {
 
 #[derive(Serialize, Deserialize, Clone, Debug, JsonSchema)]
 pub struct PoolerTemplateSpecEphemeralContainersSecurityContextWindowsOptions {
-    #[serde(default, skip_serializing_if = "Option::is_none", rename = "gmsaCredentialSpec")]
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        rename = "gmsaCredentialSpec"
+    )]
     pub gmsa_credential_spec: Option<String>,
-    #[serde(default, skip_serializing_if = "Option::is_none", rename = "gmsaCredentialSpecName")]
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        rename = "gmsaCredentialSpecName"
+    )]
     pub gmsa_credential_spec_name: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none", rename = "hostProcess")]
     pub host_process: Option<bool>,
@@ -1483,7 +1678,11 @@ pub struct PoolerTemplateSpecEphemeralContainersStartupProbe {
     pub grpc: Option<PoolerTemplateSpecEphemeralContainersStartupProbeGrpc>,
     #[serde(default, skip_serializing_if = "Option::is_none", rename = "httpGet")]
     pub http_get: Option<PoolerTemplateSpecEphemeralContainersStartupProbeHttpGet>,
-    #[serde(default, skip_serializing_if = "Option::is_none", rename = "initialDelaySeconds")]
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        rename = "initialDelaySeconds"
+    )]
     pub initial_delay_seconds: Option<i32>,
     #[serde(default, skip_serializing_if = "Option::is_none", rename = "periodSeconds")]
     pub period_seconds: Option<i32>,
@@ -1491,7 +1690,11 @@ pub struct PoolerTemplateSpecEphemeralContainersStartupProbe {
     pub success_threshold: Option<i32>,
     #[serde(default, skip_serializing_if = "Option::is_none", rename = "tcpSocket")]
     pub tcp_socket: Option<PoolerTemplateSpecEphemeralContainersStartupProbeTcpSocket>,
-    #[serde(default, skip_serializing_if = "Option::is_none", rename = "terminationGracePeriodSeconds")]
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        rename = "terminationGracePeriodSeconds"
+    )]
     pub termination_grace_period_seconds: Option<i64>,
     #[serde(default, skip_serializing_if = "Option::is_none", rename = "timeoutSeconds")]
     pub timeout_seconds: Option<i32>,
@@ -1607,9 +1810,17 @@ pub struct PoolerTemplateSpecInitContainers {
     pub stdin: Option<bool>,
     #[serde(default, skip_serializing_if = "Option::is_none", rename = "stdinOnce")]
     pub stdin_once: Option<bool>,
-    #[serde(default, skip_serializing_if = "Option::is_none", rename = "terminationMessagePath")]
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        rename = "terminationMessagePath"
+    )]
     pub termination_message_path: Option<String>,
-    #[serde(default, skip_serializing_if = "Option::is_none", rename = "terminationMessagePolicy")]
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        rename = "terminationMessagePolicy"
+    )]
     pub termination_message_policy: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub tty: Option<bool>,
@@ -1805,7 +2016,11 @@ pub struct PoolerTemplateSpecInitContainersLivenessProbe {
     pub grpc: Option<PoolerTemplateSpecInitContainersLivenessProbeGrpc>,
     #[serde(default, skip_serializing_if = "Option::is_none", rename = "httpGet")]
     pub http_get: Option<PoolerTemplateSpecInitContainersLivenessProbeHttpGet>,
-    #[serde(default, skip_serializing_if = "Option::is_none", rename = "initialDelaySeconds")]
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        rename = "initialDelaySeconds"
+    )]
     pub initial_delay_seconds: Option<i32>,
     #[serde(default, skip_serializing_if = "Option::is_none", rename = "periodSeconds")]
     pub period_seconds: Option<i32>,
@@ -1813,7 +2028,11 @@ pub struct PoolerTemplateSpecInitContainersLivenessProbe {
     pub success_threshold: Option<i32>,
     #[serde(default, skip_serializing_if = "Option::is_none", rename = "tcpSocket")]
     pub tcp_socket: Option<PoolerTemplateSpecInitContainersLivenessProbeTcpSocket>,
-    #[serde(default, skip_serializing_if = "Option::is_none", rename = "terminationGracePeriodSeconds")]
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        rename = "terminationGracePeriodSeconds"
+    )]
     pub termination_grace_period_seconds: Option<i64>,
     #[serde(default, skip_serializing_if = "Option::is_none", rename = "timeoutSeconds")]
     pub timeout_seconds: Option<i32>,
@@ -1882,7 +2101,11 @@ pub struct PoolerTemplateSpecInitContainersReadinessProbe {
     pub grpc: Option<PoolerTemplateSpecInitContainersReadinessProbeGrpc>,
     #[serde(default, skip_serializing_if = "Option::is_none", rename = "httpGet")]
     pub http_get: Option<PoolerTemplateSpecInitContainersReadinessProbeHttpGet>,
-    #[serde(default, skip_serializing_if = "Option::is_none", rename = "initialDelaySeconds")]
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        rename = "initialDelaySeconds"
+    )]
     pub initial_delay_seconds: Option<i32>,
     #[serde(default, skip_serializing_if = "Option::is_none", rename = "periodSeconds")]
     pub period_seconds: Option<i32>,
@@ -1890,7 +2113,11 @@ pub struct PoolerTemplateSpecInitContainersReadinessProbe {
     pub success_threshold: Option<i32>,
     #[serde(default, skip_serializing_if = "Option::is_none", rename = "tcpSocket")]
     pub tcp_socket: Option<PoolerTemplateSpecInitContainersReadinessProbeTcpSocket>,
-    #[serde(default, skip_serializing_if = "Option::is_none", rename = "terminationGracePeriodSeconds")]
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        rename = "terminationGracePeriodSeconds"
+    )]
     pub termination_grace_period_seconds: Option<i64>,
     #[serde(default, skip_serializing_if = "Option::is_none", rename = "timeoutSeconds")]
     pub timeout_seconds: Option<i32>,
@@ -1960,7 +2187,11 @@ pub struct PoolerTemplateSpecInitContainersResourcesClaims {
 
 #[derive(Serialize, Deserialize, Clone, Debug, JsonSchema)]
 pub struct PoolerTemplateSpecInitContainersSecurityContext {
-    #[serde(default, skip_serializing_if = "Option::is_none", rename = "allowPrivilegeEscalation")]
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        rename = "allowPrivilegeEscalation"
+    )]
     pub allow_privilege_escalation: Option<bool>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub capabilities: Option<PoolerTemplateSpecInitContainersSecurityContextCapabilities>,
@@ -1968,7 +2199,11 @@ pub struct PoolerTemplateSpecInitContainersSecurityContext {
     pub privileged: Option<bool>,
     #[serde(default, skip_serializing_if = "Option::is_none", rename = "procMount")]
     pub proc_mount: Option<String>,
-    #[serde(default, skip_serializing_if = "Option::is_none", rename = "readOnlyRootFilesystem")]
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        rename = "readOnlyRootFilesystem"
+    )]
     pub read_only_root_filesystem: Option<bool>,
     #[serde(default, skip_serializing_if = "Option::is_none", rename = "runAsGroup")]
     pub run_as_group: Option<i64>,
@@ -2014,9 +2249,17 @@ pub struct PoolerTemplateSpecInitContainersSecurityContextSeccompProfile {
 
 #[derive(Serialize, Deserialize, Clone, Debug, JsonSchema)]
 pub struct PoolerTemplateSpecInitContainersSecurityContextWindowsOptions {
-    #[serde(default, skip_serializing_if = "Option::is_none", rename = "gmsaCredentialSpec")]
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        rename = "gmsaCredentialSpec"
+    )]
     pub gmsa_credential_spec: Option<String>,
-    #[serde(default, skip_serializing_if = "Option::is_none", rename = "gmsaCredentialSpecName")]
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        rename = "gmsaCredentialSpecName"
+    )]
     pub gmsa_credential_spec_name: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none", rename = "hostProcess")]
     pub host_process: Option<bool>,
@@ -2034,7 +2277,11 @@ pub struct PoolerTemplateSpecInitContainersStartupProbe {
     pub grpc: Option<PoolerTemplateSpecInitContainersStartupProbeGrpc>,
     #[serde(default, skip_serializing_if = "Option::is_none", rename = "httpGet")]
     pub http_get: Option<PoolerTemplateSpecInitContainersStartupProbeHttpGet>,
-    #[serde(default, skip_serializing_if = "Option::is_none", rename = "initialDelaySeconds")]
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        rename = "initialDelaySeconds"
+    )]
     pub initial_delay_seconds: Option<i32>,
     #[serde(default, skip_serializing_if = "Option::is_none", rename = "periodSeconds")]
     pub period_seconds: Option<i32>,
@@ -2042,7 +2289,11 @@ pub struct PoolerTemplateSpecInitContainersStartupProbe {
     pub success_threshold: Option<i32>,
     #[serde(default, skip_serializing_if = "Option::is_none", rename = "tcpSocket")]
     pub tcp_socket: Option<PoolerTemplateSpecInitContainersStartupProbeTcpSocket>,
-    #[serde(default, skip_serializing_if = "Option::is_none", rename = "terminationGracePeriodSeconds")]
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        rename = "terminationGracePeriodSeconds"
+    )]
     pub termination_grace_period_seconds: Option<i64>,
     #[serde(default, skip_serializing_if = "Option::is_none", rename = "timeoutSeconds")]
     pub timeout_seconds: Option<i32>,
@@ -2129,9 +2380,17 @@ pub struct PoolerTemplateSpecResourceClaims {
 
 #[derive(Serialize, Deserialize, Clone, Debug, JsonSchema)]
 pub struct PoolerTemplateSpecResourceClaimsSource {
-    #[serde(default, skip_serializing_if = "Option::is_none", rename = "resourceClaimName")]
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        rename = "resourceClaimName"
+    )]
     pub resource_claim_name: Option<String>,
-    #[serde(default, skip_serializing_if = "Option::is_none", rename = "resourceClaimTemplateName")]
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        rename = "resourceClaimTemplateName"
+    )]
     pub resource_claim_template_name: Option<String>,
 }
 
@@ -2144,7 +2403,11 @@ pub struct PoolerTemplateSpecSchedulingGates {
 pub struct PoolerTemplateSpecSecurityContext {
     #[serde(default, skip_serializing_if = "Option::is_none", rename = "fsGroup")]
     pub fs_group: Option<i64>,
-    #[serde(default, skip_serializing_if = "Option::is_none", rename = "fsGroupChangePolicy")]
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        rename = "fsGroupChangePolicy"
+    )]
     pub fs_group_change_policy: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none", rename = "runAsGroup")]
     pub run_as_group: Option<i64>,
@@ -2156,7 +2419,11 @@ pub struct PoolerTemplateSpecSecurityContext {
     pub se_linux_options: Option<PoolerTemplateSpecSecurityContextSeLinuxOptions>,
     #[serde(default, skip_serializing_if = "Option::is_none", rename = "seccompProfile")]
     pub seccomp_profile: Option<PoolerTemplateSpecSecurityContextSeccompProfile>,
-    #[serde(default, skip_serializing_if = "Option::is_none", rename = "supplementalGroups")]
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        rename = "supplementalGroups"
+    )]
     pub supplemental_groups: Option<Vec<i64>>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub sysctls: Option<Vec<PoolerTemplateSpecSecurityContextSysctls>>,
@@ -2192,9 +2459,17 @@ pub struct PoolerTemplateSpecSecurityContextSysctls {
 
 #[derive(Serialize, Deserialize, Clone, Debug, JsonSchema)]
 pub struct PoolerTemplateSpecSecurityContextWindowsOptions {
-    #[serde(default, skip_serializing_if = "Option::is_none", rename = "gmsaCredentialSpec")]
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        rename = "gmsaCredentialSpec"
+    )]
     pub gmsa_credential_spec: Option<String>,
-    #[serde(default, skip_serializing_if = "Option::is_none", rename = "gmsaCredentialSpecName")]
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        rename = "gmsaCredentialSpecName"
+    )]
     pub gmsa_credential_spec_name: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none", rename = "hostProcess")]
     pub host_process: Option<bool>,
@@ -2210,7 +2485,11 @@ pub struct PoolerTemplateSpecTolerations {
     pub key: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub operator: Option<String>,
-    #[serde(default, skip_serializing_if = "Option::is_none", rename = "tolerationSeconds")]
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        rename = "tolerationSeconds"
+    )]
     pub toleration_seconds: Option<i64>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub value: Option<String>,
@@ -2226,7 +2505,11 @@ pub struct PoolerTemplateSpecTopologySpreadConstraints {
     pub max_skew: i32,
     #[serde(default, skip_serializing_if = "Option::is_none", rename = "minDomains")]
     pub min_domains: Option<i32>,
-    #[serde(default, skip_serializing_if = "Option::is_none", rename = "nodeAffinityPolicy")]
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        rename = "nodeAffinityPolicy"
+    )]
     pub node_affinity_policy: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none", rename = "nodeTaintsPolicy")]
     pub node_taints_policy: Option<String>,
@@ -2239,7 +2522,8 @@ pub struct PoolerTemplateSpecTopologySpreadConstraints {
 #[derive(Serialize, Deserialize, Clone, Debug, JsonSchema)]
 pub struct PoolerTemplateSpecTopologySpreadConstraintsLabelSelector {
     #[serde(default, skip_serializing_if = "Option::is_none", rename = "matchExpressions")]
-    pub match_expressions: Option<Vec<PoolerTemplateSpecTopologySpreadConstraintsLabelSelectorMatchExpressions>>,
+    pub match_expressions:
+        Option<Vec<PoolerTemplateSpecTopologySpreadConstraintsLabelSelectorMatchExpressions>>,
     #[serde(default, skip_serializing_if = "Option::is_none", rename = "matchLabels")]
     pub match_labels: Option<BTreeMap<String, String>>,
 }
@@ -2254,7 +2538,11 @@ pub struct PoolerTemplateSpecTopologySpreadConstraintsLabelSelectorMatchExpressi
 
 #[derive(Serialize, Deserialize, Clone, Debug, JsonSchema)]
 pub struct PoolerTemplateSpecVolumes {
-    #[serde(default, skip_serializing_if = "Option::is_none", rename = "awsElasticBlockStore")]
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        rename = "awsElasticBlockStore"
+    )]
     pub aws_elastic_block_store: Option<PoolerTemplateSpecVolumesAwsElasticBlockStore>,
     #[serde(default, skip_serializing_if = "Option::is_none", rename = "azureDisk")]
     pub azure_disk: Option<PoolerTemplateSpecVolumesAzureDisk>,
@@ -2280,7 +2568,11 @@ pub struct PoolerTemplateSpecVolumes {
     pub flex_volume: Option<PoolerTemplateSpecVolumesFlexVolume>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub flocker: Option<PoolerTemplateSpecVolumesFlocker>,
-    #[serde(default, skip_serializing_if = "Option::is_none", rename = "gcePersistentDisk")]
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        rename = "gcePersistentDisk"
+    )]
     pub gce_persistent_disk: Option<PoolerTemplateSpecVolumesGcePersistentDisk>,
     #[serde(default, skip_serializing_if = "Option::is_none", rename = "gitRepo")]
     pub git_repo: Option<PoolerTemplateSpecVolumesGitRepo>,
@@ -2293,9 +2585,17 @@ pub struct PoolerTemplateSpecVolumes {
     pub name: String,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub nfs: Option<PoolerTemplateSpecVolumesNfs>,
-    #[serde(default, skip_serializing_if = "Option::is_none", rename = "persistentVolumeClaim")]
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        rename = "persistentVolumeClaim"
+    )]
     pub persistent_volume_claim: Option<PoolerTemplateSpecVolumesPersistentVolumeClaim>,
-    #[serde(default, skip_serializing_if = "Option::is_none", rename = "photonPersistentDisk")]
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        rename = "photonPersistentDisk"
+    )]
     pub photon_persistent_disk: Option<PoolerTemplateSpecVolumesPhotonPersistentDisk>,
     #[serde(default, skip_serializing_if = "Option::is_none", rename = "portworxVolume")]
     pub portworx_volume: Option<PoolerTemplateSpecVolumesPortworxVolume>,
@@ -2417,7 +2717,11 @@ pub struct PoolerTemplateSpecVolumesCsi {
     pub driver: String,
     #[serde(default, skip_serializing_if = "Option::is_none", rename = "fsType")]
     pub fs_type: Option<String>,
-    #[serde(default, skip_serializing_if = "Option::is_none", rename = "nodePublishSecretRef")]
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        rename = "nodePublishSecretRef"
+    )]
     pub node_publish_secret_ref: Option<PoolerTemplateSpecVolumesCsiNodePublishSecretRef>,
     #[serde(default, skip_serializing_if = "Option::is_none", rename = "readOnly")]
     pub read_only: Option<bool>,
@@ -2477,7 +2781,11 @@ pub struct PoolerTemplateSpecVolumesEmptyDir {
 
 #[derive(Serialize, Deserialize, Clone, Debug, JsonSchema)]
 pub struct PoolerTemplateSpecVolumesEphemeral {
-    #[serde(default, skip_serializing_if = "Option::is_none", rename = "volumeClaimTemplate")]
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        rename = "volumeClaimTemplate"
+    )]
     pub volume_claim_template: Option<PoolerTemplateSpecVolumesEphemeralVolumeClaimTemplate>,
 }
 
@@ -2489,8 +2797,7 @@ pub struct PoolerTemplateSpecVolumesEphemeralVolumeClaimTemplate {
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, JsonSchema)]
-pub struct PoolerTemplateSpecVolumesEphemeralVolumeClaimTemplateMetadata {
-}
+pub struct PoolerTemplateSpecVolumesEphemeralVolumeClaimTemplateMetadata {}
 
 #[derive(Serialize, Deserialize, Clone, Debug, JsonSchema)]
 pub struct PoolerTemplateSpecVolumesEphemeralVolumeClaimTemplateSpec {
@@ -2548,7 +2855,8 @@ pub struct PoolerTemplateSpecVolumesEphemeralVolumeClaimTemplateSpecResourcesCla
 #[derive(Serialize, Deserialize, Clone, Debug, JsonSchema)]
 pub struct PoolerTemplateSpecVolumesEphemeralVolumeClaimTemplateSpecSelector {
     #[serde(default, skip_serializing_if = "Option::is_none", rename = "matchExpressions")]
-    pub match_expressions: Option<Vec<PoolerTemplateSpecVolumesEphemeralVolumeClaimTemplateSpecSelectorMatchExpressions>>,
+    pub match_expressions:
+        Option<Vec<PoolerTemplateSpecVolumesEphemeralVolumeClaimTemplateSpecSelectorMatchExpressions>>,
     #[serde(default, skip_serializing_if = "Option::is_none", rename = "matchLabels")]
     pub match_labels: Option<BTreeMap<String, String>>,
 }
@@ -2640,7 +2948,11 @@ pub struct PoolerTemplateSpecVolumesHostPath {
 
 #[derive(Serialize, Deserialize, Clone, Debug, JsonSchema)]
 pub struct PoolerTemplateSpecVolumesIscsi {
-    #[serde(default, skip_serializing_if = "Option::is_none", rename = "chapAuthDiscovery")]
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        rename = "chapAuthDiscovery"
+    )]
     pub chap_auth_discovery: Option<bool>,
     #[serde(default, skip_serializing_if = "Option::is_none", rename = "chapAuthSession")]
     pub chap_auth_session: Option<bool>,
@@ -2718,7 +3030,11 @@ pub struct PoolerTemplateSpecVolumesProjectedSources {
     pub downward_api: Option<PoolerTemplateSpecVolumesProjectedSourcesDownwardApi>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub secret: Option<PoolerTemplateSpecVolumesProjectedSourcesSecret>,
-    #[serde(default, skip_serializing_if = "Option::is_none", rename = "serviceAccountToken")]
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        rename = "serviceAccountToken"
+    )]
     pub service_account_token: Option<PoolerTemplateSpecVolumesProjectedSourcesServiceAccountToken>,
 }
 
@@ -2796,7 +3112,11 @@ pub struct PoolerTemplateSpecVolumesProjectedSourcesSecretItems {
 pub struct PoolerTemplateSpecVolumesProjectedSourcesServiceAccountToken {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub audience: Option<String>,
-    #[serde(default, skip_serializing_if = "Option::is_none", rename = "expirationSeconds")]
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        rename = "expirationSeconds"
+    )]
     pub expiration_seconds: Option<i64>,
     pub path: String,
 }
@@ -2913,7 +3233,11 @@ pub struct PoolerTemplateSpecVolumesVsphereVolume {
     pub fs_type: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none", rename = "storagePolicyID")]
     pub storage_policy_id: Option<String>,
-    #[serde(default, skip_serializing_if = "Option::is_none", rename = "storagePolicyName")]
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        rename = "storagePolicyName"
+    )]
     pub storage_policy_name: Option<String>,
     #[serde(rename = "volumePath")]
     pub volume_path: String,
