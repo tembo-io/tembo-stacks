@@ -11,6 +11,7 @@ pub struct AppService {
     pub args: Option<Vec<String>>,
     pub command: Option<Vec<String>>,
     pub env: Option<BTreeMap<String, String>>,
+    pub ingress: Option<Ingress>,
     // PortMapping is in format of String "host:container"
     pub ports: Option<Vec<PortMapping>>,
     pub resources: Option<ResourceRequirements>,
@@ -79,13 +80,26 @@ pub struct Probes {
     pub liveness: Probe,
 }
 
-#[allow(non_snake_case)]
 #[derive(Clone, Debug, Serialize, Deserialize, ToSchema, JsonSchema, PartialEq)]
 pub struct Probe {
     pub path: String,
     pub port: String,
     // this should never be negative
+    #[serde(rename = "initialDelaySeconds")]
     pub initial_delay_seconds: u32,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize, ToSchema, JsonSchema, PartialEq)]
+pub struct Ingress {
+    pub enabled: bool,
+    pub routes: Vec<Routes>,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize, ToSchema, JsonSchema, PartialEq)]
+pub struct Routes {
+    #[serde(rename = "containerPort")]
+    pub container_port: u32,
+    pub path: String,
 }
 
 #[cfg(test)]
