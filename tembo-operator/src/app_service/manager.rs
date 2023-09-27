@@ -2,7 +2,7 @@ use crate::{
     apis::coredb_types::CoreDB,
     ingress_route_crd::{
         IngressRoute, IngressRouteRoutes, IngressRouteRoutesKind, IngressRouteRoutesServices,
-        IngressRouteRoutesServicesKind, IngressRouteSpec, IngressRouteTls,
+        IngressRouteRoutesServicesKind, IngressRouteSpec,
     },
     Context, Error, Result,
 };
@@ -52,13 +52,17 @@ fn generate_resource(
 ) -> AppServiceResources {
     let resource_name = format!("{}-{}", coredb_name, appsvc.name.clone());
     let service = appsvc
-        .ports
+        .routing
         .as_ref()
         .map(|_| generate_service(appsvc, coredb_name, &resource_name, namespace, oref.clone()));
     let deployment = generate_deployment(appsvc, coredb_name, &resource_name, namespace, oref);
 
-    let domain_matcher = format!("Host(`{}`)", domain);
-    let ingress_routes = generate_ingress_routes(appsvc, &resource_name, namespace, domain_matcher);
+    let host_matcher = format!(
+        "Host(`{subdomain}.{domain}`)",
+        subdomain = coredb_name,
+        domain = domain
+    );
+    let ingress_routes = generate_ingress_routes(appsvc, &resource_name, namespace, host_matcher);
     AppServiceResources {
         deployment,
         name: resource_name,
@@ -73,34 +77,42 @@ fn generate_ingress_routes(
     appsvc: &AppService,
     resource_name: &str,
     namespace: &str,
-    domain_matcher: String,
+    host_matcher: String,
 ) -> Option<Vec<IngressRouteRoutes>> {
-    match appsvc.ingress.clone() {
-        Some(ingress) => {
+    match appsvc.routing.clone() {
+        Some(routings) => {
             let mut routes: Vec<IngressRouteRoutes> = Vec::new();
-            for route in ingress.routes.iter() {
-                let matcher = format!("{domain_matcher} && PathPrefix(`{}`)", route.path);
-                let route = IngressRouteRoutes {
-                    kind: IngressRouteRoutesKind::Rule,
-                    r#match: matcher.clone(),
-                    services: Some(vec![IngressRouteRoutesServices {
-                        name: resource_name.to_owned(),
-                        port: Some(IntOrString::Int(route.container_port as i32)),
-                        namespace: Some(namespace.to_owned()),
-                        kind: Some(IngressRouteRoutesServicesKind::Service),
-                        native_lb: None,
-                        pass_host_header: None,
-                        response_forwarding: None,
-                        scheme: None,
-                        servers_transport: None,
-                        sticky: None,
-                        strategy: None,
-                        weight: None,
-                    }]),
-                    middlewares: None,
-                    priority: None,
-                };
-                routes.push(route);
+            for route in routings.iter() {
+                match route.ingress_path.clone() {
+                    Some(path) => {
+                        let matcher = format!("{host_matcher} && PathPrefix(`{}`)", path);
+                        let route = IngressRouteRoutes {
+                            kind: IngressRouteRoutesKind::Rule,
+                            r#match: matcher.clone(),
+                            services: Some(vec![IngressRouteRoutesServices {
+                                name: resource_name.to_owned(),
+                                port: Some(IntOrString::Int(route.port as i32)),
+                                namespace: Some(namespace.to_owned()),
+                                kind: Some(IngressRouteRoutesServicesKind::Service),
+                                native_lb: None,
+                                pass_host_header: None,
+                                response_forwarding: None,
+                                scheme: None,
+                                servers_transport: None,
+                                sticky: None,
+                                strategy: None,
+                                weight: None,
+                            }]),
+                            middlewares: None,
+                            priority: None,
+                        };
+                        routes.push(route);
+                    }
+                    None => {
+                        // do not create ingress when there is no path provided
+                        continue;
+                    }
+                }
             }
             Some(routes)
         }
@@ -123,16 +135,9 @@ fn generate_ingress(
             ..ObjectMeta::default()
         },
         spec: IngressRouteSpec {
-            entry_points: Some(vec!["websecure".to_string()]),
+            entry_points: Some(vec!["web".to_string()]),
             routes,
-            // TODO: how to handle both http and https?
-            tls: Some(IngressRouteTls {
-                cert_resolver: None,
-                domains: None,
-                options: None,
-                secret_name: None,
-                store: None,
-            }),
+            tls: None,
         },
     }
 }
@@ -153,12 +158,12 @@ fn generate_service(
     let mut labels = selector_labels.clone();
     labels.insert("component".to_owned(), COMPONENT_NAME.to_owned());
 
-    let ports = match appsvc.ports.as_ref() {
-        Some(ports) => {
-            let ports: Vec<ServicePort> = ports
+    let ports = match appsvc.routing.as_ref() {
+        Some(routing) => {
+            let ports: Vec<ServicePort> = routing
                 .iter()
-                .map(|pm| ServicePort {
-                    port: pm.container as i32,
+                .map(|r| ServicePort {
+                    port: r.port as i32,
                     name: Some(appsvc.name.clone()),
                     target_port: Some(IntOrString::String(appsvc.name.clone())),
                     ..ServicePort::default()
@@ -235,14 +240,13 @@ fn generate_deployment(
         }
     };
 
-    // container port mapping
-    let container_ports: Option<Vec<ContainerPort>> = match appsvc.ports.as_ref() {
+    // container ports
+    let container_ports: Option<Vec<ContainerPort>> = match appsvc.routing.as_ref() {
         Some(ports) => {
             let container_ports: Vec<ContainerPort> = ports
                 .iter()
                 .map(|pm| ContainerPort {
-                    container_port: pm.container as i32,
-                    host_port: Some(pm.host as i32),
+                    container_port: pm.port as i32,
                     name: Some(appsvc.name.clone()),
                     protocol: Some("TCP".to_string()),
                     ..ContainerPort::default()
@@ -424,12 +428,12 @@ pub async fn reconcile_app_services(cdb: &CoreDB, ctx: Arc<Context>) -> Result<(
         }
     };
 
-    // only deploy the Kubernetes Service when there are port mappings
+    // only deploy the Kubernetes Service when there are routing configurations
     let desired_services = match cdb.spec.app_services.clone() {
         Some(appsvcs) => {
             let mut desired_svc: Vec<String> = Vec::new();
             for appsvc in appsvcs.iter() {
-                if appsvc.ports.as_ref().is_some() {
+                if appsvc.routing.as_ref().is_some() {
                     desired_svc.push(appsvc.name.clone());
                 }
             }
