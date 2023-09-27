@@ -6,10 +6,6 @@ spec:
   appServices:
     - name: my-app
       image: crccheck/hello-world:latest
-      ports:
-        - "8000:8000"
-      ingress:
-        enabled: true
-        routes:
-        - containerPort: 8000
-          path: /
+      routing:
+        - port: 8000
+          ingressPath: /
