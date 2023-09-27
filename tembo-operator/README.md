@@ -2,7 +2,6 @@
 
 ## Requirements
 
-
 - A Kubernetes cluster: [kind](https://github.com/kubernetes-sigs/kind)
 - [rust](https://www.rust-lang.org/)
 - [just](https://github.com/casey/just)
