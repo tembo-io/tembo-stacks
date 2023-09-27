@@ -148,7 +148,16 @@ pub async fn list_config_params(cdb: &CoreDB, ctx: Arc<Context>) -> Result<Vec<P
     let psql_out = cdb
         .psql("SHOW ALL;".to_owned(), "postgres".to_owned(), ctx)
         .await?;
-    let result_string = psql_out.stdout.unwrap();
+    let result_string = match psql_out.stdout {
+        None => {
+            error!(
+                "No stdout from psql when looking for config values for {}",
+                cdb.metadata.name.clone().unwrap()
+            );
+            return Err(Action::requeue(Duration::from_secs(300)));
+        }
+        Some(out) => out,
+    };
     Ok(parse_config_params(&result_string))
 }
 
