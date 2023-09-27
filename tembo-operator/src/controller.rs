@@ -652,10 +652,7 @@ pub async fn get_current_coredb_resource(cdb: &CoreDB, ctx: Arc<Context>) -> Res
 
 // Get current config values
 pub async fn get_current_config_values(cdb: &CoreDB, ctx: Arc<Context>) -> Result<Vec<PgConfig>, Action> {
-    let cfg = list_config_params(cdb, ctx.clone()).await.map_err(|e| {
-        error!("Error getting current postgres config: {:?}", e);
-        Action::requeue(Duration::from_secs(300))
-    })?;
+    let cfg = list_config_params(cdb, ctx.clone()).await?;
     Ok(cfg)
 }
 
