@@ -1,12 +1,10 @@
 use crate::{
-    apis::postgres_parameters::ConfigValue,
     apis::postgres_parameters::{
-        merge_pg_configs, MergeError, PgConfig, DISALLOWED_CONFIGS, MULTI_VAL_CONFIGS,
+        merge_pg_configs, ConfigValue, MergeError, PgConfig, DISALLOWED_CONFIGS, MULTI_VAL_CONFIGS,
     },
     app_service::types::AppService,
     defaults,
-    extensions::types::ExtensionStatus,
-    extensions::types::{Extension, TrunkInstall, TrunkInstallStatus},
+    extensions::types::{Extension, ExtensionStatus, TrunkInstall, TrunkInstallStatus},
     postgres_exporter::PostgresMetrics,
 };
 
