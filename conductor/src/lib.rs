@@ -7,9 +7,7 @@ pub mod types;
 
 use crate::aws::cloudformation::{AWSConfigState, CloudFormationParams};
 use aws_sdk_cloudformation::config::Region;
-use controller::{
-    apis::coredb_types::{CoreDB, CoreDBSpec},
-};
+use controller::apis::coredb_types::{CoreDB, CoreDBSpec};
 use errors::ConductorError;
 use k8s_openapi::api::apps::v1::StatefulSet;
 use k8s_openapi::api::core::v1::{Namespace, Secret};
@@ -20,7 +18,7 @@ use chrono::{SecondsFormat, Utc};
 use kube::{Api, Client};
 use log::{debug, info};
 use rand::Rng;
-use serde_json::{from_str, to_string, Value, json};
+use serde_json::{from_str, json, to_string, Value};
 
 pub type Result<T, E = ConductorError> = std::result::Result<T, E>;
 
@@ -420,11 +418,16 @@ pub async fn restart_cnpg(
     });
 
     // The server will restart, therefore it won't be running
-    patch_merge_cdb_status(&cluster, cluster_name, json!({
-        "status": {
-            "running": false
-        }
-    })).await?;
+    patch_merge_cdb_status(
+        &cluster,
+        cluster_name,
+        json!({
+            "status": {
+                "running": false
+            }
+        }),
+    )
+    .await?;
 
     // Use the patch method to update the Cluster resource
     let params = PatchParams::default();
