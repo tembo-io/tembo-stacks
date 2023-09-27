@@ -242,6 +242,7 @@ async fn run(metrics: CustomMetrics) -> Result<(), Box<dyn std::error::Error>> {
                     encryption: Some(String::from("AES256")),
                     retentionPolicy: Some(String::from("30")),
                     schedule: Some(generate_rand_schedule().await),
+                    ..Default::default()
                 };
 
                 // Merge backup and service_account_template into spec
