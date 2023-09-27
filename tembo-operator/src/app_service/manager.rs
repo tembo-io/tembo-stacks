@@ -512,7 +512,7 @@ pub async fn reconcile_app_services(cdb: &CoreDB, ctx: Arc<Context>) -> Result<(
 
     let domain = match std::env::var("DATA_PLANE_BASEDOMAIN") {
         Ok(domain) => domain,
-        Err(e) => {
+        Err(_) => {
             warn!("`DATA_PLANE_BASEDOMAIN` not set -- assuming `localhost`");
             "localhost".to_string()
         }
