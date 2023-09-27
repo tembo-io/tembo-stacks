@@ -48,6 +48,7 @@ fn generate_resource(
     coredb_name: &str,
     namespace: &str,
     oref: OwnerReference,
+    domain: String,
 ) -> AppServiceResources {
     let resource_name = format!("{}-{}", coredb_name, appsvc.name.clone());
     let service = appsvc
@@ -55,12 +56,9 @@ fn generate_resource(
         .as_ref()
         .map(|_| generate_service(appsvc, coredb_name, &resource_name, namespace, oref.clone()));
     let deployment = generate_deployment(appsvc, coredb_name, &resource_name, namespace, oref);
-    let ingress_routes = generate_ingress_routes(
-        appsvc,
-        &resource_name,
-        namespace,
-        "Host(`database-domain-name.com`)".to_owned(),
-    );
+
+    let domain_matcher = format!("Host(`{}`)", domain);
+    let ingress_routes = generate_ingress_routes(appsvc, &resource_name, namespace, domain_matcher);
     AppServiceResources {
         deployment,
         name: resource_name,
@@ -73,16 +71,15 @@ fn generate_resource(
 // maps the specified
 fn generate_ingress_routes(
     appsvc: &AppService,
-    // coredb_name: &str,
     resource_name: &str,
     namespace: &str,
-    // oref: OwnerReference,
-    matcher: String,
+    domain_matcher: String,
 ) -> Option<Vec<IngressRouteRoutes>> {
     match appsvc.ingress.clone() {
         Some(ingress) => {
             let mut routes: Vec<IngressRouteRoutes> = Vec::new();
             for route in ingress.routes.iter() {
+                let matcher = format!("{domain_matcher} || PathPrefix(`/{}`)", route.path);
                 let route = IngressRouteRoutes {
                     kind: IngressRouteRoutesKind::Rule,
                     r#match: matcher.clone(),
@@ -504,9 +501,12 @@ pub async fn reconcile_app_services(cdb: &CoreDB, ctx: Arc<Context>) -> Result<(
         }
     };
 
+    // TODO: get the domain name from someplace
+    let domain = "domain";
+
     let resources: Vec<AppServiceResources> = appsvcs
         .iter()
-        .map(|appsvc| generate_resource(appsvc, &coredb_name, &ns, oref.clone()))
+        .map(|appsvc| generate_resource(appsvc, &coredb_name, &ns, oref.clone(), domain.to_owned()))
         .collect();
 
     let routes: Vec<IngressRouteRoutes> = resources
