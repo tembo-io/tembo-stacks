@@ -26,7 +26,7 @@ use kube::{
 };
 use std::{collections::BTreeMap, sync::Arc, time::Duration};
 
-use tracing::{debug, error};
+use tracing::{debug, error, warn};
 
 
 use super::types::AppService;
@@ -135,7 +135,7 @@ fn generate_ingress(
             ..ObjectMeta::default()
         },
         spec: IngressRouteSpec {
-            entry_points: Some(vec!["web".to_string()]),
+            entry_points: Some(vec!["websecure".to_string()]),
             routes,
             tls: None,
         },
@@ -328,7 +328,8 @@ async fn get_appservice_deployments(
         .collect())
 }
 
-// gets all names of AppService Services in the namespace that have the label "component=AppService"
+// gets all names of AppService Services in the namespace
+// that that have the label "component=AppService" and belong to the coredb
 async fn get_appservice_services(
     client: &Client,
     namespace: &str,
@@ -421,7 +422,10 @@ pub async fn reconcile_app_services(cdb: &CoreDB, ctx: Arc<Context>) -> Result<(
     let service_api: Api<Service> = Api::namespaced(client.clone(), &ns);
 
     let desired_deployments = match cdb.spec.app_services.clone() {
-        Some(appsvcs) => appsvcs.iter().map(|a| a.name.clone()).collect(),
+        Some(appsvcs) => appsvcs
+            .iter()
+            .map(|a| format!("{}-{}", coredb_name, a.name.clone()))
+            .collect(),
         None => {
             debug!("No AppServices found in Instance: {}", ns);
             vec![]
@@ -434,7 +438,8 @@ pub async fn reconcile_app_services(cdb: &CoreDB, ctx: Arc<Context>) -> Result<(
             let mut desired_svc: Vec<String> = Vec::new();
             for appsvc in appsvcs.iter() {
                 if appsvc.routing.as_ref().is_some() {
-                    desired_svc.push(appsvc.name.clone());
+                    let svc_name = format!("{}-{}", coredb_name, appsvc.name);
+                    desired_svc.push(svc_name.clone());
                 }
             }
             desired_svc
@@ -505,9 +510,13 @@ pub async fn reconcile_app_services(cdb: &CoreDB, ctx: Arc<Context>) -> Result<(
         }
     };
 
-    // TODO: get the domain name from someplace
-    let domain = "localhost";
-
+    let domain = match std::env::var("DATA_PLANE_BASEDOMAIN") {
+        Ok(domain) => domain,
+        Err(e) => {
+            warn!("`DATA_PLANE_BASEDOMAIN` not set -- assuming `localhost`");
+            "localhost".to_string()
+        }
+    };
     let resources: Vec<AppServiceResources> = appsvcs
         .iter()
         .map(|appsvc| generate_resource(appsvc, &coredb_name, &ns, oref.clone(), domain.to_owned()))
