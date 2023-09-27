@@ -268,7 +268,7 @@ impl CoreDB {
 
                 let recovery_time = self.get_recovery_time(ctx.clone()).await?;
 
-                // let current_config_values = get_current_config_values(self, ctx.clone()).await?;
+                let current_config_values = get_current_config_values(self, ctx.clone()).await?;
                 CoreDBStatus {
                     running: true,
                     extensionsUpdating: false,
@@ -276,12 +276,12 @@ impl CoreDB {
                     extensions: Some(extensions),
                     trunk_installs: Some(trunk_installs),
                     resources: Some(self.spec.resources.clone()),
-                    runtime_config: self.spec.runtime_config.clone(),
+                    runtime_config: Some(current_config_values),
                     first_recoverability_time: recovery_time,
                 }
             }
             true => {
-                // let current_config_values = get_current_config_values(self, ctx.clone()).await?;
+                let current_config_values = get_current_config_values(self, ctx.clone()).await?;
                 CoreDBStatus {
                     running: false,
                     extensionsUpdating: false,
@@ -289,7 +289,7 @@ impl CoreDB {
                     extensions: self.status.clone().and_then(|f| f.extensions),
                     trunk_installs: self.status.clone().and_then(|f| f.trunk_installs),
                     resources: Some(self.spec.resources.clone()),
-                    runtime_config: self.spec.runtime_config.clone(),
+                    runtime_config: Some(current_config_values),
                     first_recoverability_time: self.status.as_ref().and_then(|f| f.first_recoverability_time),
                 }
             }
