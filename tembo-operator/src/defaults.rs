@@ -96,18 +96,15 @@ pub fn default_service_account_template() -> ServiceAccountTemplate {
 pub fn default_backup() -> Backup {
     Backup {
         destinationPath: default_destination_path(),
-        encryption: default_encryption(),
+        encryption: None,
         retentionPolicy: default_retention_policy(),
         schedule: default_backup_schedule(),
+        ..Default::default()
     }
 }
 
 pub fn default_destination_path() -> Option<String> {
     Some("s3://".to_string())
-}
-
-pub fn default_encryption() -> Option<String> {
-    Some("AES256".to_owned())
 }
 
 pub fn default_retention_policy() -> Option<String> {

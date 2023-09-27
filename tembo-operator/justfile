@@ -42,6 +42,17 @@ install-tempo:
 		tempo grafana/tempo \
 	  --namespace monitoring
 
+install-minio: update-helm-repos
+	helm upgrade --install \
+		minio minio/minio \
+	  --namespace minio \
+		--create-namespace \
+		--values=./testdata/minio.yaml \
+		&& kubectl wait pods --for=condition=Ready --timeout=300s --all --all-namespaces \
+		&& kubectl apply -f ./testdata/minio-bucket-job.yaml \
+		&& kubectl -n minio wait --for=condition=complete job/minio-create-backup-bucket --timeout=300s\
+		&& kubectl -n minio delete job/minio-create-backup-bucket
+
 enable-cnpg-default-namespace:
 	kubectl label namespace default "tembo-pod-init.tembo.io/watch"="true"
 	kubectl delete pods -n tembo-pod-init --all
@@ -58,6 +69,7 @@ update-helm-repos:
 	helm repo add traefik https://traefik.github.io/charts
 	helm repo add prometheus-community https://prometheus-community.github.io/helm-charts
 	helm repo add grafana https://grafana.github.io/helm-charts
+	helm repo add minio https://charts.min.io/
 	helm repo update
 
 # generate and install crd into the cluster
@@ -77,6 +89,7 @@ start-kind:
 	just install-kube-prometheus-stack
 	just install-tempo
 	just install-traefik
+	just install-minio
 	just install-crd
 	just install-cnpg
 	just install-tembo-pod-init
