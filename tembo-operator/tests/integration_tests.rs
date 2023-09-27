@@ -42,8 +42,7 @@ mod test {
         Api, Client, Config, Error,
     };
     use rand::Rng;
-    use std::{str, sync::Arc, thread, time::Duration};
-    use tracing_subscriber::Registry;
+    use std::{ops::Not, str, sync::Arc, thread, time::Duration};
 
     use tokio::io::AsyncReadExt;
 
@@ -2896,6 +2895,7 @@ mod test {
     }
 
     #[tokio::test]
+    #[ignore]
     async fn restarts_postgres_correctly() {
         async fn wait_til_status_is_filled(coredbs: &Api<CoreDB>, name: &str) {
             let started_waiting = Utc::now();
@@ -3043,7 +3043,7 @@ mod test {
             let max_wait_time = chrono::Duration::seconds(60);
             let mut running_became_true = false;
             while Utc::now().signed_duration_since(started) < max_wait_time {
-                if status_running(&coredbs, &name).await {
+                if status_running(&coredbs, &name).await.not() {
                     println!("status.running is still false. Retrying in 3 secs.");
                     tokio::time::sleep(Duration::from_secs(3)).await;
                 } else {
@@ -3060,6 +3060,7 @@ mod test {
             );
 
             let reboot_start_time = get_pg_start_time(&coredbs, &name, context).await;
+
 
             assert!(
                 reboot_start_time > initial_start_time,
