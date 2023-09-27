@@ -515,9 +515,6 @@ pub async fn reconcile_app_services(cdb: &CoreDB, ctx: Arc<Context>) -> Result<(
         .flatten()
         .collect();
 
-    error!("routes: {:?}", routes);
-
-
     let apply_errored = apply_resources(resources, &client, &ns).await;
 
     let ingress = generate_ingress(&coredb_name, &ns, oref, routes);
@@ -550,10 +547,6 @@ async fn apply_ingress_route(
 ) -> Result<IngressRoute, kube::Error> {
     let patch_parameters = PatchParams::apply("cntrlr").force();
     ingress_api
-        .patch(
-            ingress_name,
-            &patch_parameters,
-            &Patch::Apply(&ingress_route),
-        )
+        .patch(ingress_name, &patch_parameters, &Patch::Apply(&ingress_route))
         .await
 }
