@@ -79,7 +79,7 @@ fn generate_ingress_routes(
         Some(ingress) => {
             let mut routes: Vec<IngressRouteRoutes> = Vec::new();
             for route in ingress.routes.iter() {
-                let matcher = format!("{domain_matcher} || PathPrefix(`/{}`)", route.path);
+                let matcher = format!("{domain_matcher} && PathPrefix(`{}`)", route.path);
                 let route = IngressRouteRoutes {
                     kind: IngressRouteRoutesKind::Rule,
                     r#match: matcher.clone(),
@@ -502,7 +502,7 @@ pub async fn reconcile_app_services(cdb: &CoreDB, ctx: Arc<Context>) -> Result<(
     };
 
     // TODO: get the domain name from someplace
-    let domain = "domain";
+    let domain = "localhost";
 
     let resources: Vec<AppServiceResources> = appsvcs
         .iter()
