@@ -32,6 +32,7 @@ use tracing::{debug, error, warn};
 use super::types::AppService;
 
 // private wrapper to hold the AppService Resources
+#[derive(Clone, Debug)]
 struct AppServiceResources {
     deployment: Deployment,
     name: String,
@@ -90,7 +91,7 @@ fn generate_ingress_routes(
                             kind: IngressRouteRoutesKind::Rule,
                             r#match: matcher.clone(),
                             services: Some(vec![IngressRouteRoutesServices {
-                                name: resource_name.to_owned(),
+                                name: format!("{}-{}", resource_name, route.port),
                                 port: Some(IntOrString::Int(route.port as i32)),
                                 namespace: Some(namespace.to_owned()),
                                 kind: Some(IngressRouteRoutesServicesKind::Service),
@@ -164,8 +165,8 @@ fn generate_service(
                 .iter()
                 .map(|r| ServicePort {
                     port: r.port as i32,
-                    name: Some(appsvc.name.clone()),
-                    target_port: Some(IntOrString::String(appsvc.name.clone())),
+                    name: Some(format!("{}-{}", appsvc.name.clone(), r.port)),
+                    target_port: None, //Some(IntOrString::String(format!("{}-{}", appsvc.name.clone(), r.port))),
                     ..ServicePort::default()
                 })
                 .collect();
@@ -247,7 +248,7 @@ fn generate_deployment(
                 .iter()
                 .map(|pm| ContainerPort {
                     container_port: pm.port as i32,
-                    name: Some(appsvc.name.clone()),
+                    name: Some(format!("{}-{}", appsvc.name.clone(), pm.port)),
                     protocol: Some("TCP".to_string()),
                     ..ContainerPort::default()
                 })
@@ -521,18 +522,15 @@ pub async fn reconcile_app_services(cdb: &CoreDB, ctx: Arc<Context>) -> Result<(
         .iter()
         .map(|appsvc| generate_resource(appsvc, &coredb_name, &ns, oref.clone(), domain.to_owned()))
         .collect();
+    let apply_errored = apply_resources(resources.clone(), &client, &ns).await;
 
-    let routes: Vec<IngressRouteRoutes> = resources
+    let desired_routes: Vec<IngressRouteRoutes> = resources
         .iter()
         .filter_map(|r| r.ingress_routes.clone())
         .flatten()
         .collect();
 
-    let apply_errored = apply_resources(resources, &client, &ns).await;
-
-    let ingress = generate_ingress(&coredb_name, &ns, oref, routes);
-    let ingress_api: Api<IngressRoute> = Api::namespaced(client, &ns);
-    match apply_ingress_route(ingress_api, &coredb_name, &ingress).await {
+    match reconcile_ingress(client.clone(), &coredb_name, &ns, oref.clone(), desired_routes).await {
         Ok(_) => {
             debug!("Updated/applied ingress for {}.{}", ns, coredb_name,);
         }
@@ -545,13 +543,56 @@ pub async fn reconcile_app_services(cdb: &CoreDB, ctx: Arc<Context>) -> Result<(
         }
     }
 
-
     if has_errors || apply_errored {
         return Err(Action::requeue(Duration::from_secs(300)));
     }
     Ok(())
 }
 
+async fn reconcile_ingress(
+    client: Client,
+    coredb_name: &str,
+    ns: &str,
+    oref: OwnerReference,
+    desired_routes: Vec<IngressRouteRoutes>,
+) -> Result<(), kube::Error> {
+    let ingress_api: Api<IngressRoute> = Api::namespaced(client, ns);
+    let ingress = generate_ingress(coredb_name, ns, oref, desired_routes.clone());
+    if desired_routes.is_empty() {
+        // we don't need an IngressRoute when there are no routes
+        match ingress_api.get_opt(coredb_name).await {
+            Ok(Some(_)) => {
+                debug!("Deleting IngressRoute {}.{}", ns, coredb_name);
+                ingress_api.delete(coredb_name, &Default::default()).await?;
+                return Ok(());
+            }
+            Ok(None) => {
+                warn!("No IngressRoute {}.{} found to delete", ns, coredb_name);
+                return Ok(());
+            }
+            Err(e) => {
+                error!(
+                    "Error retrieving IngressRoute, {}.{}, error: {}",
+                    ns, coredb_name, e
+                );
+                return Err(e);
+            }
+        }
+    }
+    match apply_ingress_route(ingress_api, coredb_name, &ingress).await {
+        Ok(_) => {
+            debug!("Updated/applied ingress for {}.{}", ns, coredb_name,);
+            Ok(())
+        }
+        Err(e) => {
+            error!(
+                "Failed to update/apply IngressRoute {}.{}: {}",
+                ns, coredb_name, e
+            );
+            Err(e)
+        }
+    }
+}
 
 async fn apply_ingress_route(
     ingress_api: Api<IngressRoute>,
