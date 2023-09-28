@@ -319,6 +319,7 @@ mod test {
     use controller::{apis::postgres_parameters::ConfigValue, errors};
     use k8s_openapi::NamespaceResourceScope;
     use serde::de::DeserializeOwned;
+    use controller::apis::postgres_parameters::PgConfig;
 
     // helper function retrieve all instances of a resource in namespace
     // used repeatedly in appService tests
@@ -3092,6 +3093,11 @@ mod test {
     #[tokio::test]
     #[ignore]
     async fn functional_test_status_configs() {
+        async fn runtime_cfg(coredbs: &Api<CoreDB>, name: &str) -> Option<Vec<PgConfig>> {
+            let spec = coredbs.get(name).await.expect("spec not found");
+            spec.status.expect("Expected status to be present").runtime_config
+        }
+
         // Initialize the Kubernetes client
         let client = kube_client().await;
         let state = State::default();
@@ -3199,25 +3205,44 @@ mod test {
 
         pod_ready_and_running(pods.clone(), exporter_pod_name.clone()).await;
 
-        // TODO(ianstanton) wait for status.runtime_config to be populated & updated with correct configs
-        tokio::time::sleep(Duration::from_secs(60)).await;
-        let coredb_resource = coredbs.patch(name, &params, &patch).await.unwrap();
         // Assert status contains configs
         let mut found_configs = false;
         let expected_config = ConfigValue::Multiple(BTreeSet::from_iter(vec![
             "pg_stat_statements".to_string(),
             "pg_partman_bgw".to_string(),
         ]));
-        for config in coredb_resource.status.unwrap().runtime_config.unwrap() {
-            if config.name == "shared_preload_libraries" {
-                println!("Found shared_preload_libraries config: {:?}", config);
-                found_configs = true;
-                assert_eq!(config.value, expected_config);
+
+        // Wait for status.runtime_config to contain expected_config
+        while !found_configs {
+            let runtime_config = runtime_cfg(&coredbs, &name).await;
+            if runtime_config.is_some() {
+                let runtime_config = runtime_config.unwrap();
+                for config in runtime_config {
+                    if config.name == "shared_preload_libraries" {
+                        if config.value == expected_config {
+                            found_configs = true;
+                        }
+                    }
+                }
             }
+            println!("Waiting for runtime_config to be populated with expected values");
+            tokio::time::sleep(Duration::from_secs(5)).await;
         }
+
+
+        // Assert status.runtime_config length is greater than 350. It should be around 362, but
+        // that will fluctuate between postgres versions. This is a sanity check to ensure that
+        // the runtime_config is being populated with all config values.
+        let runtime_cfg = runtime_cfg(&coredbs, &name).await.unwrap();
+        assert!(runtime_cfg.len() > 350);
+        println!(
+            "Found {} runtime_config values",
+            runtime_cfg.len()
+        );
 
         // Assert status.runtime_config
         assert!(found_configs);
+
         // CLEANUP TEST
         // Cleanup CoreDB
         coredbs.delete(name, &Default::default()).await.unwrap();
