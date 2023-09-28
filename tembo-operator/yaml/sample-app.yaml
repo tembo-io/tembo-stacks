@@ -1,7 +1,7 @@
 apiVersion: coredb.io/v1alpha1
 kind: CoreDB
 metadata:
-  name: sample-app
+  name: my-coredb
 spec:
   appServices:
     - name: my-app

@@ -91,7 +91,7 @@ fn generate_ingress_routes(
                             kind: IngressRouteRoutesKind::Rule,
                             r#match: matcher.clone(),
                             services: Some(vec![IngressRouteRoutesServices {
-                                name: format!("{}-{}", resource_name, route.port),
+                                name: resource_name.to_string(),
                                 port: Some(IntOrString::Int(route.port as i32)),
                                 namespace: Some(namespace.to_owned()),
                                 kind: Some(IngressRouteRoutesServicesKind::Service),
@@ -152,6 +152,7 @@ fn generate_service(
     oref: OwnerReference,
 ) -> Service {
     let mut selector_labels: BTreeMap<String, String> = BTreeMap::new();
+
     selector_labels.insert("app".to_owned(), resource_name.to_string());
     selector_labels.insert("component".to_owned(), COMPONENT_NAME.to_string());
     selector_labels.insert("coredb.io/name".to_owned(), coredb_name.to_string());
@@ -165,8 +166,10 @@ fn generate_service(
                 .iter()
                 .map(|r| ServicePort {
                     port: r.port as i32,
-                    name: Some(format!("{}-{}", appsvc.name.clone(), r.port)),
-                    target_port: None, //Some(IntOrString::String(format!("{}-{}", appsvc.name.clone(), r.port))),
+                    // there can be more than one ServicePort per Service
+                    // these must be unique, so we'll use the port number
+                    name: Some(format!("http-{}", r.port)),
+                    target_port: None,
                     ..ServicePort::default()
                 })
                 .collect();
@@ -236,7 +239,6 @@ fn generate_deployment(
             (Some(readiness_probe), Some(liveness_probe))
         }
         None => {
-            // are there default probes we could configure when none are provided?
             (None, None)
         }
     };
@@ -248,7 +250,6 @@ fn generate_deployment(
                 .iter()
                 .map(|pm| ContainerPort {
                     container_port: pm.port as i32,
-                    name: Some(format!("{}-{}", appsvc.name.clone(), pm.port)),
                     protocol: Some("TCP".to_string()),
                     ..ContainerPort::default()
                 })
