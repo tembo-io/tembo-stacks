@@ -3039,7 +3039,7 @@ mod test {
         // Wait for Postgres to restart
         {
             let started = Utc::now();
-            let max_wait_time = chrono::Duration::seconds(90);
+            let max_wait_time = chrono::Duration::seconds(TIMEOUT_SECONDS_POD_READY as _);
             let mut running_became_true = false;
             while Utc::now().signed_duration_since(started) < max_wait_time {
                 if status_running(&coredbs, &name).await.not() {
