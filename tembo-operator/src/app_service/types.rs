@@ -24,6 +24,7 @@ pub struct PortMapping {
     pub container: u16,
 }
 
+
 // attempting to keep the CRD clean
 // this enables ports to be defined as "8080:8081" instead of
 // {"host": "8080", "container": "8081}
@@ -61,6 +62,7 @@ impl JsonSchema for PortMapping {
     }
 }
 
+
 #[allow(non_snake_case)]
 #[derive(Clone, Debug, Serialize, Deserialize, ToSchema, JsonSchema, PartialEq)]
 pub struct Metrics {
@@ -68,6 +70,7 @@ pub struct Metrics {
     pub port: String,
     pub path: String,
 }
+
 
 #[allow(non_snake_case)]
 #[derive(Clone, Debug, Serialize, Deserialize, ToSchema, JsonSchema, PartialEq)]
