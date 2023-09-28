@@ -72,6 +72,12 @@ fn generate_resource(
     }
 }
 
+
+fn interpolate_pathprefix(appsvc_name: &str, path: &str) -> String {
+    let formatted_path = if path.starts_with('/') { &path[1..] } else { path };
+    format!("/{}/{}", appsvc_name, formatted_path)
+}
+
 // generates Kubernetes IngressRoute template for an appService
 // maps the specified
 fn generate_ingress_routes(
@@ -86,7 +92,10 @@ fn generate_ingress_routes(
             for route in routings.iter() {
                 match route.ingress_path.clone() {
                     Some(path) => {
-                        let matcher = format!("{host_matcher} && PathPrefix(`{}`)", path);
+                        let matcher = format!(
+                            "{host_matcher} && PathPrefix(`{}`)",
+                            interpolate_pathprefix(&appsvc.name, &path)
+                        );
                         let route = IngressRouteRoutes {
                             kind: IngressRouteRoutesKind::Rule,
                             r#match: matcher.clone(),
@@ -604,4 +613,19 @@ async fn apply_ingress_route(
     ingress_api
         .patch(ingress_name, &patch_parameters, &Patch::Apply(&ingress_route))
         .await
+}
+
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_interpolate_pathprefix() {
+        let expected = "/appsvc/path";
+        let pp = interpolate_pathprefix("appsvc", "/path");
+        assert_eq!(pp, expected);
+        let pp = interpolate_pathprefix("appsvc", "path");
+        assert_eq!(pp, expected);
+    }
 }
