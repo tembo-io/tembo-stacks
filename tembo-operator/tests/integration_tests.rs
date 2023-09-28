@@ -18,8 +18,7 @@ mod test {
     use chrono::{DateTime, SecondsFormat, Utc};
     use controller::{
         apis::coredb_types::CoreDB,
-        cloudnativepg::backups::Backup,
-        cloudnativepg::clusters::Cluster,
+        cloudnativepg::{backups::Backup, clusters::Cluster},
         defaults::{default_resources, default_storage},
         ingress_route_crd::IngressRoute,
         ingress_route_tcp_crd::IngressRouteTCP,

@@ -56,137 +56,186 @@ pub struct PostgresConfig {
     pub shared_preload_libraries: Option<Vec<String>>,
 }
 
+fn create_cluster_backup_barman_data(cdb: &CoreDB) -> Option<ClusterBackupBarmanObjectStoreData> {
+    let encryption = match &cdb.spec.backup.encryption {
+        Some(encryption) => match encryption.as_str() {
+            "AES256" => Some(ClusterBackupBarmanObjectStoreDataEncryption::Aes256),
+            "aws:kms" => Some(ClusterBackupBarmanObjectStoreDataEncryption::AwsKms),
+            _ => None,
+        },
+        _ => None,
+    };
+
+    Some(ClusterBackupBarmanObjectStoreData {
+        compression: Some(ClusterBackupBarmanObjectStoreDataCompression::Bzip2),
+        encryption,
+        immediate_checkpoint: Some(true),
+        ..ClusterBackupBarmanObjectStoreData::default()
+    })
+}
+
+fn create_cluster_backup_barman_wal(cdb: &CoreDB) -> Option<ClusterBackupBarmanObjectStoreWal> {
+    let encryption = match &cdb.spec.backup.encryption {
+        Some(encryption) => match encryption.as_str() {
+            "AES256" => Some(ClusterBackupBarmanObjectStoreWalEncryption::Aes256),
+            "aws:kms" => Some(ClusterBackupBarmanObjectStoreWalEncryption::AwsKms),
+            _ => None,
+        },
+        _ => None,
+    };
+
+    if encryption.is_some() {
+        Some(ClusterBackupBarmanObjectStoreWal {
+            compression: Some(ClusterBackupBarmanObjectStoreWalCompression::Bzip2),
+            encryption,
+            max_parallel: Some(5),
+        })
+    } else {
+        None
+    }
+}
+
+fn create_cluster_backup_barman_object_store(
+    cdb: &CoreDB,
+    endpoint_url: &str,
+    backup_path: &str,
+    s3_credentials: &ClusterBackupBarmanObjectStoreS3Credentials,
+) -> ClusterBackupBarmanObjectStore {
+    ClusterBackupBarmanObjectStore {
+        data: create_cluster_backup_barman_data(cdb),
+        endpoint_url: Some(endpoint_url.to_string()),
+        destination_path: backup_path.to_string(),
+        s3_credentials: Some(s3_credentials.clone()),
+        wal: create_cluster_backup_barman_wal(cdb),
+        ..ClusterBackupBarmanObjectStore::default()
+    }
+}
+
+fn create_cluster_backup(
+    cdb: &CoreDB,
+    endpoint_url: &str,
+    backup_path: &str,
+    s3_credentials: &ClusterBackupBarmanObjectStoreS3Credentials,
+) -> Option<ClusterBackup> {
+    let retention_days = match &cdb.spec.backup.retentionPolicy {
+        None => "30d".to_string(),
+        Some(retention_policy) => match retention_policy.parse::<i32>() {
+            Ok(days) => {
+                format!("{}d", days)
+            }
+            Err(_) => {
+                warn!("Invalid retention policy because could not convert to i32, using default of 30 days");
+                "30d".to_string()
+            }
+        },
+    };
+
+    Some(ClusterBackup {
+        barman_object_store: Some(create_cluster_backup_barman_object_store(
+            cdb,
+            endpoint_url,
+            backup_path,
+            s3_credentials,
+        )),
+        retention_policy: Some(retention_days), // Adjust as needed
+        ..ClusterBackup::default()
+    })
+}
+
 pub fn cnpg_backup_configuration(
     cdb: &CoreDB,
     cfg: &Config,
 ) -> (Option<ClusterBackup>, Option<ClusterServiceAccountTemplate>) {
     let mut service_account_template: Option<ClusterServiceAccountTemplate> = None;
-    // Check to make sure that backups are enabled, and return None if it is disabled.
-    if !cfg.enable_backup {
-        (None, None)
-    } else {
-        debug!("Backups are enabled, configuring...");
 
-        let backup_path = cdb.spec.backup.destinationPath.clone();
-        if backup_path.is_none() {
-            warn!("Backups are disabled because we don't have an S3 backup path");
+    // Check if backups are enabled
+    if !cfg.enable_backup {
+        return (None, None);
+    }
+
+    debug!("Backups are enabled, configuring...");
+
+    // Check for backup path
+    let backup_path = cdb.spec.backup.destinationPath.clone();
+    if backup_path.is_none() {
+        warn!("Backups are disabled because we don't have an S3 backup path");
+        return (None, None);
+    }
+
+    let should_set_service_account_template = (cdb.spec.backup.endpoint_url.is_none()
+        && cdb.spec.backup.s3_credentials.is_none())
+        || (cdb
+            .spec
+            .backup
+            .s3_credentials
+            .as_ref()
+            .and_then(|cred| cred.inherit_from_iam_role)
+            .unwrap_or(false)
+            && cdb
+                .spec
+                .serviceAccountTemplate
+                .metadata
+                .as_ref()
+                .and_then(|meta| meta.annotations.as_ref())
+                .map_or(false, |annots| annots.contains_key("eks.amazonaws.com/role-arn")));
+
+    let should_reset_service_account_template = cdb
+        .spec
+        .backup
+        .s3_credentials
+        .as_ref()
+        .and_then(|cred| cred.inherit_from_iam_role)
+        == Some(false)
+        && (cdb.spec.backup.s3_credentials.as_ref().map_or(false, |cred| {
+            cred.access_key_id.is_some()
+                || cred.region.is_some()
+                || cred.secret_access_key.is_some()
+                || cred.session_token.is_some()
+        }));
+
+    if should_reset_service_account_template {
+        service_account_template = None;
+    } else if should_set_service_account_template {
+        let service_account_metadata = cdb.spec.serviceAccountTemplate.metadata.clone();
+        if service_account_metadata.is_none() {
+            warn!("Backups are disabled because we don't have a service account template");
             return (None, None);
         }
-        // If backup.endpoint_url & backup.s3_credentials is not set, then we need to use the service account template
-        // to get the EKS role ARN to setup backups
-        if cdb.spec.backup.endpoint_url.is_none() && cdb.spec.backup.s3_credentials.is_none() {
-            let service_account_metadata = cdb.spec.serviceAccountTemplate.metadata.clone();
-            if service_account_metadata.is_none() {
-                warn!("Backups are disabled because we don't have a service account template");
-                return (None, None);
-            }
-            let service_account_annotations = service_account_metadata
-                .expect("Expected service account template metadata")
-                .annotations;
-            if service_account_annotations.is_none() {
-                warn!(
-                    "Backups are disabled because we don't have a service account template with annotations"
-                );
-                return (None, None);
-            }
-            let service_account_annotations =
-                service_account_annotations.expect("Expected service account template annotations");
-            let service_account_role_arn = service_account_annotations.get("eks.amazonaws.com/role-arn");
-            if service_account_role_arn.is_none() {
-                warn!(
+        let service_account_annotations = service_account_metadata
+            .expect("Expected service account template metadata")
+            .annotations;
+        if service_account_annotations.is_none() {
+            warn!("Backups are disabled because we don't have a service account template with annotations");
+            return (None, None);
+        }
+        let annotations = service_account_annotations.expect("Expected service account template annotations");
+        let service_account_role_arn = annotations.get("eks.amazonaws.com/role-arn");
+        if service_account_role_arn.is_none() {
+            warn!(
                 "Backups are disabled because we don't have a service account template with an EKS role ARN"
             );
-                return (None, None);
-            }
-            let role_arn = service_account_role_arn
-                .expect("Expected service account template annotations to contain an EKS role ARN")
-                .clone();
-
-            service_account_template = Some(ClusterServiceAccountTemplate {
-                metadata: ClusterServiceAccountTemplateMetadata {
-                    annotations: Some(BTreeMap::from([(
-                        "eks.amazonaws.com/role-arn".to_string(),
-                        role_arn,
-                    )])),
-                    ..ClusterServiceAccountTemplateMetadata::default()
-                },
-            });
+            return (None, None);
         }
+        let role_arn = service_account_role_arn
+            .expect("Expected service account template annotations to contain an EKS role ARN")
+            .clone();
 
-        // Copy the endpoint_url and s3_credentials from cdb to configure backups
-        let endpoint_url = cdb.spec.backup.endpoint_url.as_deref().unwrap_or_default();
-        let s3_credentials = generate_s3_backup_credentials(cdb.spec.backup.s3_credentials.as_ref());
-
-        let retention_days = match &cdb.spec.backup.retentionPolicy {
-            None => "30d".to_string(),
-            Some(retention_policy) => {
-                match retention_policy.parse::<i32>() {
-                    Ok(days) => {
-                        format!("{}d", days)
-                    }
-                    Err(_) => {
-                        warn!("Invalid retention policy because could not convert to i32, using default of 30 days");
-                        "30d".to_string()
-                    }
-                }
-            }
-        };
-
-        let cluster_backup = Some(ClusterBackup {
-            barman_object_store: Some(ClusterBackupBarmanObjectStore {
-                data: if cdb.spec.backup.encryption.is_some() {
-                    let encryption = match &cdb.spec.backup.encryption {
-                        None => None,
-                        Some(encryption) => match encryption.as_str() {
-                            "AES256" => Some(ClusterBackupBarmanObjectStoreDataEncryption::Aes256),
-                            "aws:kms" => Some(ClusterBackupBarmanObjectStoreDataEncryption::AwsKms),
-                            _ => None,
-                        },
-                    };
-                    // todo: Expose all compression types(gzip & snappy), not just bzip2
-                    Some(ClusterBackupBarmanObjectStoreData {
-                        compression: Some(ClusterBackupBarmanObjectStoreDataCompression::Bzip2),
-                        encryption,
-                        immediate_checkpoint: Some(true),
-                        ..ClusterBackupBarmanObjectStoreData::default()
-                    })
-                } else {
-                    // todo: Expose all compression types(gzip & snappy), not just bzip2
-                    Some(ClusterBackupBarmanObjectStoreData {
-                        compression: Some(ClusterBackupBarmanObjectStoreDataCompression::Bzip2),
-                        immediate_checkpoint: Some(true),
-                        ..ClusterBackupBarmanObjectStoreData::default()
-                    })
-                },
-                endpoint_url: Some(endpoint_url.to_string()),
-                destination_path: backup_path.expect("Expected to find S3 path"),
-                s3_credentials: Some(s3_credentials),
-                wal: if cdb.spec.backup.encryption.is_some() {
-                    let encryption = match &cdb.spec.backup.encryption {
-                        None => None,
-                        Some(encryption) => match encryption.as_str() {
-                            "AES256" => Some(ClusterBackupBarmanObjectStoreWalEncryption::Aes256),
-                            "aws:kms" => Some(ClusterBackupBarmanObjectStoreWalEncryption::AwsKms),
-                            _ => None,
-                        },
-                    };
-                    // todo: Expose all compression types(gzip & snappy), not just bzip2
-                    Some(ClusterBackupBarmanObjectStoreWal {
-                        compression: Some(ClusterBackupBarmanObjectStoreWalCompression::Bzip2),
-                        encryption,
-                        max_parallel: Some(5),
-                    })
-                } else {
-                    None
-                },
-                ..ClusterBackupBarmanObjectStore::default()
-            }),
-            retention_policy: Some(retention_days),
-            ..ClusterBackup::default()
+        service_account_template = Some(ClusterServiceAccountTemplate {
+            metadata: ClusterServiceAccountTemplateMetadata {
+                annotations: Some(BTreeMap::from([(
+                    "eks.amazonaws.com/role-arn".to_string(),
+                    role_arn,
+                )])),
+                ..ClusterServiceAccountTemplateMetadata::default()
+            },
         });
-
-        (cluster_backup, service_account_template)
     }
+    // Copy the endpoint_url and s3_credentials from cdb to configure backups
+    let endpoint_url = cdb.spec.backup.endpoint_url.as_deref().unwrap_or_default();
+    let s3_credentials = generate_s3_backup_credentials(cdb.spec.backup.s3_credentials.as_ref());
+    let cluster_backup = create_cluster_backup(cdb, endpoint_url, &backup_path.unwrap(), &s3_credentials);
+
+    (cluster_backup, service_account_template)
 }
 
 // parse_target_time returns the parsed target_time which is used for point-in-time-recovery

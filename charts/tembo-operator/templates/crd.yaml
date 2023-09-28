@@ -125,17 +125,19 @@ spec:
               backup:
                 default:
                   destinationPath: s3://
-                  encryption: null
+                  encryption: AES256
                   retentionPolicy: '30'
                   schedule: 0 0 * * *
                   endpointURL: null
-                  s3Credentials: null
+                  s3Credentials:
+                    inheritFromIAMRole: true
                 properties:
                   destinationPath:
                     default: s3://
                     nullable: true
                     type: string
                   encryption:
+                    default: AES256
                     nullable: true
                     type: string
                   endpointURL:
@@ -146,6 +148,8 @@ spec:
                     nullable: true
                     type: string
                   s3Credentials:
+                    default:
+                      inheritFromIAMRole: true
                     nullable: true
                     properties:
                       accessKeyId:

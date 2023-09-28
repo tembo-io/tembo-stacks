@@ -77,6 +77,7 @@ pub struct S3CredentialsSessionToken {
 pub struct Backup {
     #[serde(default = "defaults::default_destination_path")]
     pub destinationPath: Option<String>,
+    #[serde(default = "defaults::default_encryption")]
     pub encryption: Option<String>,
     #[serde(default = "defaults::default_retention_policy")]
     pub retentionPolicy: Option<String>,
@@ -84,7 +85,7 @@ pub struct Backup {
     pub schedule: Option<String>,
     #[serde(default, rename = "endpointURL")]
     pub endpoint_url: Option<String>,
-    #[serde(rename = "s3Credentials")]
+    #[serde(default = "defaults::default_s3_credentials", rename = "s3Credentials")]
     pub s3_credentials: Option<S3Credentials>,
 }
 
