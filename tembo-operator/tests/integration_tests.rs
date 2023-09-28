@@ -2793,7 +2793,7 @@ mod test {
         let route = routes[0].clone();
         assert_eq!(
             route.r#match,
-            format!("Host(`{}.localhost`) && PathPrefix(`/`)", cdb_name)
+            format!("Host(`{}.localhost`) && PathPrefix(`/test-app-0`)", cdb_name)
         );
         let services = routes[0].services.clone().unwrap();
         assert_eq!(services.len(), 1);
