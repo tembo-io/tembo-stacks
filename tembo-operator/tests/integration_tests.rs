@@ -2680,8 +2680,11 @@ mod test {
                     {
                         "name": "test-app-0",
                         "image": "crccheck/hello-world:latest",
-                        "ports": [
-                            "80:8000"
+                        "routing": [
+                            {
+                                "port": 8000,
+                                "ingressPath": "/"
+                            }
                         ],
                         "resources": {
                             "requests": {
@@ -2768,6 +2771,8 @@ mod test {
         let app_0_resources = app_0_container.resources.unwrap();
         assert_eq!(app_0_resources, expected);
 
+        // TODO: assert ingressRoute created
+        // path = /, port 8000
 
         // Assert resources in second AppService
         let selector_map = app_1
@@ -2812,8 +2817,11 @@ mod test {
                     {
                         "name": "test-app-0",
                         "image": "crccheck/hello-world:latest",
-                        "ports": [
-                            "80:8000"
+                        "routing": [
+                            {
+                                "port": 8000,
+                                "ingressPath": "/"
+                            }
                         ],
                         "resources": {
                             "requests": {
@@ -2847,6 +2855,10 @@ mod test {
             .unwrap();
         // One appService Services
         assert!(service_items.len() == 1);
+
+        // TODO: assert ingressRoute created
+        // path = /, port 8000
+        // TODO: add a second routing to the same appService
 
         // Delete all of them
         let coredb_json = serde_json::json!({

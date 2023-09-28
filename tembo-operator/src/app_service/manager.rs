@@ -238,9 +238,7 @@ fn generate_deployment(
             };
             (Some(readiness_probe), Some(liveness_probe))
         }
-        None => {
-            (None, None)
-        }
+        None => (None, None),
     };
 
     // container ports
