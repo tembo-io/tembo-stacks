@@ -139,9 +139,11 @@ pub fn cnpg_backup_configuration(
                         None => None,
                         Some(encryption) => match encryption.as_str() {
                             "AES256" => Some(ClusterBackupBarmanObjectStoreDataEncryption::Aes256),
+                            "aws:kms" => Some(ClusterBackupBarmanObjectStoreDataEncryption::AwsKms),
                             _ => None,
                         },
                     };
+                    // todo: Expose all compression types(gzip & snappy), not just bzip2
                     Some(ClusterBackupBarmanObjectStoreData {
                         compression: Some(ClusterBackupBarmanObjectStoreDataCompression::Bzip2),
                         encryption,
@@ -149,7 +151,9 @@ pub fn cnpg_backup_configuration(
                         ..ClusterBackupBarmanObjectStoreData::default()
                     })
                 } else {
+                    // todo: Expose all compression types(gzip & snappy), not just bzip2
                     Some(ClusterBackupBarmanObjectStoreData {
+                        compression: Some(ClusterBackupBarmanObjectStoreDataCompression::Bzip2),
                         immediate_checkpoint: Some(true),
                         ..ClusterBackupBarmanObjectStoreData::default()
                     })
@@ -162,9 +166,11 @@ pub fn cnpg_backup_configuration(
                         None => None,
                         Some(encryption) => match encryption.as_str() {
                             "AES256" => Some(ClusterBackupBarmanObjectStoreWalEncryption::Aes256),
+                            "aws:kms" => Some(ClusterBackupBarmanObjectStoreWalEncryption::AwsKms),
                             _ => None,
                         },
                     };
+                    // todo: Expose all compression types(gzip & snappy), not just bzip2
                     Some(ClusterBackupBarmanObjectStoreWal {
                         compression: Some(ClusterBackupBarmanObjectStoreWalCompression::Bzip2),
                         encryption,
