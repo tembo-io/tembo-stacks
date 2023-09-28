@@ -371,7 +371,6 @@ mod test {
         }
     }
 
-
     #[tokio::test]
     #[ignore]
     async fn functional_test_basic_cnpg() {
@@ -3100,7 +3099,6 @@ mod test {
 
             let reboot_start_time = get_pg_start_time(&coredbs, &name, context).await;
 
-
             assert!(
                 reboot_start_time > initial_start_time,
                 "start time should've changed"
@@ -3268,7 +3266,6 @@ mod test {
             tokio::time::sleep(Duration::from_secs(5)).await;
         }
 
-
         // Assert status.runtime_config length is greater than 350. It should be around 362, but
         // that will fluctuate between postgres versions. This is a sanity check to ensure that
         // the runtime_config is being populated with all config values.
@@ -3298,5 +3295,281 @@ mod test {
 
         // Delete namespace
         let _ = delete_namespace(client.clone(), &namespace).await;
+    }
+
+    #[tokio::test]
+    #[ignore]
+    async fn functional_test_backup_and_restore() {
+        // Initialize the Kubernetes client
+        let client = kube_client().await;
+        let state = State::default();
+        let context = state.create_context(client.clone());
+
+        // Configurations
+        let mut rng = rand::thread_rng();
+        let suffix = rng.gen_range(0..100000);
+        let name = &format!("test-coredb-{}", suffix);
+        let namespace = match create_namespace(client.clone(), name).await {
+            Ok(namespace) => namespace,
+            Err(e) => {
+                eprintln!("Error creating namespace: {}", e);
+                std::process::exit(1);
+            }
+        };
+
+        let kind = "CoreDB";
+        let replicas = 1;
+
+        // Create a pod we can use to run commands in the cluster
+        let pods: Api<Pod> = Api::namespaced(client.clone(), &namespace);
+        let backup_location = format!("s3://tembo-backup/{}", name);
+
+        // Apply a basic configuration of CoreDB
+        println!("Creating CoreDB resource {}", name);
+        let coredbs: Api<CoreDB> = Api::namespaced(client.clone(), &namespace);
+        // Generate basic CoreDB resource to start with
+        let coredb_json = serde_json::json!({
+            "apiVersion": API_VERSION,
+            "kind": kind,
+            "metadata": {
+                "name": name
+            },
+            "spec": {
+            "replicas": replicas,
+                "backup": {
+                    "destinationPath": backup_location,
+                    "retentionPolicy": "30",
+                    "schedule": "17 9 * * *",
+                    "endpointURL": "http://minio.minio.svc.cluster.local:9000",
+                    "s3Credentials": {
+                        "accessKeyId": {
+                        "name": "s3creds",
+                        "key": "MINIO_ACCESS_KEY"
+                        },
+                        "secretAccessKey": {
+                        "name": "s3creds",
+                        "key": "MINIO_SECRET_KEY"
+                        }
+                    }
+                }
+            }
+        });
+        let params = PatchParams::apply("tembo-integration-test");
+        let patch = Patch::Apply(&coredb_json);
+        let coredb_resource = coredbs.patch(name, &params, &patch).await.unwrap();
+
+        // Wait for CNPG Pod to be created
+        let pod_name = format!("{}-1", name);
+        pod_ready_and_running(pods.clone(), pod_name.clone()).await;
+
+        let pods: Api<Pod> = Api::namespaced(client.clone(), &namespace);
+        let lp =
+            ListParams::default().labels(format!("app=postgres-exporter,coredb.io/name={}", name).as_str());
+        let exporter_pods = pods.list(&lp).await.expect("could not get pods");
+        let exporter_pod_name = exporter_pods.items[0].metadata.name.as_ref().unwrap();
+        println!("Exporter pod name: {}", &exporter_pod_name);
+
+        // Wait for CNPG Cluster to be created by looping over replicas until
+        // they are in a running state
+        for i in 1..=replicas {
+            let pod_name = format!("{}-{}", name, i);
+            pod_ready_and_running(pods.clone(), pod_name).await;
+        }
+
+        // Assert that we can query the database with \dx;
+        let result = psql_with_retry(context.clone(), coredb_resource.clone(), "\\dx".to_string()).await;
+        assert!(result.stdout.clone().unwrap().contains("plpgsql"));
+
+        // Check to make sure the initial backup has run and its completed
+        has_backup_completed(context.clone(), &namespace, name).await;
+
+        // Create a table and insert some data
+        let result = psql_with_retry(
+            context.clone(),
+            coredb_resource.clone(),
+            "CREATE TABLE test (id SERIAL PRIMARY KEY, name VARCHAR(255));".to_string(),
+        )
+        .await;
+        assert!(result.stdout.clone().unwrap().contains("CREATE TABLE"));
+
+        let result = psql_with_retry(
+            context.clone(),
+            coredb_resource.clone(),
+            "INSERT INTO test (name) VALUES ('test');".to_string(),
+        )
+        .await;
+        assert!(result.stdout.clone().unwrap().contains("INSERT 0 1"));
+
+        // Now take a new backup of the instance
+        let backup: Api<Backup> = Api::namespaced(client.clone(), &namespace);
+        let backup_name = format!("{}-backup", name);
+        let backup_json = serde_json::json!({
+            "apiVersion": "postgresql.cnpg.io/v1",
+            "kind": "Backup",
+            "metadata": {
+                "name": backup_name,
+                "labels": {
+                    "cnpg.io/cluster": backup_name,
+                    "cnpg.io/immediateBackup": "false",
+                    "cnpg.io/scheduled-backup": name
+                },
+            },
+            "spec": {
+                "cluster": {
+                    "name": name,
+                }
+            },
+        });
+        let params = PatchParams::apply("tembo-integration-test");
+        let patch = Patch::Apply(&backup_json);
+        let _backup_resource = backup.patch(&backup_name, &params, &patch).await.unwrap();
+
+        // Assert that we can query the database with \dx;
+        let result = psql_with_retry(context.clone(), coredb_resource.clone(), "\\dx".to_string()).await;
+        assert!(result.stdout.clone().unwrap().contains("plpgsql"));
+
+        // Wait for backup to complete
+        has_backup_completed(context.clone(), &namespace, &backup_name).await;
+
+        // If the backup is complete, we can now restore to a new instance in a new namespace
+        let suffix = rng.gen_range(0..100000);
+        let restore_name = &format!("test-coredb-restore-{}", suffix);
+        let restore_namespace = match create_namespace(client.clone(), restore_name).await {
+            Ok(restore_namespace) => restore_namespace,
+            Err(e) => {
+                eprintln!("Error creating namespace: {}", e);
+                std::process::exit(1);
+            }
+        };
+
+        let kind = "CoreDB";
+        let replicas = 1;
+
+        // Create a pod we can use to run commands in the cluster
+        let restore_pods: Api<Pod> = Api::namespaced(client.clone(), &restore_namespace);
+        let restore_backup_location = format!("s3://tembo-backup/{}", restore_name);
+
+        // Apply a basic configuration of CoreDB
+        println!("Creating CoreDB resource {}", restore_name);
+        let restore_coredbs: Api<CoreDB> = Api::namespaced(client.clone(), &restore_namespace);
+        // Generate basic CoreDB resource to start with
+        let restore_coredb_json = serde_json::json!({
+            "apiVersion": API_VERSION,
+            "kind": kind,
+            "metadata": {
+                "name": restore_name
+            },
+            "spec": {
+                "replicas": replicas,
+                "backup": {
+                    "destinationPath": restore_backup_location,
+                    "retentionPolicy": "30",
+                    "schedule": "17 9 * * *",
+                    "endpointURL": "http://minio.minio.svc.cluster.local:9000",
+                    "s3Credentials": {
+                        "accessKeyId": {
+                            "name": "s3creds",
+                            "key": "MINIO_ACCESS_KEY"
+                        },
+                        "secretAccessKey": {
+                            "name": "s3creds",
+                            "key": "MINIO_SECRET_KEY"
+                        }
+                    }
+                },
+                "restore": {
+                    "serverName": name,
+                    "endpointURL": "http://minio.minio.svc.cluster.local:9000",
+                    "s3Credentials": {
+                        "accessKeyId": {
+                            "name": "s3creds",
+                            "key": "MINIO_ACCESS_KEY"
+                        },
+                        "secretAccessKey": {
+                            "name": "s3creds",
+                            "key": "MINIO_SECRET_KEY"
+                        }
+                    }
+                }
+            }
+        });
+        let params = PatchParams::apply("tembo-integration-test");
+        let patch = Patch::Apply(&restore_coredb_json);
+        let coredb_resource = restore_coredbs
+            .patch(restore_name, &params, &patch)
+            .await
+            .unwrap();
+
+        // Wait for CNPG Pod to be created
+        let restore_pod_name = format!("{}-1", restore_name);
+        pod_ready_and_running(restore_pods.clone(), restore_pod_name.clone()).await;
+
+        let restore_pods: Api<Pod> = Api::namespaced(client.clone(), &restore_namespace);
+        let lp = ListParams::default()
+            .labels(format!("app=postgres-exporter,coredb.io/name={}", restore_name).as_str());
+        let exporter_pods = restore_pods.list(&lp).await.expect("could not get pods");
+        let exporter_pod_name = exporter_pods.items[0].metadata.name.as_ref().unwrap();
+        println!("Exporter pod name: {}", &exporter_pod_name);
+
+        // Wait for CNPG Cluster to be created by looping over replicas until
+        // they are in a running state
+        for i in 1..=replicas {
+            let restore_pod_name = format!("{}-{}", restore_name, i);
+            pod_ready_and_running(restore_pods.clone(), restore_pod_name).await;
+        }
+
+        // Assert that we can query the database with \dx;
+        let result = psql_with_retry(context.clone(), coredb_resource.clone(), "\\dx".to_string()).await;
+        assert!(result.stdout.clone().unwrap().contains("plpgsql"));
+
+        // Check to make sure the data from the original database is present
+        let result = psql_with_retry(
+            context.clone(),
+            coredb_resource.clone(),
+            "SELECT * FROM test;".to_string(),
+        )
+        .await;
+        assert!(result.stdout.clone().unwrap().contains("test"));
+
+        // CLEANUP TEST
+        // Cleanup CoreDB
+        coredbs.delete(name, &Default::default()).await.unwrap();
+        println!("Waiting for CoreDB to be deleted: {}", &name);
+        let _assert_coredb_deleted = tokio::time::timeout(
+            Duration::from_secs(TIMEOUT_SECONDS_COREDB_DELETED),
+            await_condition(coredbs.clone(), name, conditions::is_deleted("")),
+        )
+        .await
+        .unwrap_or_else(|_| {
+            panic!(
+                "CoreDB {} was not deleted after waiting {} seconds",
+                name, TIMEOUT_SECONDS_COREDB_DELETED
+            )
+        });
+        println!("CoreDB resource deleted {}", name);
+
+        // Delete namespace
+        let _ = delete_namespace(client.clone(), &namespace).await;
+
+        restore_coredbs
+            .delete(restore_name, &Default::default())
+            .await
+            .unwrap();
+        println!("Waiting for CoreDB to be deleted: {}", &restore_name);
+        let _assert_coredb_deleted = tokio::time::timeout(
+            Duration::from_secs(TIMEOUT_SECONDS_COREDB_DELETED),
+            await_condition(restore_coredbs.clone(), restore_name, conditions::is_deleted("")),
+        )
+        .await
+        .unwrap_or_else(|_| {
+            panic!(
+                "CoreDB {} was not deleted after waiting {} seconds",
+                restore_name, TIMEOUT_SECONDS_COREDB_DELETED
+            )
+        });
+        println!("CoreDB resource deleted {}", restore_name);
+
+        // Delete namespace
+        let _ = delete_namespace(client.clone(), &restore_namespace).await;
     }
 }

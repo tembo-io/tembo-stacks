@@ -13,7 +13,7 @@ spec:
         - /bin/sh
         - -c
         args:
-        - aws s3 mb s3://tembo-backups --endpoint-url http://minio.minio.svc.cluster.local:9000
+        - aws s3 mb s3://tembo-backup --endpoint-url http://minio.minio.svc.cluster.local:9000
         env:
         - name: AWS_ACCESS_KEY_ID
           value: "tembo"
