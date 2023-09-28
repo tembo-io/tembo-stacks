@@ -316,10 +316,12 @@ mod test {
         Ok(())
     }
 
-    use controller::{apis::postgres_parameters::ConfigValue, errors};
+    use controller::{
+        apis::postgres_parameters::{ConfigValue, PgConfig},
+        errors,
+    };
     use k8s_openapi::NamespaceResourceScope;
     use serde::de::DeserializeOwned;
-    use controller::apis::postgres_parameters::PgConfig;
 
     // helper function retrieve all instances of a resource in namespace
     // used repeatedly in appService tests
@@ -3235,10 +3237,7 @@ mod test {
         // the runtime_config is being populated with all config values.
         let runtime_cfg = runtime_cfg(&coredbs, &name).await.unwrap();
         assert!(runtime_cfg.len() > 350);
-        println!(
-            "Found {} runtime_config values",
-            runtime_cfg.len()
-        );
+        println!("Found {} runtime_config values", runtime_cfg.len());
 
         // Assert status.runtime_config
         assert!(found_configs);
