@@ -95,7 +95,7 @@ fn generate_ingress_routes(
                                 port: Some(IntOrString::Int(route.port as i32)),
                                 namespace: Some(namespace.to_owned()),
                                 kind: Some(IngressRouteRoutesServicesKind::Service),
-                                .. IngressRouteRoutesServices::default()
+                                ..IngressRouteRoutesServices::default()
                             }]),
                             middlewares: None,
                             priority: None,
