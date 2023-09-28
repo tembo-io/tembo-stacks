@@ -74,8 +74,23 @@ fn generate_resource(
 
 
 fn interpolate_pathprefix(appsvc_name: &str, path: &str) -> String {
-    let formatted_path = if path.starts_with('/') { &path[1..] } else { path };
-    format!("/{}/{}", appsvc_name, formatted_path)
+    let formatted_path = if let Some(stripped) = path.strip_prefix('/') {
+        stripped
+    } else {
+        path
+    };
+    let formatted_name = if let Some(stripped) = appsvc_name.strip_prefix('/') {
+        stripped
+    } else {
+        appsvc_name
+    };
+
+    // if formatted_path is empty, we'll just return the formatted_name
+    if formatted_path.is_empty() {
+        format!("/{}", formatted_name)
+    } else {
+        format!("/{}/{}", formatted_name, formatted_path)
+    }
 }
 
 // generates Kubernetes IngressRoute template for an appService
@@ -627,5 +642,15 @@ mod tests {
         assert_eq!(pp, expected);
         let pp = interpolate_pathprefix("appsvc", "path");
         assert_eq!(pp, expected);
+        let pp = interpolate_pathprefix("/appsvc", "/path");
+        assert_eq!(pp, expected);
+        let pp = interpolate_pathprefix("/appsvc", "path");
+        assert_eq!(pp, expected);
+        // app named appsvc and ingress path is empty string or single slash
+        // do not add extra slash
+        let pp = interpolate_pathprefix("/appsvc", "/");
+        assert_eq!(pp, "/appsvc");
+        let pp = interpolate_pathprefix("/appsvc", "");
+        assert_eq!(pp, "/appsvc");
     }
 }
