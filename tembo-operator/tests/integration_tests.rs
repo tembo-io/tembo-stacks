@@ -3377,6 +3377,7 @@ mod test {
                     "destinationPath": backup_location,
                     "retentionPolicy": "30",
                     "schedule": "17 9 * * *",
+                    "encryption": "",
                     "endpointURL": "http://minio.minio.svc.cluster.local:9000",
                     "s3Credentials": {
                         "accessKeyId": {
@@ -3503,6 +3504,7 @@ mod test {
                     "retentionPolicy": "30",
                     "schedule": "17 9 * * *",
                     "endpointURL": "http://minio.minio.svc.cluster.local:9000",
+                    "encryption": "",
                     "s3Credentials": {
                         "accessKeyId": {
                             "name": "s3creds",
