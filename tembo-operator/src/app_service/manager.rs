@@ -127,12 +127,21 @@ fn generate_ingress(
     oref: OwnerReference,
     routes: Vec<IngressRouteRoutes>,
 ) -> IngressRoute {
+    let mut selector_labels: BTreeMap<String, String> = BTreeMap::new();
+
+    selector_labels.insert("component".to_owned(), COMPONENT_NAME.to_string());
+    selector_labels.insert("coredb.io/name".to_owned(), coredb_name.to_string());
+
+    let mut labels = selector_labels.clone();
+    labels.insert("component".to_owned(), COMPONENT_NAME.to_owned());
+
     IngressRoute {
         metadata: ObjectMeta {
             // using coredb name, since we'll have 1x ingress per coredb
             name: Some(coredb_name.to_owned()),
             namespace: Some(namespace.to_owned()),
             owner_references: Some(vec![oref]),
+            labels: Some(labels.clone()),
             ..ObjectMeta::default()
         },
         spec: IngressRouteSpec {
@@ -506,7 +515,7 @@ pub async fn reconcile_app_services(cdb: &CoreDB, ctx: Arc<Context>) -> Result<(
         Some(appsvcs) => appsvcs,
         None => {
             debug!("ns: {}, No AppServices found in spec", ns);
-            return Ok(());
+            vec![]
         }
     };
 
