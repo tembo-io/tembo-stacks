@@ -42,8 +42,7 @@ mod test {
         Api, Client, Config, Error,
     };
     use rand::Rng;
-    use std::{ops::Not, str, sync::Arc, thread, time::Duration};
-    use std::collections::BTreeSet;
+    use std::{collections::BTreeSet, ops::Not, str, sync::Arc, thread, time::Duration};
 
     use tokio::io::AsyncReadExt;
 
@@ -93,8 +92,8 @@ mod test {
                 conditions::is_crd_established(),
             ),
         )
-            .await
-            .expect("Custom Resource Definition for CoreDB was not found.");
+        .await
+        .expect("Custom Resource Definition for CoreDB was not found.");
 
         client
     }
@@ -250,25 +249,25 @@ mod test {
             Duration::from_secs(TIMEOUT_SECONDS_START_POD),
             await_condition(pods.clone(), &pod_name, conditions::is_pod_running()),
         )
-            .await
-            .unwrap_or_else(|_| {
-                panic!(
-                    "Did not find the pod {} to be running after waiting {} seconds",
-                    pod_name, TIMEOUT_SECONDS_START_POD
-                )
-            });
+        .await
+        .unwrap_or_else(|_| {
+            panic!(
+                "Did not find the pod {} to be running after waiting {} seconds",
+                pod_name, TIMEOUT_SECONDS_START_POD
+            )
+        });
         println!("Waiting for pod to be ready: {}", pod_name);
         let _check_for_pod_ready = tokio::time::timeout(
             Duration::from_secs(TIMEOUT_SECONDS_POD_READY),
             await_condition(pods.clone(), &pod_name, is_pod_ready()),
         )
-            .await
-            .unwrap_or_else(|_| {
-                panic!(
-                    "Did not find the pod {} to be ready after waiting {} seconds",
-                    pod_name, TIMEOUT_SECONDS_POD_READY
-                )
-            });
+        .await
+        .unwrap_or_else(|_| {
+            panic!(
+                "Did not find the pod {} to be ready after waiting {} seconds",
+                pod_name, TIMEOUT_SECONDS_POD_READY
+            )
+        });
         println!("Found pod ready: {}", pod_name);
     }
 
@@ -317,10 +316,9 @@ mod test {
         Ok(())
     }
 
-    use controller::errors;
+    use controller::{apis::postgres_parameters::ConfigValue, errors};
     use k8s_openapi::NamespaceResourceScope;
     use serde::de::DeserializeOwned;
-    use controller::apis::postgres_parameters::ConfigValue;
 
     // helper function retrieve all instances of a resource in namespace
     // used repeatedly in appService tests
@@ -331,14 +329,14 @@ mod test {
         namespace: &str,
         num_expected: usize,
     ) -> Result<Vec<R>, errors::OperatorError>
-        where
-            R: kube::api::Resource<Scope = NamespaceResourceScope>
+    where
+        R: kube::api::Resource<Scope = NamespaceResourceScope>
             + std::fmt::Debug
             + 'static
             + Clone
             + DeserializeOwned
             + for<'de> serde::Deserialize<'de>,
-            R::DynamicType: Default,
+        R::DynamicType: Default,
     {
         let api: Api<R> = Api::namespaced(client, namespace);
         let lp = ListParams::default().labels(format!("coredb.io/name={}", cdb_name).as_str());
@@ -458,13 +456,13 @@ mod test {
             Duration::from_secs(TIMEOUT_SECONDS_COREDB_DELETED),
             await_condition(coredbs.clone(), name, conditions::is_deleted("")),
         )
-            .await
-            .unwrap_or_else(|_| {
-                panic!(
-                    "CoreDB {} was not deleted after waiting {} seconds",
-                    name, TIMEOUT_SECONDS_COREDB_DELETED
-                )
-            });
+        .await
+        .unwrap_or_else(|_| {
+            panic!(
+                "CoreDB {} was not deleted after waiting {} seconds",
+                name, TIMEOUT_SECONDS_COREDB_DELETED
+            )
+        });
         println!("CoreDB resource deleted {}", name);
 
         // Delete namespace
@@ -640,9 +638,9 @@ mod test {
                    created_at TIMESTAMP DEFAULT NOW()
                 );
             "
-                .to_string(),
+            .to_string(),
         )
-            .await;
+        .await;
         println!("{}", result.stdout.clone().unwrap());
         assert!(result.stdout.clone().unwrap().contains("CREATE TABLE"));
 
@@ -658,7 +656,7 @@ mod test {
             "aggs_for_vecs".to_string(),
             false,
         )
-            .await;
+        .await;
 
         println!("{}", result.stdout.clone().unwrap());
         assert!(result.stdout.clone().unwrap().contains("aggs_for_vecs"));
@@ -669,7 +667,7 @@ mod test {
             coredb_resource.clone(),
             "SELECT rolname FROM pg_roles;".to_string(),
         )
-            .await;
+        .await;
         assert!(
             result.stdout.clone().unwrap().contains("postgres_exporter"),
             "results must contain postgres_exporter: {}",
@@ -699,7 +697,7 @@ mod test {
             c,
             Some("postgres-exporter".to_string()),
         )
-            .await;
+        .await;
         assert!(result_stdout.contains(&test_metric_decr));
 
         // Assert we can drop an extension after its been created
@@ -737,7 +735,7 @@ mod test {
             "aggs_for_vecs".to_string(),
             true,
         )
-            .await;
+        .await;
 
         assert!(
             !result.stdout.clone().unwrap().contains("aggs_for_vecs"),
@@ -793,13 +791,13 @@ mod test {
             Duration::from_secs(TIMEOUT_SECONDS_COREDB_DELETED),
             await_condition(coredbs.clone(), name, conditions::is_deleted("")),
         )
-            .await
-            .unwrap_or_else(|_| {
-                panic!(
-                    "CoreDB {} was not deleted after waiting {} seconds",
-                    name, TIMEOUT_SECONDS_COREDB_DELETED
-                )
-            });
+        .await
+        .unwrap_or_else(|_| {
+            panic!(
+                "CoreDB {} was not deleted after waiting {} seconds",
+                name, TIMEOUT_SECONDS_COREDB_DELETED
+            )
+        });
         println!("CoreDB resource deleted {}", name);
 
         // Delete namespace
@@ -928,7 +926,7 @@ mod test {
             "pgmq".to_string(),
             false,
         )
-            .await;
+        .await;
 
         println!("{}", result.stdout.clone().unwrap());
         assert!(result.stdout.clone().unwrap().contains("pgmq"));
@@ -960,7 +958,7 @@ mod test {
             "pg_stat_statements,pg_partman_bgw".to_string(),
             false,
         )
-            .await;
+        .await;
 
         // Assert that shared_preload_libraries contains pg_stat_statements
         // and pg_partman_bgw
@@ -970,7 +968,7 @@ mod test {
             coredb_resource.clone(),
             "show shared_preload_libraries;".to_string(),
         )
-            .await;
+        .await;
 
         let stdout = match result.stdout {
             Some(output) => output,
@@ -987,13 +985,13 @@ mod test {
             Duration::from_secs(TIMEOUT_SECONDS_COREDB_DELETED),
             await_condition(coredbs.clone(), name, conditions::is_deleted("")),
         )
-            .await
-            .unwrap_or_else(|_| {
-                panic!(
-                    "CoreDB {} was not deleted after waiting {} seconds",
-                    name, TIMEOUT_SECONDS_COREDB_DELETED
-                )
-            });
+        .await
+        .unwrap_or_else(|_| {
+            panic!(
+                "CoreDB {} was not deleted after waiting {} seconds",
+                name, TIMEOUT_SECONDS_COREDB_DELETED
+            )
+        });
         println!("CoreDB resource deleted {}", name);
 
         // Delete namespace
@@ -1068,13 +1066,13 @@ mod test {
             Duration::from_secs(TIMEOUT_SECONDS_COREDB_DELETED),
             await_condition(coredbs.clone(), name, conditions::is_deleted("")),
         )
-            .await
-            .unwrap_or_else(|_| {
-                panic!(
-                    "CoreDB {} was not deleted after waiting {} seconds",
-                    name, TIMEOUT_SECONDS_COREDB_DELETED
-                )
-            });
+        .await
+        .unwrap_or_else(|_| {
+            panic!(
+                "CoreDB {} was not deleted after waiting {} seconds",
+                name, TIMEOUT_SECONDS_COREDB_DELETED
+            )
+        });
         println!("CoreDB resource deleted {}", name);
 
         // Delete namespace
@@ -1154,13 +1152,13 @@ mod test {
             Duration::from_secs(TIMEOUT_SECONDS_COREDB_DELETED),
             await_condition(coredbs.clone(), name, conditions::is_deleted("")),
         )
-            .await
-            .unwrap_or_else(|_| {
-                panic!(
-                    "CoreDB {} was not deleted after waiting {} seconds",
-                    name, TIMEOUT_SECONDS_COREDB_DELETED
-                )
-            });
+        .await
+        .unwrap_or_else(|_| {
+            panic!(
+                "CoreDB {} was not deleted after waiting {} seconds",
+                name, TIMEOUT_SECONDS_COREDB_DELETED
+            )
+        });
 
         // Assert namespace has been deleted
         println!("Waiting for namespace to be deleted: {}", &namespace);
@@ -1173,13 +1171,13 @@ mod test {
                 }
             }
         })
-            .await
-            .unwrap_or_else(|_| {
-                panic!(
-                    "Namespace {} was not deleted after waiting {} seconds",
-                    namespace, TIMEOUT_SECONDS_NS_DELETED
-                )
-            });
+        .await
+        .unwrap_or_else(|_| {
+            panic!(
+                "Namespace {} was not deleted after waiting {} seconds",
+                namespace, TIMEOUT_SECONDS_NS_DELETED
+            )
+        });
     }
 
     #[tokio::test]
@@ -1229,13 +1227,13 @@ mod test {
             Duration::from_secs(TIMEOUT_SECONDS_START_POD),
             await_condition(pods.clone(), &pod_name, conditions::is_pod_running()),
         )
-            .await
-            .unwrap_or_else(|_| {
-                panic!(
-                    "Did not find the pod {} to be running after waiting {} seconds",
-                    pod_name, TIMEOUT_SECONDS_START_POD
-                )
-            });
+        .await
+        .unwrap_or_else(|_| {
+            panic!(
+                "Did not find the pod {} to be running after waiting {} seconds",
+                pod_name, TIMEOUT_SECONDS_START_POD
+            )
+        });
 
         let ing_route_tcp_name = format!("{}-rw-0", name);
         let ingress_route_tcp_api: Api<IngressRouteTCP> = Api::namespaced(client.clone(), &namespace);
@@ -1356,13 +1354,13 @@ mod test {
             Duration::from_secs(TIMEOUT_SECONDS_COREDB_DELETED),
             await_condition(coredbs.clone(), name, conditions::is_deleted("")),
         )
-            .await
-            .unwrap_or_else(|_| {
-                panic!(
-                    "CoreDB {} was not deleted after waiting {} seconds",
-                    name, TIMEOUT_SECONDS_COREDB_DELETED
-                )
-            });
+        .await
+        .unwrap_or_else(|_| {
+            panic!(
+                "CoreDB {} was not deleted after waiting {} seconds",
+                name, TIMEOUT_SECONDS_COREDB_DELETED
+            )
+        });
         println!("CoreDB resource deleted {}", name);
 
         // Delete namespace
@@ -1469,13 +1467,13 @@ mod test {
             Duration::from_secs(TIMEOUT_SECONDS_COREDB_DELETED),
             await_condition(coredbs.clone(), name, conditions::is_deleted("")),
         )
-            .await
-            .unwrap_or_else(|_| {
-                panic!(
-                    "CoreDB {} was not deleted after waiting {} seconds",
-                    name, TIMEOUT_SECONDS_COREDB_DELETED
-                )
-            });
+        .await
+        .unwrap_or_else(|_| {
+            panic!(
+                "CoreDB {} was not deleted after waiting {} seconds",
+                name, TIMEOUT_SECONDS_COREDB_DELETED
+            )
+        });
         println!("CoreDB resource deleted {}", name);
 
         // Delete namespace
@@ -1590,13 +1588,13 @@ mod test {
             Duration::from_secs(TIMEOUT_SECONDS_COREDB_DELETED),
             await_condition(coredbs.clone(), name, conditions::is_deleted("")),
         )
-            .await
-            .unwrap_or_else(|_| {
-                panic!(
-                    "CoreDB {} was not deleted after waiting {} seconds",
-                    name, TIMEOUT_SECONDS_COREDB_DELETED
-                )
-            });
+        .await
+        .unwrap_or_else(|_| {
+            panic!(
+                "CoreDB {} was not deleted after waiting {} seconds",
+                name, TIMEOUT_SECONDS_COREDB_DELETED
+            )
+        });
         println!("CoreDB resource deleted {}", name);
 
         // Delete namespace
@@ -1664,7 +1662,7 @@ mod test {
             coredb_resource.clone(),
             "SELECT state FROM pg_stat_replication".to_string(),
         )
-            .await;
+        .await;
         assert!(result.stdout.clone().unwrap().contains("streaming"));
 
         // CLEANUP TEST
@@ -1675,13 +1673,13 @@ mod test {
             Duration::from_secs(TIMEOUT_SECONDS_COREDB_DELETED),
             await_condition(coredbs.clone(), name, conditions::is_deleted("")),
         )
-            .await
-            .unwrap_or_else(|_| {
-                panic!(
-                    "CoreDB {} was not deleted after waiting {} seconds",
-                    name, TIMEOUT_SECONDS_COREDB_DELETED
-                )
-            });
+        .await
+        .unwrap_or_else(|_| {
+            panic!(
+                "CoreDB {} was not deleted after waiting {} seconds",
+                name, TIMEOUT_SECONDS_COREDB_DELETED
+            )
+        });
         println!("CoreDB resource deleted {}", name);
 
         // Delete namespace
@@ -1780,7 +1778,7 @@ mod test {
             coredb_resource.clone(),
             "SELECT state FROM pg_stat_replication".to_string(),
         )
-            .await;
+        .await;
         assert!(result.stdout.clone().unwrap().contains("streaming"));
 
         // Revert replicas back to 1 to disable HA
@@ -1807,13 +1805,13 @@ mod test {
             Duration::from_secs(TIMEOUT_SECONDS_POD_DELETED),
             await_condition(pods.clone(), &pod_name_secondary, conditions::is_deleted("")),
         )
-            .await
-            .unwrap_or_else(|_| {
-                panic!(
-                    "Pod {} was not deleted after waiting {} seconds",
-                    pod_name_secondary, TIMEOUT_SECONDS_POD_DELETED
-                )
-            });
+        .await
+        .unwrap_or_else(|_| {
+            panic!(
+                "Pod {} was not deleted after waiting {} seconds",
+                pod_name_secondary, TIMEOUT_SECONDS_POD_DELETED
+            )
+        });
 
         // Query the database again to ensure that pg_replication_slots is empty
         wait_until_psql_contains(
@@ -1823,7 +1821,7 @@ mod test {
             "0".to_string(),
             false,
         )
-            .await;
+        .await;
 
         // CLEANUP TEST
         // Cleanup CoreDB
@@ -1833,13 +1831,13 @@ mod test {
             Duration::from_secs(TIMEOUT_SECONDS_COREDB_DELETED),
             await_condition(coredbs.clone(), name, conditions::is_deleted("")),
         )
-            .await
-            .unwrap_or_else(|_| {
-                panic!(
-                    "CoreDB {} was not deleted after waiting {} seconds",
-                    name, TIMEOUT_SECONDS_COREDB_DELETED
-                )
-            });
+        .await
+        .unwrap_or_else(|_| {
+            panic!(
+                "CoreDB {} was not deleted after waiting {} seconds",
+                name, TIMEOUT_SECONDS_COREDB_DELETED
+            )
+        });
         println!("CoreDB resource deleted {}", name);
 
         // Delete namespace
@@ -1937,7 +1935,7 @@ mod test {
             "pg_cron".to_string(),
             false,
         )
-            .await;
+        .await;
 
         wait_until_psql_contains(
             context.clone(),
@@ -1946,7 +1944,7 @@ mod test {
             "citus".to_string(),
             false,
         )
-            .await;
+        .await;
 
         let coredb_resource = coredbs.get(name).await.unwrap();
         let mut found_citus = false;
@@ -1976,13 +1974,13 @@ mod test {
             Duration::from_secs(TIMEOUT_SECONDS_COREDB_DELETED),
             await_condition(coredbs.clone(), name, conditions::is_deleted("")),
         )
-            .await
-            .unwrap_or_else(|_| {
-                panic!(
-                    "CoreDB {} was not deleted after waiting {} seconds",
-                    name, TIMEOUT_SECONDS_COREDB_DELETED
-                )
-            });
+        .await
+        .unwrap_or_else(|_| {
+            panic!(
+                "CoreDB {} was not deleted after waiting {} seconds",
+                name, TIMEOUT_SECONDS_COREDB_DELETED
+            )
+        });
         println!("CoreDB resource deleted {}", name);
 
         // Delete namespace
@@ -2061,7 +2059,7 @@ mod test {
             coredb_resource.clone(),
             "SELECT state FROM pg_stat_replication".to_string(),
         )
-            .await;
+        .await;
         assert!(result.stdout.clone().unwrap().contains("streaming"));
 
         // Add in an extension and lets make sure it's installed on all pods
@@ -2104,7 +2102,7 @@ mod test {
             "aggs_for_vecs".to_string(),
             true,
         )
-            .await;
+        .await;
 
         // Assert that the extensions are installed on both replicas
         let retrieved_pods_result = coredb_resource.pods_by_cluster(client.clone()).await;
@@ -2136,13 +2134,13 @@ mod test {
             Duration::from_secs(TIMEOUT_SECONDS_COREDB_DELETED),
             await_condition(coredbs.clone(), name, conditions::is_deleted("")),
         )
-            .await
-            .unwrap_or_else(|_| {
-                panic!(
-                    "CoreDB {} was not deleted after waiting {} seconds",
-                    name, TIMEOUT_SECONDS_COREDB_DELETED
-                )
-            });
+        .await
+        .unwrap_or_else(|_| {
+            panic!(
+                "CoreDB {} was not deleted after waiting {} seconds",
+                name, TIMEOUT_SECONDS_COREDB_DELETED
+            )
+        });
         println!("CoreDB resource deleted {}", name);
 
         // Delete namespace
@@ -2212,7 +2210,7 @@ mod test {
             "plpgsql".to_string(),
             false,
         )
-            .await;
+        .await;
 
         // Add in an extension and lets make sure it's installed on all pods
         let coredb_json = serde_json::json!({
@@ -2254,7 +2252,7 @@ mod test {
             "aggs_for_vecs".to_string(),
             true,
         )
-            .await;
+        .await;
 
         // Assert that the extensions are installed on both replicas
         let retrieved_pods_result = coredb_resource.pods_by_cluster(client.clone()).await;
@@ -2326,7 +2324,7 @@ mod test {
             "aggs_for_vecs".to_string(),
             true,
         )
-            .await;
+        .await;
 
         // Assert that the extensions are installed on both replicas
         let retrieved_pods_result = coredb_resource.pods_by_cluster(client.clone()).await;
@@ -2358,13 +2356,13 @@ mod test {
             Duration::from_secs(TIMEOUT_SECONDS_COREDB_DELETED),
             await_condition(coredbs.clone(), name, conditions::is_deleted("")),
         )
-            .await
-            .unwrap_or_else(|_| {
-                panic!(
-                    "CoreDB {} was not deleted after waiting {} seconds",
-                    name, TIMEOUT_SECONDS_COREDB_DELETED
-                )
-            });
+        .await
+        .unwrap_or_else(|_| {
+            panic!(
+                "CoreDB {} was not deleted after waiting {} seconds",
+                name, TIMEOUT_SECONDS_COREDB_DELETED
+            )
+        });
         println!("CoreDB resource deleted {}", name);
 
         // Delete namespace
@@ -2491,7 +2489,7 @@ mod test {
             "pgmq".to_string(),
             true,
         )
-            .await;
+        .await;
 
         // Assert that the extensions are installed on both replicas
         let retrieved_pods_result = coredb_resource.pods_by_cluster(client.clone()).await;
@@ -2602,7 +2600,7 @@ mod test {
             "pgmq".to_string(),
             true,
         )
-            .await;
+        .await;
 
         // Assert that the extensions are installed on both replicas
         let retrieved_pods_result = coredb_resource.pods_by_cluster(client.clone()).await;
@@ -2634,13 +2632,13 @@ mod test {
             Duration::from_secs(TIMEOUT_SECONDS_COREDB_DELETED),
             await_condition(coredbs.clone(), name, conditions::is_deleted("")),
         )
-            .await
-            .unwrap_or_else(|_| {
-                panic!(
-                    "CoreDB {} was not deleted after waiting {} seconds",
-                    name, TIMEOUT_SECONDS_COREDB_DELETED
-                )
-            });
+        .await
+        .unwrap_or_else(|_| {
+            panic!(
+                "CoreDB {} was not deleted after waiting {} seconds",
+                name, TIMEOUT_SECONDS_COREDB_DELETED
+            )
+        });
         println!("CoreDB resource deleted {}", name);
 
         // Delete namespace
@@ -2766,7 +2764,7 @@ mod test {
                 "memory": "256Mi"
             }
         }))
-            .unwrap();
+        .unwrap();
         let app_0_resources = app_0_container.resources.unwrap();
         assert_eq!(app_0_resources, expected);
 
@@ -2798,7 +2796,7 @@ mod test {
                 "memory": "128Mi"
             }
         }))
-            .unwrap();
+        .unwrap();
         let app_1_resources = app_1_container.resources.unwrap();
         assert_eq!(app_1_resources, expected);
 
@@ -2883,13 +2881,13 @@ mod test {
             Duration::from_secs(TIMEOUT_SECONDS_COREDB_DELETED),
             await_condition(coredbs.clone(), cdb_name, conditions::is_deleted("")),
         )
-            .await
-            .unwrap_or_else(|_| {
-                panic!(
-                    "CoreDB {} was not deleted after waiting {} seconds",
-                    cdb_name, TIMEOUT_SECONDS_COREDB_DELETED
-                )
-            });
+        .await
+        .unwrap_or_else(|_| {
+            panic!(
+                "CoreDB {} was not deleted after waiting {} seconds",
+                cdb_name, TIMEOUT_SECONDS_COREDB_DELETED
+            )
+        });
         println!("CoreDB resource deleted {}", cdb_name);
 
         // Delete namespace
@@ -3077,13 +3075,13 @@ mod test {
                 Duration::from_secs(TIMEOUT_SECONDS_COREDB_DELETED),
                 await_condition(coredbs.clone(), &name, conditions::is_deleted("")),
             )
-                .await
-                .unwrap_or_else(|_| {
-                    panic!(
-                        "CoreDB {} was not deleted after waiting {} seconds",
-                        name, TIMEOUT_SECONDS_COREDB_DELETED
-                    )
-                });
+            .await
+            .unwrap_or_else(|_| {
+                panic!(
+                    "CoreDB {} was not deleted after waiting {} seconds",
+                    name, TIMEOUT_SECONDS_COREDB_DELETED
+                )
+            });
             println!("CoreDB resource deleted {name}");
 
             // Delete namespace
@@ -3228,13 +3226,13 @@ mod test {
             Duration::from_secs(TIMEOUT_SECONDS_COREDB_DELETED),
             await_condition(coredbs.clone(), name, conditions::is_deleted("")),
         )
-            .await
-            .unwrap_or_else(|_| {
-                panic!(
-                    "CoreDB {} was not deleted after waiting {} seconds",
-                    name, TIMEOUT_SECONDS_COREDB_DELETED
-                )
-            });
+        .await
+        .unwrap_or_else(|_| {
+            panic!(
+                "CoreDB {} was not deleted after waiting {} seconds",
+                name, TIMEOUT_SECONDS_COREDB_DELETED
+            )
+        });
         println!("CoreDB resource deleted {}", name);
 
         // Delete namespace
