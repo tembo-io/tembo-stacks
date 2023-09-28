@@ -18,6 +18,7 @@ mod test {
     use chrono::{DateTime, SecondsFormat, Utc};
     use controller::{
         apis::coredb_types::CoreDB,
+        cloudnativepg::backups::Backup,
         cloudnativepg::clusters::Cluster,
         defaults::{default_resources, default_storage},
         ingress_route_crd::IngressRoute,
@@ -26,6 +27,7 @@ mod test {
         psql::PsqlOutput,
         Context, State,
     };
+    use futures_util::stream::StreamExt;
     use k8s_openapi::{
         api::{
             apps::v1::Deployment,
@@ -38,7 +40,7 @@ mod test {
         apimachinery::pkg::{api::resource::Quantity, apis::meta::v1::ObjectMeta, util::intstr::IntOrString},
     };
     use kube::{
-        api::{AttachParams, DeleteParams, ListParams, Patch, PatchParams, PostParams},
+        api::{AttachParams, DeleteParams, ListParams, Patch, PatchParams, PostParams, WatchParams},
         runtime::wait::{await_condition, conditions, Condition},
         Api, Client, Config, Error,
     };
@@ -55,6 +57,7 @@ mod test {
     const TIMEOUT_SECONDS_NS_DELETED: u64 = 120;
     const TIMEOUT_SECONDS_POD_DELETED: u64 = 120;
     const TIMEOUT_SECONDS_COREDB_DELETED: u64 = 120;
+    const TIMEOUT_SECONDS_BACKUP_COMPLETED: u64 = 600;
 
     async fn kube_client() -> Client {
         // Get the name of the currently selected namespace
@@ -270,6 +273,43 @@ mod test {
             )
         });
         println!("Found pod ready: {}", pod_name);
+    }
+
+    async fn has_backup_completed(context: Arc<Context>, namespace: &str, name: &str) {
+        println!("Waiting for backup to complete: {}", name);
+        let backups: Api<Backup> = Api::namespaced(context.client.clone(), namespace);
+
+        let wp = WatchParams::default().labels(&format!("cnpg.io/cluster={}", name));
+        let stream_result = backups.watch(&wp, "0").await;
+
+        let mut stream = match stream_result {
+            Ok(s) => Box::pin(s),
+            Err(e) => panic!("Failed to watch backups: {}", e),
+        };
+
+        let watch_result =
+            tokio::time::timeout(Duration::from_secs(TIMEOUT_SECONDS_BACKUP_COMPLETED), async {
+                while let Some(event) = stream.next().await {
+                    match event {
+                        Ok(kube::api::WatchEvent::Modified(backup)) => {
+                            if let Some(status) = &backup.status {
+                                if status.phase.as_deref() == Some("completed") {
+                                    return;
+                                }
+                            }
+                        }
+                        Ok(_) => {} // For other events we do nothing
+                        Err(e) => panic!("Error watching Backup: {}", e),
+                    }
+                }
+                panic!("Watch stream ended prematurely");
+            })
+            .await;
+
+        if watch_result.is_err() {
+            panic!("Timed out waiting for Backup to complete");
+        }
+        println!("Found backup completed: {}", name);
     }
 
     // Create namespace for the test to run in
@@ -3251,14 +3291,12 @@ mod test {
 
         // Wait for status.runtime_config to contain expected_config
         while !found_configs {
-            let runtime_config = runtime_cfg(&coredbs, &name).await;
+            let runtime_config = runtime_cfg(&coredbs, name).await;
             if runtime_config.is_some() {
                 let runtime_config = runtime_config.unwrap();
                 for config in runtime_config {
-                    if config.name == "shared_preload_libraries" {
-                        if config.value == expected_config {
-                            found_configs = true;
-                        }
+                    if config.name == "shared_preload_libraries" && config.value == expected_config {
+                        found_configs = true;
                     }
                 }
             }
@@ -3269,7 +3307,7 @@ mod test {
         // Assert status.runtime_config length is greater than 350. It should be around 362, but
         // that will fluctuate between postgres versions. This is a sanity check to ensure that
         // the runtime_config is being populated with all config values.
-        let runtime_cfg = runtime_cfg(&coredbs, &name).await.unwrap();
+        let runtime_cfg = runtime_cfg(&coredbs, name).await.unwrap();
         assert!(runtime_cfg.len() > 350);
         println!("Found {} runtime_config values", runtime_cfg.len());
 
