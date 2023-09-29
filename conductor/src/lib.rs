@@ -427,7 +427,7 @@ pub async fn restart_cnpg(
         }
     });
 
-    info!("Applied `restartedAt == {restart}` to the CoreDB resource. Setting `status.running = false`.");
+    info!("Applying `restartedAt == {restart}` to the CoreDB resource. Setting `status.running = false`.");
 
     // The server will restart, therefore it won't be running
     patch_merge_cdb_status(
