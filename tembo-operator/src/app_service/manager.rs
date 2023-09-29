@@ -10,8 +10,8 @@ use k8s_openapi::{
     api::{
         apps::v1::{Deployment, DeploymentSpec},
         core::v1::{
-            Container, ContainerPort, EnvVar, HTTPGetAction, PodSpec, PodTemplateSpec, Probe,
-            SecurityContext, Service, ServicePort, ServiceSpec,
+            Container, ContainerPort, EnvVar, EnvVarSource, HTTPGetAction, PodSpec, PodTemplateSpec, Probe,
+            SecretKeySelector, SecurityContext, Service, ServicePort, ServiceSpec,
         },
     },
     apimachinery::pkg::{
@@ -274,13 +274,52 @@ fn generate_deployment(
             })
             .collect()
     });
+
+    // map postgres connection secrets to env vars
+    let postgres_conns = vec![
+        EnvVar {
+            name: format!("{}_RW_CONNECTION", coredb_name.to_uppercase().replace("-", "_")),
+            value_from: Some(EnvVarSource {
+                secret_key_ref: Some(SecretKeySelector {
+                    name: Some(format!("{}-connection", coredb_name)),
+                    key: "rw_uri".to_string(),
+                    ..SecretKeySelector::default()
+                }),
+                ..EnvVarSource::default()
+            }),
+            ..EnvVar::default()
+        },
+        EnvVar {
+            name: format!("{}_RO_CONNECTION", coredb_name.to_uppercase().replace("-", "_")),
+            value_from: Some(EnvVarSource {
+                secret_key_ref: Some(SecretKeySelector {
+                    name: Some(format!("{}-connection", coredb_name)),
+                    key: "ro_uri".to_string(),
+                    ..SecretKeySelector::default()
+                }),
+                ..EnvVarSource::default()
+            }),
+            ..EnvVar::default()
+        },
+    ];
+
+    let envs = match env_vars {
+        Some(mut envs) => {
+            envs.extend(postgres_conns);
+            envs
+        }
+        None => postgres_conns,
+    };
+
+
     // TODO: Container VolumeMounts, currently not in scope
     // TODO: PodSpec volumes, currently not in scope
 
     let pod_spec = PodSpec {
         containers: vec![Container {
             args: appsvc.args.clone(),
-            env: env_vars,
+            command: appsvc.command.clone(),
+            env: Some(envs),
             image: Some(appsvc.image.clone()),
             name: appsvc.name.clone(),
             ports: container_ports,
