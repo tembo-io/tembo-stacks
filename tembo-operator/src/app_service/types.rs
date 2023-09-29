@@ -22,8 +22,8 @@ pub struct AppService {
 pub struct EnvVar {
     pub name: String,
     pub value: Option<String>,
-    #[serde(rename = "valueFromEnv")]
-    pub value_from_env: Option<EnvVarRef>,
+    #[serde(rename = "valueFromPlatform")]
+    pub value_from_platform: Option<EnvVarRef>,
 }
 
 

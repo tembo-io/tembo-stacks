@@ -322,7 +322,7 @@ fn generate_deployment(
     let mut env_vars: Vec<EnvVar> = Vec::new();
     if let Some(envs) = appsvc.env.clone() {
         for env in envs {
-            let evar: Option<EnvVar> = match (env.value, env.value_from_env) {
+            let evar: Option<EnvVar> = match (env.value, env.value_from_platform) {
                 // Value provided
                 (Some(e), _) => Some(EnvVar {
                     name: env.name,
@@ -351,7 +351,7 @@ fn generate_deployment(
                 // everything missing, skip it
                 _ => {
                     error!(
-                        "ns: {}, AppService: {}, env var: {} is missing value or valueFromEnv",
+                        "ns: {}, AppService: {}, env var: {} is missing value or valueFromPlatform",
                         namespace, resource_name, env.name
                     );
                     None

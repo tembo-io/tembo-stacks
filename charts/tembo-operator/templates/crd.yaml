@@ -46,7 +46,7 @@ spec:
                           value:
                             nullable: true
                             type: string
-                          valueFromEnv:
+                          valueFromPlatform:
                             enum:
                             - ReadOnlyConnection
                             - ReadWriteConnection

@@ -2763,7 +2763,7 @@ mod test {
                         "env": [
                             {
                                 "name": "PGRST_DB_URI",
-                                "valueFromEnv": "ReadWriteConnection"
+                                "valueFromPlatform": "ReadWriteConnection"
                             },
                             {
                                 "name": "PGRST_DB_SCHEMA",
@@ -2928,7 +2928,7 @@ mod test {
                         "env": [
                             {
                                 "name": "PGRST_DB_URI",
-                                "valueFromEnv": "ReadWriteConnection"
+                                "valueFromPlatform": "ReadWriteConnection"
                             },
                             {
                                 "name": "PGRST_DB_SCHEMA",
