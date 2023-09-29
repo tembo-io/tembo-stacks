@@ -123,8 +123,6 @@ async fn run(metrics: CustomMetrics) -> Result<(), Box<dyn std::error::Error>> {
             continue;
         }
 
-
-
         let namespace = format!(
             "org-{}-inst-{}",
             read_msg.message.organization_name, read_msg.message.dbname
