@@ -86,6 +86,9 @@ async fn run(metrics: CustomMetrics) -> Result<(), Box<dyn std::error::Error>> {
             }
         };
 
+        let (workspace_id, org_id, entity_name, instance_id) =
+            parse_event_id(read_msg.message.event_id.as_str())?;
+
         metrics
             .conductor_total
             .add(&opentelemetry::Context::current(), 1, &[]);
@@ -119,6 +122,8 @@ async fn run(metrics: CustomMetrics) -> Result<(), Box<dyn std::error::Error>> {
             );
             continue;
         }
+
+
 
         let namespace = format!(
             "org-{}-inst-{}",
@@ -258,16 +263,14 @@ async fn run(metrics: CustomMetrics) -> Result<(), Box<dyn std::error::Error>> {
 
                 info!("{}: Creating namespace", read_msg.msg_id);
                 // create Namespace
-                create_namespace(client.clone(), &namespace).await?;
+                create_namespace(client.clone(), &namespace, &org_id, &instance_id).await?;
 
                 info!("{}: Creating network policy", read_msg.msg_id);
                 // create NetworkPolicy to allow internet access only
                 create_networkpolicy(client.clone(), &namespace).await?;
 
                 info!("{}: Generating spec", read_msg.msg_id);
-                // generate CoreDB spec based on values in body
-                let (workspace_id, org_id, entity_name, instance_id) =
-                    parse_event_id(read_msg.message.event_id.as_str())?;
+
                 let spec = generate_spec(
                     &workspace_id,
                     &org_id,
