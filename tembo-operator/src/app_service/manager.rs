@@ -275,10 +275,13 @@ fn generate_deployment(
             .collect()
     });
 
+    // ensure hyphen in in env var name (cdb name allows hyphen)
+    let cdb_name_env = coredb_name.to_uppercase().replace("-", "_");
+
     // map postgres connection secrets to env vars
     let postgres_conns = vec![
         EnvVar {
-            name: format!("{}_RW_CONNECTION", coredb_name.to_uppercase().replace("-", "_")),
+            name: format!("{}_RW_CONNECTION", cdb_name_env),
             value_from: Some(EnvVarSource {
                 secret_key_ref: Some(SecretKeySelector {
                     name: Some(format!("{}-connection", coredb_name)),
@@ -290,7 +293,7 @@ fn generate_deployment(
             ..EnvVar::default()
         },
         EnvVar {
-            name: format!("{}_RO_CONNECTION", coredb_name.to_uppercase().replace("-", "_")),
+            name: format!("{}_RO_CONNECTION", cdb_name_env),
             value_from: Some(EnvVarSource {
                 secret_key_ref: Some(SecretKeySelector {
                     name: Some(format!("{}-connection", coredb_name)),
@@ -310,7 +313,6 @@ fn generate_deployment(
         }
         None => postgres_conns,
     };
-
 
     // TODO: Container VolumeMounts, currently not in scope
     // TODO: PodSpec volumes, currently not in scope
