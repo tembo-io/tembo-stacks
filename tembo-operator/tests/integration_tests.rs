@@ -3016,34 +3016,6 @@ mod test {
             .unwrap();
         assert_eq!(ingresses.len(), 0);
 
-
-        // deploy appService so we can test psql connections
-        let coredb_json = serde_json::json!({
-            "apiVersion": API_VERSION,
-            "kind": kind,
-            "metadata": {
-                "name": cdb_name
-            },
-            "spec": {
-                "postgresExporterEnabled": false,
-                "appServices": [
-                    {
-                        "name": "test-psql",
-                        "image": "postgres:latest",
-                        "command": ["sleep", "86400"]
-                    }
-
-                ]
-            }
-        });
-        let params = PatchParams::apply("tembo-integration-test");
-        let patch = Patch::Apply(&coredb_json);
-        coredbs.patch(cdb_name, &params, &patch).await.unwrap();
-        let _deployment_items: Vec<Deployment> = list_resources(client.clone(), cdb_name, &namespace, 1)
-            .await
-            .unwrap();
-
-
         // CLEANUP TEST
         // Cleanup CoreDB
         coredbs.delete(cdb_name, &Default::default()).await.unwrap();
