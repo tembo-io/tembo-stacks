@@ -2924,7 +2924,7 @@ mod test {
                 "appServices": [
                     {
                         "name": "postgrest",
-                        "image": " postgrest/postgrest:v10.0.0",
+                        "image": "postgrest/postgrest:v10.0.0",
                         "env": [
                             {
                                 "name": "PGRST_DB_URI",
