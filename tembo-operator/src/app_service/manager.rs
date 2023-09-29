@@ -29,7 +29,7 @@ use std::{collections::BTreeMap, sync::Arc, time::Duration};
 use tracing::{debug, error, warn};
 
 
-use super::types::AppService;
+use super::types::{AppService, EnvVarRef};
 
 // private wrapper to hold the AppService Resources
 #[derive(Clone, Debug)]
@@ -265,23 +265,34 @@ fn generate_deployment(
         ..SecurityContext::default()
     };
 
-    let env_vars: Option<Vec<EnvVar>> = appsvc.env.clone().map(|env| {
-        env.into_iter()
-            .map(|(k, v)| EnvVar {
-                name: k,
-                value: Some(v),
-                ..EnvVar::default()
-            })
-            .collect()
-    });
-
     // ensure hyphen in in env var name (cdb name allows hyphen)
-    let cdb_name_env = coredb_name.to_uppercase().replace("-", "_");
+    let cdb_name_env = coredb_name.to_uppercase().replace('-', "_");
 
     // map postgres connection secrets to env vars
-    let postgres_conns = vec![
+    // mapping directly to env vars instead of using a SecretEnvSource
+    // so that we can select which secrets to map into appService
+    // generally, the system roles (e.g. postgres-exporter role) should not be injected to the appService
+    // these three are the only secrets that are mapped into the container
+    let r_conn = format!("{}_R_CONNECTION", cdb_name_env);
+    let ro_conn = format!("{}_RO_CONNECTION", cdb_name_env);
+    let rw_conn = format!("{}_RW_CONNECTION", cdb_name_env);
+
+    // map the secrets we inject to appService containers
+    let secret_envs = vec![
         EnvVar {
-            name: format!("{}_RW_CONNECTION", cdb_name_env),
+            name: r_conn,
+            value_from: Some(EnvVarSource {
+                secret_key_ref: Some(SecretKeySelector {
+                    name: Some(format!("{}-connection", coredb_name)),
+                    key: "r_uri".to_string(),
+                    ..SecretKeySelector::default()
+                }),
+                ..EnvVarSource::default()
+            }),
+            ..EnvVar::default()
+        },
+        EnvVar {
+            name: ro_conn,
             value_from: Some(EnvVarSource {
                 secret_key_ref: Some(SecretKeySelector {
                     name: Some(format!("{}-connection", coredb_name)),
@@ -293,7 +304,7 @@ fn generate_deployment(
             ..EnvVar::default()
         },
         EnvVar {
-            name: format!("{}_RO_CONNECTION", cdb_name_env),
+            name: rw_conn,
             value_from: Some(EnvVarSource {
                 secret_key_ref: Some(SecretKeySelector {
                     name: Some(format!("{}-connection", coredb_name)),
@@ -306,22 +317,60 @@ fn generate_deployment(
         },
     ];
 
-    let envs = match env_vars {
-        Some(mut envs) => {
-            envs.extend(postgres_conns);
-            envs
+    // map the user provided env vars
+    // users can map certain secrets to env vars of their choice
+    let mut env_vars: Vec<EnvVar> = Vec::new();
+    if let Some(envs) = appsvc.env.clone() {
+        for env in envs {
+            let evar: Option<EnvVar> = match (env.value, env.value_from_env) {
+                // Value provided
+                (Some(e), _) => Some(EnvVar {
+                    name: env.name,
+                    value: Some(e),
+                    ..EnvVar::default()
+                }),
+                // EnvVarRef provided, and no Value
+                (None, Some(e)) => {
+                    let secret_key = match e {
+                        EnvVarRef::ReadOnlyConnection => "ro_uri",
+                        EnvVarRef::ReadWriteConnection => "rw_uri",
+                    };
+                    Some(EnvVar {
+                        name: env.name,
+                        value_from: Some(EnvVarSource {
+                            secret_key_ref: Some(SecretKeySelector {
+                                name: Some(format!("{}-connection", coredb_name)),
+                                key: secret_key.to_string(),
+                                ..SecretKeySelector::default()
+                            }),
+                            ..EnvVarSource::default()
+                        }),
+                        ..EnvVar::default()
+                    })
+                }
+                // everything missing, skip it
+                _ => {
+                    error!(
+                        "ns: {}, AppService: {}, env var: {} is missing value or valueFromEnv",
+                        namespace, resource_name, env.name
+                    );
+                    None
+                }
+            };
+            if let Some(e) = evar {
+                env_vars.push(e);
+            }
         }
-        None => postgres_conns,
-    };
+    }
+    // combine the secret env vars and those provided in spec by user
+    env_vars.extend(secret_envs);
 
-    // TODO: Container VolumeMounts, currently not in scope
-    // TODO: PodSpec volumes, currently not in scope
 
     let pod_spec = PodSpec {
         containers: vec![Container {
             args: appsvc.args.clone(),
             command: appsvc.command.clone(),
-            env: Some(envs),
+            env: Some(env_vars),
             image: Some(appsvc.image.clone()),
             name: appsvc.name.clone(),
             ports: container_ports,
