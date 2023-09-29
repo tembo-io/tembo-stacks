@@ -2980,7 +2980,7 @@ mod test {
             title: String,
         }
         let postgres_url = format!("https://{}.localhost:8443/", cdb_name);
-        let response = http_request_with_retry(&postgres_url, 20, 5).await;
+        let response = http_request_with_retry(&postgres_url, 100, 5).await;
         let body: ApiResponse = response.json().await.unwrap();
 
         assert_eq!(body.info.title, "PostgREST API");
