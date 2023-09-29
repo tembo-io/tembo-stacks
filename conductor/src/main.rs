@@ -436,10 +436,7 @@ async fn run(metrics: CustomMetrics) -> Result<(), Box<dyn std::error::Error>> {
                         let status = coredb.status.as_ref().unwrap();
                         if !status.running {
                             // Instance is still rebooting, recheck this message later
-                            info!(
-                                "{}: Instance is still rebooting",
-                                read_msg.msg_id
-                            );
+                            info!("{}: Instance is still rebooting", read_msg.msg_id);
                         }
 
                         let as_json = serde_json::to_string(&coredb);
