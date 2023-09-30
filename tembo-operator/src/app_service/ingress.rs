@@ -1,9 +1,15 @@
 use crate::{
-    ingress_route_crd::{IngressRoute, IngressRouteRoutes, IngressRouteSpec, IngressRouteTls},
+    ingress_route_crd::{
+        IngressRoute, IngressRouteRoutes, IngressRouteRoutesKind, IngressRouteRoutesMiddlewares,
+        IngressRouteRoutesServices, IngressRouteRoutesServicesKind, IngressRouteSpec, IngressRouteTls,
+    },
     traefik::middlewares_crd::{Middleware as TraefikMiddleware, MiddlewareHeaders, MiddlewareSpec},
-    Error, Result,
+    Result,
 };
-use k8s_openapi::apimachinery::pkg::apis::meta::v1::OwnerReference;
+use k8s_openapi::apimachinery::pkg::{
+    apis::meta::v1::{LabelSelector, OwnerReference},
+    util::intstr::IntOrString,
+};
 use kube::{
     api::{Api, ListParams, ObjectMeta, Patch, PatchParams},
     Client,
@@ -16,7 +22,7 @@ use tracing::{debug, error, warn};
 
 use super::{
     manager::to_delete,
-    types::{Middleware, COMPONENT_NAME},
+    types::{AppService, Middleware, COMPONENT_NAME},
 };
 
 #[derive(Clone, Debug)]
@@ -98,6 +104,60 @@ fn generate_middlewares(
         traefik_middlwares.push(traefik_mw);
     }
     traefik_middlwares
+}
+
+
+// generates Kubernetes IngressRoute template for an appService
+// maps the specified
+pub fn generate_ingress_routes(
+    appsvc: &AppService,
+    resource_name: &str,
+    namespace: &str,
+    host_matcher: String,
+    coredb_name: &str,
+) -> Option<Vec<IngressRouteRoutes>> {
+    match appsvc.routing.clone() {
+        Some(routings) => {
+            let mut routes: Vec<IngressRouteRoutes> = Vec::new();
+            for route in routings.iter() {
+                match route.ingress_path.clone() {
+                    Some(path) => {
+                        let matcher = format!("{host_matcher} && PathPrefix(`{}`)", path);
+                        let middlewares: Option<Vec<IngressRouteRoutesMiddlewares>> =
+                            route.middlewares.clone().map(|names| {
+                                names
+                                    .into_iter()
+                                    .map(|m| IngressRouteRoutesMiddlewares {
+                                        name: format!("{}-{}", &coredb_name, m),
+                                        namespace: Some(namespace.to_owned()),
+                                    })
+                                    .collect()
+                            });
+                        let route = IngressRouteRoutes {
+                            kind: IngressRouteRoutesKind::Rule,
+                            r#match: matcher.clone(),
+                            services: Some(vec![IngressRouteRoutesServices {
+                                name: resource_name.to_string(),
+                                port: Some(IntOrString::Int(route.port as i32)),
+                                namespace: Some(namespace.to_owned()),
+                                kind: Some(IngressRouteRoutesServicesKind::Service),
+                                ..IngressRouteRoutesServices::default()
+                            }]),
+                            middlewares,
+                            priority: None,
+                        };
+                        routes.push(route);
+                    }
+                    None => {
+                        // do not create ingress when there is no path provided
+                        continue;
+                    }
+                }
+            }
+            Some(routes)
+        }
+        None => None,
+    }
 }
 
 

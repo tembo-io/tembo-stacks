@@ -78,6 +78,7 @@ pub struct Ingress {
 
 #[derive(Clone, Debug, Serialize, Deserialize, ToSchema, JsonSchema, PartialEq)]
 pub enum Middleware {
+    #[serde(rename = "customRequestHeaders")]
     CustomRequestHeaders(HeaderConfig),
 }
 

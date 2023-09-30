@@ -63,9 +63,9 @@ spec:
                       items:
                         oneOf:
                         - required:
-                          - CustomRequestHeaders
+                          - customRequestHeaders
                         properties:
-                          CustomRequestHeaders:
+                          customRequestHeaders:
                             properties:
                               config:
                                 x-kubernetes-preserve-unknown-fields: true

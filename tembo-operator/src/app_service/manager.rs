@@ -1,17 +1,4 @@
-use crate::{
-    apis::coredb_types::CoreDB,
-    ingress_route_crd::{
-        IngressRoute, IngressRouteRoutes, IngressRouteRoutesKind, IngressRouteRoutesServices,
-        IngressRouteRoutesServicesKind, IngressRouteSpec, IngressRouteTls,
-    },
-    traefik::{
-        ingress_route_crd::IngressRouteRoutesMiddlewares,
-        middlewares_crd::{
-            Middleware as TraefikMiddleware, MiddlewareHeaders, MiddlewareSpec, MiddlewareStripPrefix,
-        },
-    },
-    Context, Error, Result,
-};
+use crate::{apis::coredb_types::CoreDB, ingress_route_crd::IngressRouteRoutes, Context, Error, Result};
 use k8s_openapi::{
     api::{
         apps::v1::{Deployment, DeploymentSpec},
@@ -36,7 +23,7 @@ use tracing::{debug, error, warn};
 
 
 use super::{
-    ingress::reconcile_ingress,
+    ingress::{generate_ingress_routes, reconcile_ingress},
     types::{AppService, EnvVarRef, Middleware, COMPONENT_NAME},
 };
 
@@ -70,66 +57,13 @@ fn generate_resource(
         subdomain = coredb_name,
         domain = domain
     );
-    let ingress_routes = generate_ingress_routes(appsvc, &resource_name, namespace, host_matcher);
+    let ingress_routes =
+        generate_ingress_routes(appsvc, &resource_name, namespace, host_matcher, coredb_name);
     AppServiceResources {
         deployment,
         name: resource_name,
         service,
         ingress_routes,
-    }
-}
-
-
-// generates Kubernetes IngressRoute template for an appService
-// maps the specified
-fn generate_ingress_routes(
-    appsvc: &AppService,
-    resource_name: &str,
-    namespace: &str,
-    host_matcher: String,
-) -> Option<Vec<IngressRouteRoutes>> {
-    match appsvc.routing.clone() {
-        Some(routings) => {
-            let mut routes: Vec<IngressRouteRoutes> = Vec::new();
-            for route in routings.iter() {
-                match route.ingress_path.clone() {
-                    Some(path) => {
-                        let matcher = format!("{host_matcher} && PathPrefix(`{}`)", path);
-                        let middlewares: Option<Vec<IngressRouteRoutesMiddlewares>> =
-                            route.middlewares.clone().map(|names| {
-                                names
-                                    .into_iter()
-                                    .map(|m| IngressRouteRoutesMiddlewares {
-                                        name: m,
-                                        namespace: Some(namespace.to_owned()),
-                                        ..IngressRouteRoutesMiddlewares::default()
-                                    })
-                                    .collect()
-                            });
-                        let route = IngressRouteRoutes {
-                            kind: IngressRouteRoutesKind::Rule,
-                            r#match: matcher.clone(),
-                            services: Some(vec![IngressRouteRoutesServices {
-                                name: resource_name.to_string(),
-                                port: Some(IntOrString::Int(route.port as i32)),
-                                namespace: Some(namespace.to_owned()),
-                                kind: Some(IngressRouteRoutesServicesKind::Service),
-                                ..IngressRouteRoutesServices::default()
-                            }]),
-                            middlewares: middlewares,
-                            priority: None,
-                        };
-                        routes.push(route);
-                    }
-                    None => {
-                        // do not create ingress when there is no path provided
-                        continue;
-                    }
-                }
-            }
-            Some(routes)
-        }
-        None => None,
     }
 }
 
