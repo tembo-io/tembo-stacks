@@ -85,7 +85,6 @@ fn generate_middlewares(
                 };
                 let tmw = TraefikMiddleware {
                     metadata: ObjectMeta {
-                        // TODO: add standard labels
                         name: Some(mw_name.clone()),
                         namespace: Some(namespace.to_owned()),
                         owner_references: Some(vec![oref.clone()]),
