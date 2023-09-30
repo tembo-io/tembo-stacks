@@ -3,16 +3,22 @@
 // kopium version: 0.15.0
 // note: deleted the "plugin" field.
 // defined at https://github.com/traefik/traefik-helm-chart/blob/v23.1.0/traefik/crds/traefik.containo.us_middlewares.yaml
+// added several Default impls
 
+use k8s_openapi::apimachinery::pkg::util::intstr::IntOrString;
 use kube::CustomResource;
 use schemars::JsonSchema;
-use serde::{Serialize, Deserialize};
+use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
-use k8s_openapi::apimachinery::pkg::util::intstr::IntOrString;
 
 /// MiddlewareSpec defines the desired state of a Middleware.
-#[derive(CustomResource, Serialize, Deserialize, Clone, Debug, JsonSchema)]
-#[kube(group = "traefik.containo.us", version = "v1alpha1", kind = "Middleware", plural = "middlewares")]
+#[derive(CustomResource, Serialize, Deserialize, Clone, Debug, Default, JsonSchema)]
+#[kube(
+    group = "traefik.containo.us",
+    version = "v1alpha1",
+    kind = "Middleware",
+    plural = "middlewares"
+)]
 #[kube(namespaced)]
 pub struct MiddlewareSpec {
     /// AddPrefix holds the add prefix middleware configuration. This middleware updates the path of a request before forwarding it. More info: https://doc.traefik.io/traefik/v2.9/middlewares/http/addprefix/
@@ -55,7 +61,11 @@ pub struct MiddlewareSpec {
     #[serde(default, skip_serializing_if = "Option::is_none", rename = "ipWhiteList")]
     pub ip_white_list: Option<MiddlewareIpWhiteList>,
     /// PassTLSClientCert holds the pass TLS client cert middleware configuration. This middleware adds the selected data from the passed client TLS certificate to a header. More info: https://doc.traefik.io/traefik/v2.9/middlewares/http/passtlsclientcert/
-    #[serde(default, skip_serializing_if = "Option::is_none", rename = "passTLSClientCert")]
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        rename = "passTLSClientCert"
+    )]
     pub pass_tls_client_cert: Option<MiddlewarePassTlsClientCert>,
     /// RateLimit holds the rate limit configuration. This middleware ensures that services will receive a fair amount of requests, and allows one to define what fair is. More info: https://doc.traefik.io/traefik/v2.9/middlewares/http/ratelimit/
     #[serde(default, skip_serializing_if = "Option::is_none", rename = "rateLimit")]
@@ -112,16 +122,32 @@ pub struct MiddlewareBasicAuth {
 #[derive(Serialize, Deserialize, Clone, Debug, JsonSchema)]
 pub struct MiddlewareBuffering {
     /// MaxRequestBodyBytes defines the maximum allowed body size for the request (in bytes). If the request exceeds the allowed size, it is not forwarded to the service, and the client gets a 413 (Request Entity Too Large) response. Default: 0 (no maximum).
-    #[serde(default, skip_serializing_if = "Option::is_none", rename = "maxRequestBodyBytes")]
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        rename = "maxRequestBodyBytes"
+    )]
     pub max_request_body_bytes: Option<i64>,
     /// MaxResponseBodyBytes defines the maximum allowed response size from the service (in bytes). If the response exceeds the allowed size, it is not forwarded to the client. The client gets a 500 (Internal Server Error) response instead. Default: 0 (no maximum).
-    #[serde(default, skip_serializing_if = "Option::is_none", rename = "maxResponseBodyBytes")]
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        rename = "maxResponseBodyBytes"
+    )]
     pub max_response_body_bytes: Option<i64>,
     /// MemRequestBodyBytes defines the threshold (in bytes) from which the request will be buffered on disk instead of in memory. Default: 1048576 (1Mi).
-    #[serde(default, skip_serializing_if = "Option::is_none", rename = "memRequestBodyBytes")]
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        rename = "memRequestBodyBytes"
+    )]
     pub mem_request_body_bytes: Option<i64>,
     /// MemResponseBodyBytes defines the threshold (in bytes) from which the response will be buffered on disk instead of in memory. Default: 1048576 (1Mi).
-    #[serde(default, skip_serializing_if = "Option::is_none", rename = "memResponseBodyBytes")]
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        rename = "memResponseBodyBytes"
+    )]
     pub mem_response_body_bytes: Option<i64>,
     /// RetryExpression defines the retry conditions. It is a logical combination of functions with operators AND (&&) and OR (||). More info: https://doc.traefik.io/traefik/v2.9/middlewares/http/buffering/#retryexpression
     #[serde(default, skip_serializing_if = "Option::is_none", rename = "retryExpression")]
@@ -167,10 +193,18 @@ pub struct MiddlewareCircuitBreaker {
 #[derive(Serialize, Deserialize, Clone, Debug, JsonSchema)]
 pub struct MiddlewareCompress {
     /// ExcludedContentTypes defines the list of content types to compare the Content-Type header of the incoming requests and responses before compressing.
-    #[serde(default, skip_serializing_if = "Option::is_none", rename = "excludedContentTypes")]
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        rename = "excludedContentTypes"
+    )]
     pub excluded_content_types: Option<Vec<String>>,
     /// MinResponseBodyBytes defines the minimum amount of bytes a response body must have to be compressed. Default: 1024.
-    #[serde(default, skip_serializing_if = "Option::is_none", rename = "minResponseBodyBytes")]
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        rename = "minResponseBodyBytes"
+    )]
     pub min_response_body_bytes: Option<i64>,
 }
 
@@ -231,7 +265,11 @@ pub struct MiddlewareErrorsService {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub port: Option<IntOrString>,
     /// ResponseForwarding defines how Traefik forwards the response from the upstream Kubernetes Service to the client.
-    #[serde(default, skip_serializing_if = "Option::is_none", rename = "responseForwarding")]
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        rename = "responseForwarding"
+    )]
     pub response_forwarding: Option<MiddlewareErrorsServiceResponseForwarding>,
     /// Scheme defines the scheme to use for the request to the upstream Kubernetes Service. It defaults to https when Kubernetes Service port is 443, http otherwise.
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -297,19 +335,35 @@ pub struct MiddlewareForwardAuth {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub address: Option<String>,
     /// AuthRequestHeaders defines the list of the headers to copy from the request to the authentication server. If not set or empty then all request headers are passed.
-    #[serde(default, skip_serializing_if = "Option::is_none", rename = "authRequestHeaders")]
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        rename = "authRequestHeaders"
+    )]
     pub auth_request_headers: Option<Vec<String>>,
     /// AuthResponseHeaders defines the list of headers to copy from the authentication server response and set on forwarded request, replacing any existing conflicting headers.
-    #[serde(default, skip_serializing_if = "Option::is_none", rename = "authResponseHeaders")]
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        rename = "authResponseHeaders"
+    )]
     pub auth_response_headers: Option<Vec<String>>,
     /// AuthResponseHeadersRegex defines the regex to match headers to copy from the authentication server response and set on forwarded request, after stripping all headers that match the regex. More info: https://doc.traefik.io/traefik/v2.9/middlewares/http/forwardauth/#authresponseheadersregex
-    #[serde(default, skip_serializing_if = "Option::is_none", rename = "authResponseHeadersRegex")]
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        rename = "authResponseHeadersRegex"
+    )]
     pub auth_response_headers_regex: Option<String>,
     /// TLS defines the configuration used to secure the connection to the authentication server.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub tls: Option<MiddlewareForwardAuthTls>,
     /// TrustForwardHeader defines whether to trust (ie: forward) all X-Forwarded-* headers.
-    #[serde(default, skip_serializing_if = "Option::is_none", rename = "trustForwardHeader")]
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        rename = "trustForwardHeader"
+    )]
     pub trust_forward_header: Option<bool>,
 }
 
@@ -325,33 +379,65 @@ pub struct MiddlewareForwardAuthTls {
     #[serde(default, skip_serializing_if = "Option::is_none", rename = "certSecret")]
     pub cert_secret: Option<String>,
     /// InsecureSkipVerify defines whether the server certificates should be validated.
-    #[serde(default, skip_serializing_if = "Option::is_none", rename = "insecureSkipVerify")]
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        rename = "insecureSkipVerify"
+    )]
     pub insecure_skip_verify: Option<bool>,
 }
 
 /// Headers holds the headers middleware configuration. This middleware manages the requests and responses headers. More info: https://doc.traefik.io/traefik/v2.9/middlewares/http/headers/#customrequestheaders
-#[derive(Serialize, Deserialize, Clone, Debug, JsonSchema)]
+#[derive(Serialize, Default, Deserialize, Clone, Debug, JsonSchema)]
 pub struct MiddlewareHeaders {
     /// AccessControlAllowCredentials defines whether the request can include user credentials.
-    #[serde(default, skip_serializing_if = "Option::is_none", rename = "accessControlAllowCredentials")]
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        rename = "accessControlAllowCredentials"
+    )]
     pub access_control_allow_credentials: Option<bool>,
     /// AccessControlAllowHeaders defines the Access-Control-Request-Headers values sent in preflight response.
-    #[serde(default, skip_serializing_if = "Option::is_none", rename = "accessControlAllowHeaders")]
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        rename = "accessControlAllowHeaders"
+    )]
     pub access_control_allow_headers: Option<Vec<String>>,
     /// AccessControlAllowMethods defines the Access-Control-Request-Method values sent in preflight response.
-    #[serde(default, skip_serializing_if = "Option::is_none", rename = "accessControlAllowMethods")]
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        rename = "accessControlAllowMethods"
+    )]
     pub access_control_allow_methods: Option<Vec<String>>,
     /// AccessControlAllowOriginList is a list of allowable origins. Can also be a wildcard origin "*".
-    #[serde(default, skip_serializing_if = "Option::is_none", rename = "accessControlAllowOriginList")]
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        rename = "accessControlAllowOriginList"
+    )]
     pub access_control_allow_origin_list: Option<Vec<String>>,
     /// AccessControlAllowOriginListRegex is a list of allowable origins written following the Regular Expression syntax (https://golang.org/pkg/regexp/).
-    #[serde(default, skip_serializing_if = "Option::is_none", rename = "accessControlAllowOriginListRegex")]
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        rename = "accessControlAllowOriginListRegex"
+    )]
     pub access_control_allow_origin_list_regex: Option<Vec<String>>,
     /// AccessControlExposeHeaders defines the Access-Control-Expose-Headers values sent in preflight response.
-    #[serde(default, skip_serializing_if = "Option::is_none", rename = "accessControlExposeHeaders")]
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        rename = "accessControlExposeHeaders"
+    )]
     pub access_control_expose_headers: Option<Vec<String>>,
     /// AccessControlMaxAge defines the time that a preflight request may be cached.
-    #[serde(default, skip_serializing_if = "Option::is_none", rename = "accessControlMaxAge")]
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        rename = "accessControlMaxAge"
+    )]
     pub access_control_max_age: Option<i64>,
     /// AddVaryHeader defines whether the Vary header is automatically added/updated when the AccessControlAllowOriginList is set.
     #[serde(default, skip_serializing_if = "Option::is_none", rename = "addVaryHeader")]
@@ -363,22 +449,46 @@ pub struct MiddlewareHeaders {
     #[serde(default, skip_serializing_if = "Option::is_none", rename = "browserXssFilter")]
     pub browser_xss_filter: Option<bool>,
     /// ContentSecurityPolicy defines the Content-Security-Policy header value.
-    #[serde(default, skip_serializing_if = "Option::is_none", rename = "contentSecurityPolicy")]
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        rename = "contentSecurityPolicy"
+    )]
     pub content_security_policy: Option<String>,
     /// ContentTypeNosniff defines whether to add the X-Content-Type-Options header with the nosniff value.
-    #[serde(default, skip_serializing_if = "Option::is_none", rename = "contentTypeNosniff")]
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        rename = "contentTypeNosniff"
+    )]
     pub content_type_nosniff: Option<bool>,
     /// CustomBrowserXSSValue defines the X-XSS-Protection header value. This overrides the BrowserXssFilter option.
-    #[serde(default, skip_serializing_if = "Option::is_none", rename = "customBrowserXSSValue")]
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        rename = "customBrowserXSSValue"
+    )]
     pub custom_browser_xss_value: Option<String>,
     /// CustomFrameOptionsValue defines the X-Frame-Options header value. This overrides the FrameDeny option.
-    #[serde(default, skip_serializing_if = "Option::is_none", rename = "customFrameOptionsValue")]
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        rename = "customFrameOptionsValue"
+    )]
     pub custom_frame_options_value: Option<String>,
     /// CustomRequestHeaders defines the header names and values to apply to the request.
-    #[serde(default, skip_serializing_if = "Option::is_none", rename = "customRequestHeaders")]
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        rename = "customRequestHeaders"
+    )]
     pub custom_request_headers: Option<BTreeMap<String, String>>,
     /// CustomResponseHeaders defines the header names and values to apply to the response.
-    #[serde(default, skip_serializing_if = "Option::is_none", rename = "customResponseHeaders")]
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        rename = "customResponseHeaders"
+    )]
     pub custom_response_headers: Option<BTreeMap<String, String>>,
     /// Deprecated: use PermissionsPolicy instead.
     #[serde(default, skip_serializing_if = "Option::is_none", rename = "featurePolicy")]
@@ -390,13 +500,21 @@ pub struct MiddlewareHeaders {
     #[serde(default, skip_serializing_if = "Option::is_none", rename = "frameDeny")]
     pub frame_deny: Option<bool>,
     /// HostsProxyHeaders defines the header keys that may hold a proxied hostname value for the request.
-    #[serde(default, skip_serializing_if = "Option::is_none", rename = "hostsProxyHeaders")]
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        rename = "hostsProxyHeaders"
+    )]
     pub hosts_proxy_headers: Option<Vec<String>>,
     /// IsDevelopment defines whether to mitigate the unwanted effects of the AllowedHosts, SSL, and STS options when developing. Usually testing takes place using HTTP, not HTTPS, and on localhost, not your production domain. If you would like your development environment to mimic production with complete Host blocking, SSL redirects, and STS headers, leave this as false.
     #[serde(default, skip_serializing_if = "Option::is_none", rename = "isDevelopment")]
     pub is_development: Option<bool>,
     /// PermissionsPolicy defines the Permissions-Policy header value. This allows sites to control browser features.
-    #[serde(default, skip_serializing_if = "Option::is_none", rename = "permissionsPolicy")]
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        rename = "permissionsPolicy"
+    )]
     pub permissions_policy: Option<String>,
     /// PublicKey is the public key that implements HPKP to prevent MITM attacks with forged certificates.
     #[serde(default, skip_serializing_if = "Option::is_none", rename = "publicKey")]
@@ -417,10 +535,18 @@ pub struct MiddlewareHeaders {
     #[serde(default, skip_serializing_if = "Option::is_none", rename = "sslRedirect")]
     pub ssl_redirect: Option<bool>,
     /// Deprecated: use EntryPoint redirection or RedirectScheme instead.
-    #[serde(default, skip_serializing_if = "Option::is_none", rename = "sslTemporaryRedirect")]
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        rename = "sslTemporaryRedirect"
+    )]
     pub ssl_temporary_redirect: Option<bool>,
     /// STSIncludeSubdomains defines whether the includeSubDomains directive is appended to the Strict-Transport-Security header.
-    #[serde(default, skip_serializing_if = "Option::is_none", rename = "stsIncludeSubdomains")]
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        rename = "stsIncludeSubdomains"
+    )]
     pub sts_include_subdomains: Option<bool>,
     /// STSPreload defines whether the preload flag is appended to the Strict-Transport-Security header.
     #[serde(default, skip_serializing_if = "Option::is_none", rename = "stsPreload")]
@@ -448,7 +574,11 @@ pub struct MiddlewareInFlightReqSourceCriterion {
     #[serde(default, skip_serializing_if = "Option::is_none", rename = "ipStrategy")]
     pub ip_strategy: Option<MiddlewareInFlightReqSourceCriterionIpStrategy>,
     /// RequestHeaderName defines the name of the header used to group incoming requests.
-    #[serde(default, skip_serializing_if = "Option::is_none", rename = "requestHeaderName")]
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        rename = "requestHeaderName"
+    )]
     pub request_header_name: Option<String>,
     /// RequestHost defines whether to consider the request Host as the source.
     #[serde(default, skip_serializing_if = "Option::is_none", rename = "requestHost")]
@@ -567,7 +697,11 @@ pub struct MiddlewarePassTlsClientCertInfoSubject {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub organization: Option<bool>,
     /// OrganizationalUnit defines whether to add the organizationalUnit information into the subject.
-    #[serde(default, skip_serializing_if = "Option::is_none", rename = "organizationalUnit")]
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        rename = "organizationalUnit"
+    )]
     pub organizational_unit: Option<bool>,
     /// Province defines whether to add the province information into the subject.
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -601,7 +735,11 @@ pub struct MiddlewareRateLimitSourceCriterion {
     #[serde(default, skip_serializing_if = "Option::is_none", rename = "ipStrategy")]
     pub ip_strategy: Option<MiddlewareRateLimitSourceCriterionIpStrategy>,
     /// RequestHeaderName defines the name of the header used to group incoming requests.
-    #[serde(default, skip_serializing_if = "Option::is_none", rename = "requestHeaderName")]
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        rename = "requestHeaderName"
+    )]
     pub request_header_name: Option<String>,
     /// RequestHost defines whether to consider the request Host as the source.
     #[serde(default, skip_serializing_if = "Option::is_none", rename = "requestHost")]
