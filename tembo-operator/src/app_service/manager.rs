@@ -95,6 +95,17 @@ fn generate_ingress_routes(
                 match route.ingress_path.clone() {
                     Some(path) => {
                         let matcher = format!("{host_matcher} && PathPrefix(`{}`)", path);
+                        let middlewares: Option<Vec<IngressRouteRoutesMiddlewares>> =
+                            route.middlewares.clone().map(|names| {
+                                names
+                                    .into_iter()
+                                    .map(|m| IngressRouteRoutesMiddlewares {
+                                        name: m,
+                                        namespace: Some(namespace.to_owned()),
+                                        ..IngressRouteRoutesMiddlewares::default()
+                                    })
+                                    .collect()
+                            });
                         let route = IngressRouteRoutes {
                             kind: IngressRouteRoutesKind::Rule,
                             r#match: matcher.clone(),
@@ -105,7 +116,7 @@ fn generate_ingress_routes(
                                 kind: Some(IngressRouteRoutesServicesKind::Service),
                                 ..IngressRouteRoutesServices::default()
                             }]),
-                            middlewares: None,
+                            middlewares: middlewares,
                             priority: None,
                         };
                         routes.push(route);
