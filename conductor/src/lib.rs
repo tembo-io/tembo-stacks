@@ -14,7 +14,7 @@ use k8s_openapi::api::core::v1::{Namespace, Secret};
 use k8s_openapi::api::networking::v1::NetworkPolicy;
 use kube::api::{DeleteParams, ListParams, Patch, PatchParams};
 
-use chrono::{SecondsFormat, Utc};
+use chrono::{DateTime, SecondsFormat, Utc};
 use kube::{Api, Client};
 use log::{debug, info};
 use rand::Rng;
@@ -172,7 +172,12 @@ pub async fn delete(client: Client, namespace: &str, name: &str) -> Result<(), C
     Ok(())
 }
 
-pub async fn create_namespace(client: Client, name: &str) -> Result<(), ConductorError> {
+pub async fn create_namespace(
+    client: Client,
+    name: &str,
+    organization_id: &str,
+    instance_id: &str,
+) -> Result<(), ConductorError> {
     let ns_api: Api<Namespace> = Api::all(client);
     // check if the namespace already exists
     let params = ListParams::default().fields(&format!("metadata.name={}", name));
@@ -190,6 +195,10 @@ pub async fn create_namespace(client: Client, name: &str) -> Result<(), Conducto
         "kind": "Namespace",
         "metadata": {
             "name": format!("{name}"),
+            "annotations": {
+                "tembo.io/instance_id": instance_id,
+                "tembo.io/organization_id": organization_id
+            },
             "labels": {
                 "tembo-pod-init.tembo.io/watch": "true"
             }
@@ -401,9 +410,10 @@ pub async fn restart_cnpg(
     client: Client,
     namespace: &str,
     cluster_name: &str,
+    msg_enqueued_at: DateTime<Utc>,
 ) -> Result<(), ConductorError> {
     let cluster: Api<CoreDB> = Api::namespaced(client, namespace);
-    let restart = Utc::now()
+    let restart = msg_enqueued_at
         .to_rfc3339_opts(SecondsFormat::Secs, true)
         .to_string();
 
@@ -416,6 +426,8 @@ pub async fn restart_cnpg(
             }
         }
     });
+
+    info!("Applying `restartedAt == {restart}` to the CoreDB resource. Setting `status.running = false`.");
 
     // The server will restart, therefore it won't be running
     patch_merge_cdb_status(

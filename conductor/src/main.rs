@@ -84,6 +84,9 @@ async fn run(metrics: CustomMetrics) -> Result<(), Box<dyn std::error::Error>> {
             }
         };
 
+        let (workspace_id, org_id, entity_name, instance_id) =
+            parse_event_id(read_msg.message.event_id.as_str())?;
+
         metrics
             .conductor_total
             .add(&opentelemetry::Context::current(), 1, &[]);
@@ -256,16 +259,14 @@ async fn run(metrics: CustomMetrics) -> Result<(), Box<dyn std::error::Error>> {
 
                 info!("{}: Creating namespace", read_msg.msg_id);
                 // create Namespace
-                create_namespace(client.clone(), &namespace).await?;
+                create_namespace(client.clone(), &namespace, &org_id, &instance_id).await?;
 
                 info!("{}: Creating network policy", read_msg.msg_id);
                 // create NetworkPolicy to allow internet access only
                 create_networkpolicy(client.clone(), &namespace).await?;
 
                 info!("{}: Generating spec", read_msg.msg_id);
-                // generate CoreDB spec based on values in body
-                let (workspace_id, org_id, entity_name, instance_id) =
-                    parse_event_id(read_msg.message.event_id.as_str())?;
+
                 let spec = generate_spec(
                     &workspace_id,
                     &org_id,
@@ -419,7 +420,8 @@ async fn run(metrics: CustomMetrics) -> Result<(), Box<dyn std::error::Error>> {
                         error!("error restarting statefulset: {:?}", err);
                     }
                 }
-                match restart_cnpg(client.clone(), &namespace, &namespace).await {
+                let msg_enqueued_at = read_msg.enqueued_at;
+                match restart_cnpg(client.clone(), &namespace, &namespace, msg_enqueued_at).await {
                     Ok(_) => {}
                     Err(err) => {
                         error!("error restarting cnpg: {:?}", err);
@@ -434,18 +436,7 @@ async fn run(metrics: CustomMetrics) -> Result<(), Box<dyn std::error::Error>> {
                         let status = coredb.status.as_ref().unwrap();
                         if !status.running {
                             // Instance is still rebooting, recheck this message later
-                            let _ = queue
-                                .set_vt::<CRUDevent>(
-                                    &control_plane_events_queue,
-                                    read_msg.msg_id,
-                                    REQUEUE_VT_SEC_SHORT,
-                                )
-                                .await?;
-                            metrics.conductor_requeues.add(
-                                &opentelemetry::Context::current(),
-                                1,
-                                &[KeyValue::new("queue_duration", "short")],
-                            );
+                            info!("{}: Instance is still rebooting", read_msg.msg_id);
                         }
 
                         let as_json = serde_json::to_string(&coredb);
