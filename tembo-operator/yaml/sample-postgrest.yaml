@@ -17,6 +17,8 @@ spec:
             config:
               # removes auth header from request
               Authorization: ""
+              # adds a header to the request
+              MyOtherHeader: "MyValue"
       env:
         - name: PGRST_DB_URI
           valueFromPlatform: ReadWriteConnection
