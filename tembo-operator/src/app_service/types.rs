@@ -102,16 +102,17 @@ fn preserve_arbitrary(_gen: &mut schemars::gen::SchemaGenerator) -> schemars::sc
 #[cfg(test)]
 mod tests {
     use super::*;
-    use serde_json::json;
 
     #[test]
     fn test_middleware_config() {
         let middleware = serde_json::json!({
-            "CustomRequestHeaders": {
+            "customRequestHeaders": {
                 "name": "my-custom-headers",
                 "config":
                     {
+                        //remove a header
                         "Authorization": "",
+                        // add a header
                         "My-New-Header": "yolo"
                     }
             },
