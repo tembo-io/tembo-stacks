@@ -6,10 +6,7 @@ use crate::{
     traefik::middlewares_crd::{Middleware as TraefikMiddleware, MiddlewareHeaders, MiddlewareSpec},
     Result,
 };
-use k8s_openapi::apimachinery::pkg::{
-    apis::meta::v1::{LabelSelector, OwnerReference},
-    util::intstr::IntOrString,
-};
+use k8s_openapi::apimachinery::pkg::{apis::meta::v1::OwnerReference, util::intstr::IntOrString};
 use kube::{
     api::{Api, ListParams, ObjectMeta, Patch, PatchParams},
     Client,
@@ -73,6 +70,10 @@ fn generate_middlewares(
     middlewares: Vec<Middleware>,
 ) -> Vec<MiddleWareWrapper> {
     let mut traefik_middlwares: Vec<MiddleWareWrapper> = Vec::new();
+    let mut labels: BTreeMap<String, String> = BTreeMap::new();
+    labels.insert("component".to_owned(), COMPONENT_NAME.to_string());
+    labels.insert("coredb.io/name".to_owned(), coredb_name.to_string());
+
     for mw in middlewares {
         let traefik_mw = match mw {
             // only supports CustomRequestHeaders middleware for now
@@ -88,6 +89,7 @@ fn generate_middlewares(
                         name: Some(mw_name.clone()),
                         namespace: Some(namespace.to_owned()),
                         owner_references: Some(vec![oref.clone()]),
+                        labels: Some(labels.clone()),
                         ..ObjectMeta::default()
                     },
                     spec: MiddlewareSpec {
