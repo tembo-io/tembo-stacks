@@ -14,6 +14,7 @@ pub struct CRUDevent {
     pub spec: Option<CoreDBSpec>,
 }
 
+
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq)]
 pub enum Event {
     Create,
