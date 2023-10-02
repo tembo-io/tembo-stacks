@@ -1,12 +1,12 @@
 use crate::secrets::types::AvailableSecret;
 use crate::{config, secrets};
 use actix_web::{get, web, Error, HttpRequest, HttpResponse};
+use k8s_openapi::api::core::v1::Namespace;
+use kube::api::ListParams;
+use kube::{Api, Client};
 use lazy_static::lazy_static;
 use log::{error, warn};
 use std::ops::Deref;
-use k8s_openapi::api::core::v1::Namespace;
-use kube::{Api, Client};
-use kube::api::ListParams;
 
 lazy_static! {
     pub static ref SECRETS_ALLOW_LIST: Vec<AvailableSecret> = {
@@ -103,11 +103,16 @@ pub async fn get_secret(
         Ok(client) => client,
         Err(_) => {
             error!("Failed to create Kubernetes client");
-            return Ok(HttpResponse::InternalServerError().json("Failed to create Kubernetes client"));
+            return Ok(
+                HttpResponse::InternalServerError().json("Failed to create Kubernetes client")
+            );
         }
     };
 
-    Ok(secrets::get_secret_data_from_kubernetes(kubernetes_client, namespace, requested_secret).await)
+    Ok(
+        secrets::get_secret_data_from_kubernetes(kubernetes_client, namespace, requested_secret)
+            .await,
+    )
 }
 
 #[utoipa::path(
@@ -169,29 +174,46 @@ pub async fn get_secret_v1(
         Ok(client) => client,
         Err(_) => {
             error!("Failed to create Kubernetes client");
-            return Ok(HttpResponse::InternalServerError().json("Failed to create Kubernetes client"));
+            return Ok(
+                HttpResponse::InternalServerError().json("Failed to create Kubernetes client")
+            );
         }
     };
     // Find namespace by labels
     let namespaces: Api<Namespace> = Api::all(kubernetes_client.clone());
 
-    let label_selector = format!("tembo.io/instance_id={},tembo.io/organization_id={}", instance_id, org_id);
+    let label_selector = format!(
+        "tembo.io/instance_id={},tembo.io/organization_id={}",
+        instance_id, org_id
+    );
     let lp = ListParams::default().labels(&label_selector);
     let ns_list = match namespaces.list(&lp).await {
         Ok(list) => list,
         Err(_) => {
-            error!("Failed to list namespaces with label selector: {}", label_selector);
+            error!(
+                "Failed to list namespaces with label selector: {}",
+                label_selector
+            );
             return Ok(HttpResponse::InternalServerError().json("Failed to list namespaces"));
         }
     };
 
     let namespace = match ns_list.iter().next() {
-        Some(namespace) => namespace.metadata.name.as_ref().expect("Namespaces always have names").to_string(),
+        Some(namespace) => namespace
+            .metadata
+            .name
+            .as_ref()
+            .expect("Namespaces always have names")
+            .to_string(),
         None => {
             error!("No namespace found with provided labels");
-            return Ok(HttpResponse::NotFound().json("Instance not found for provided org_id and instance_id"));
+            return Ok(HttpResponse::NotFound()
+                .json("Instance not found for provided org_id and instance_id"));
         }
     };
 
-    Ok(secrets::get_secret_data_from_kubernetes(kubernetes_client, namespace, &requested_secret).await)
+    Ok(
+        secrets::get_secret_data_from_kubernetes(kubernetes_client, namespace, requested_secret)
+            .await,
+    )
 }
