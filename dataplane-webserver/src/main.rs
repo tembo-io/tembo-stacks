@@ -36,6 +36,7 @@ async fn main() -> std::io::Result<()> {
         paths(
               secrets::get_secret,
               secrets::get_secret_names,
+              secrets::get_secret_v1,
               secrets::get_secret_names_v1,
               metrics::query_range,
         ),
@@ -95,6 +96,7 @@ async fn main() -> std::io::Result<()> {
             .service(
                 web::scope("/api/v1/orgs/{org_id}/instances/{instance_id}")
                     .service(secrets::get_secret_names_v1)
+                    .service(secrets::get_secret_v1)
             )
             .service(web::scope("/{namespace}/metrics").service(metrics::query_range))
             .service(
