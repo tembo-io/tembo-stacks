@@ -6,6 +6,7 @@ use kube::api::ListParams;
 use kube::{Api, Client};
 use lazy_static::lazy_static;
 use log::{error, warn};
+use regex::Regex;
 use std::ops::Deref;
 
 lazy_static! {
@@ -152,7 +153,7 @@ pub async fn get_secret_names_v1() -> Result<HttpResponse, Error> {
         (status = 403, description = "Not authorized for query"),
     )
 )]
-#[get("/{secret_name}")]
+#[get("/secrets/{secret_name}")]
 pub async fn get_secret_v1(
     _cfg: web::Data<config::Config>,
     _req: HttpRequest,
@@ -161,6 +162,11 @@ pub async fn get_secret_v1(
     // Requests are auth'd by org_id before entering this function
 
     let (org_id, instance_id, secret_name) = path.into_inner();
+
+    if !is_valid_id(&org_id) || !is_valid_id(&instance_id) {
+        return Ok(HttpResponse::BadRequest()
+            .json("org_id and instance_id must be lowercase alphanumeric or underscore only"));
+    }
 
     let requested_secret = match secrets::validate_requested_secret(&secret_name) {
         Ok(secret) => secret,
@@ -216,4 +222,9 @@ pub async fn get_secret_v1(
         secrets::get_secret_data_from_kubernetes(kubernetes_client, namespace, requested_secret)
             .await,
     )
+}
+
+fn is_valid_id(s: &str) -> bool {
+    let re = Regex::new(r"^[a-z0-9_]+$").unwrap();
+    re.is_match(s)
 }
