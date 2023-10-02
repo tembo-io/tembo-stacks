@@ -1325,7 +1325,7 @@ pub async fn get_fenced_pods(cdb: &CoreDB, ctx: Arc<Context>) -> Result<Option<V
 }
 
 // get_instance_replicas will look up cluster.spec.instances from Kubernetes and return i64 value
-#[instrument(skip(cdb, ctx), fields(trace_id, instance_name))]
+#[instrument(skip(cdb, ctx), fields(trace_id, instance_name = %cdb.name_any()))]
 async fn get_instance_replicas(cdb: &CoreDB, ctx: Arc<Context>) -> Result<i64, Action> {
     let namespace = match cdb.namespace() {
         Some(ns) => ns,
