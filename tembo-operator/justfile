@@ -51,6 +51,7 @@ install-tempo:
 install-minio:
 	helm upgrade --install \
 		minio minio/minio \
+		--version 5.0.13 \
 	  --namespace minio \
 		--create-namespace \
 		--values=./testdata/minio.yaml \
