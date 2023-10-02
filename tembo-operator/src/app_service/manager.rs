@@ -444,7 +444,7 @@ pub async fn reconcile_app_services(cdb: &CoreDB, ctx: Arc<Context>) -> Result<(
             .collect(),
         None => {
             debug!("No AppServices found in Instance: {}", ns);
-            vec![]
+            return Ok(());
         }
     };
 

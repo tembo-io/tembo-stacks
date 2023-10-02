@@ -3089,7 +3089,10 @@ mod test {
                 "name": cdb_name
             },
             "spec": {
-                "postgresExporterEnabled": false
+                "postgresExporterEnabled": false,
+                "appServices": [
+                    
+                ]
             }
         });
         let params = PatchParams::apply("tembo-integration-test");
