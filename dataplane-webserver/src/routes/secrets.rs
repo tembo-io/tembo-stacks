@@ -80,7 +80,6 @@ pub async fn get_secret_names() -> Result<HttpResponse, Error> {
         (status = 403, description = "Not authorized for query"),
     )
 )]
-#[deprecated]
 #[get("/secrets")]
 pub async fn get_secret_names_v1() -> Result<HttpResponse, Error> {
     let allow_list = SECRETS_ALLOW_LIST.deref();
