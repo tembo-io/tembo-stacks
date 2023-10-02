@@ -692,8 +692,7 @@ async fn pods_to_fence(cdb: &CoreDB, ctx: Arc<Context>) -> Result<Vec<String>, A
     let cdb_replica = cdb.spec.replicas;
 
     // using get_cluster_replicas function to lookup current replica count from Cluster object
-    let cluster_replica_result: Result<i64, Action> =
-        get_instance_replicas(cdb, ctx.clone(), &cdb.name_any()).await;
+    let cluster_replica_result = get_instance_replicas(cdb, ctx.clone(), &cdb.name_any()).await;
 
     let mut pod_names_to_fence = Vec::new();
 
@@ -1337,22 +1336,12 @@ async fn get_instance_replicas(cdb: &CoreDB, ctx: Arc<Context>, instance_name: &
     };
 
     let cluster: Api<Cluster> = Api::namespaced(ctx.client.clone(), &namespace);
-    let co = cluster.get(instance_name).await;
+    let co = cluster.get(instance_name).await.map_err(|e| {
+        error!("Error getting cluster: {}", e);
+        Action::requeue(Duration::from_secs(300))
+    })?;
 
-    match co {
-        Ok(cluster_resource) => {
-            // Directly get the instances since it's always present.
-            Ok(cluster_resource.spec.instances)
-        }
-        // Log the error message if the Kubernetes API call fails.
-        Err(e) => {
-            info!(
-                "Error fetching Cluster {}: {}. Possible new cluster detected.",
-                instance_name, e
-            );
-            Err(Action::requeue(Duration::from_secs(30)))
-        }
-    }
+    Ok(co.spec.instances)
 }
 
 // remove_pod_from_fenced_instances_annotation function will remove the pod name from the fencedInstances annotation
