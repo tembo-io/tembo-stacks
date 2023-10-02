@@ -149,7 +149,7 @@ fn find_trunk_installs_to_pod<'a>(cdb: &'a CoreDB, pod_name: &str) -> Vec<&'a Tr
 }
 
 // is_pod_fenced function checks if a pod is fenced and returns a bool or requeue action
-#[instrument(skip(cdb, ctx, pod_name) fields(trace_id))]
+#[instrument(skip(cdb, ctx, pod_name) fields(trace_id, pod_name))]
 async fn is_pod_fenced(cdb: &CoreDB, ctx: Arc<Context>, pod_name: &str) -> Result<bool, Action> {
     let coredb_name = cdb.metadata.name.as_deref().unwrap_or_default();
 
@@ -171,7 +171,7 @@ async fn is_pod_fenced(cdb: &CoreDB, ctx: Arc<Context>, pod_name: &str) -> Resul
     Ok(false)
 }
 
-#[instrument(skip(ctx, cdb) fields(trace_id))]
+#[instrument(skip(ctx, cdb))]
 pub async fn reconcile_trunk_installs(
     cdb: &CoreDB,
     ctx: Arc<Context>,
@@ -475,11 +475,10 @@ mod tests {
             .iter()
             .filter_map(|pod| pod.metadata.name.clone())
             .collect();
-        assert_eq!(deduplicated_names, vec![
-            "pod1".to_string(),
-            "pod2".to_string(),
-            "pod3".to_string()
-        ]);
+        assert_eq!(
+            deduplicated_names,
+            vec!["pod1".to_string(), "pod2".to_string(), "pod3".to_string()]
+        );
     }
 
     #[test]
