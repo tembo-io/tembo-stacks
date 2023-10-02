@@ -3091,7 +3091,7 @@ mod test {
             "spec": {
                 "postgresExporterEnabled": false,
                 "appServices": [
-                    
+
                 ]
             }
         });
