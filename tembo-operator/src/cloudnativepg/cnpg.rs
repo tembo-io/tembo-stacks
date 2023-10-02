@@ -750,6 +750,9 @@ pub async fn reconcile_cnpg(cdb: &CoreDB, ctx: Arc<Context>) -> Result<(), Actio
     debug!("Generating CNPG spec");
     let mut cluster = cnpg_cluster_from_cdb(cdb, Some(pods_to_fence), requires_load);
 
+    let cluster_api: Api<Cluster> = Api::namespaced(ctx.client.clone(), &cdb.metadata.namespace.clone().unwrap());
+    let current_cluster_spec = cluster_api.get(&cdb.metadata.name.clone().unwrap()).await;
+
     debug!("Getting namespace of cluster");
     let namespace = cluster
         .metadata
@@ -763,13 +766,19 @@ pub async fn reconcile_cnpg(cdb: &CoreDB, ctx: Arc<Context>) -> Result<(), Actio
         .clone()
         .expect("CNPG Cluster should always have a name");
 
-    let existing_restarted_at_annotation = cluster
-        .metadata
-        .annotations
-        .as_ref()
-        .and_then(|annotations| annotations.get(RESTARTED_AT));
+    let existing_restarted_at_annotation = match &current_cluster_spec {
+        Ok(current) => {
+            let result = current.metadata
+                .annotations
+                .as_ref()
+                .and_then(|annotations| annotations.get(RESTARTED_AT));
+            result
+        }
+        Err(_) => {None}
+    };
 
     let restart_annotation_updated = if let Some(restarted_at) = cdb.annotations().get(RESTARTED_AT) {
+        dbg!(&existing_restarted_at_annotation, &restarted_at);
         match existing_restarted_at_annotation {
             Some(timestamp) if timestamp == restarted_at => false,
             Some(_) | None => {
