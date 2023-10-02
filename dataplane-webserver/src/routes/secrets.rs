@@ -41,6 +41,7 @@ lazy_static! {
     };
 }
 
+/// Please use /api/v1/orgs/{org_id}/instances/{instance_id}/secrets
 #[utoipa::path(
     context_path = "/{namespace}/secrets",
     params(
@@ -56,12 +57,37 @@ lazy_static! {
         (status = 403, description = "Not authorized for query"),
     )
 )]
+#[deprecated]
 #[get("")]
 pub async fn get_secret_names() -> Result<HttpResponse, Error> {
     let allow_list = SECRETS_ALLOW_LIST.deref();
     Ok(HttpResponse::Ok().json(allow_list))
 }
 
+#[utoipa::path(
+    context_path = "/api/v1/orgs/{org_id}/instances/{instance_id}",
+    params(
+        ("org_id" = String, Path, example="org_2T7FJA0DpaNBnELVLU1IS4XzZG0", description = "Tembo Cloud Organization ID"),
+        ("instance_id" = String, Path, example="inst_1696253936968_TblNOY_6", description = "Tembo Cloud Instance ID"),
+    ),
+    responses(
+        (status = 200, description = "Map of secret names and the keys this user is authorized for", body = Vec<AvailableSecret>,
+        example = json!([
+            {"name":"app-role","possible_keys":["username","password"]},
+            {"name":"readonly-role","possible_keys":["username","password"]},
+            {"name":"superuser-role","possible_keys":["username","password"]},
+            {"name":"certificate","possible_keys":["ca.crt"]}])),
+        (status = 403, description = "Not authorized for query"),
+    )
+)]
+#[deprecated]
+#[get("/secrets")]
+pub async fn get_secret_names_v1() -> Result<HttpResponse, Error> {
+    let allow_list = SECRETS_ALLOW_LIST.deref();
+    Ok(HttpResponse::Ok().json(allow_list))
+}
+
+/// Please use /api/v1/orgs/{org_id}/instances/{instance_id}/secrets/{secret_name}
 #[utoipa::path(
     context_path = "/{namespace}/secrets",
     params(
@@ -74,6 +100,7 @@ pub async fn get_secret_names() -> Result<HttpResponse, Error> {
         (status = 403, description = "Not authorized for query"),
     )
 )]
+#[deprecated]
 #[get("/{secret_name}")]
 pub async fn get_secret(
     _cfg: web::Data<config::Config>,
