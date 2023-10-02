@@ -692,7 +692,7 @@ async fn pods_to_fence(cdb: &CoreDB, ctx: Arc<Context>) -> Result<Vec<String>, A
     let cdb_replica = cdb.spec.replicas;
 
     // using get_cluster_replicas function to lookup current replica count from Cluster object
-    let cluster_replica_result = get_instance_replicas(cdb, ctx.clone(), &cdb.name_any()).await;
+    let cluster_replica_result = get_instance_replicas(cdb, ctx.clone()).await;
 
     let mut pod_names_to_fence = Vec::new();
 
@@ -1326,17 +1326,17 @@ pub async fn get_fenced_pods(cdb: &CoreDB, ctx: Arc<Context>) -> Result<Option<V
 
 // get_instance_replicas will look up cluster.spec.instances from Kubernetes and return i64 value
 #[instrument(skip(cdb, ctx), fields(trace_id, instance_name))]
-async fn get_instance_replicas(cdb: &CoreDB, ctx: Arc<Context>, instance_name: &str) -> Result<i64, Action> {
+async fn get_instance_replicas(cdb: &CoreDB, ctx: Arc<Context>) -> Result<i64, Action> {
     let namespace = match cdb.namespace() {
         Some(ns) => ns,
         None => {
-            error!("Namespace is not set for CoreDB instance {}", instance_name);
+            error!("Namespace is not set for CoreDB instance {}", cdb.name_any());
             return Err(Action::requeue(Duration::from_secs(300)));
         }
     };
 
     let cluster: Api<Cluster> = Api::namespaced(ctx.client.clone(), &namespace);
-    let co = cluster.get(instance_name).await.map_err(|e| {
+    let co = cluster.get(&cdb.name_any()).await.map_err(|e| {
         error!("Error getting cluster: {}", e);
         Action::requeue(Duration::from_secs(300))
     })?;
