@@ -315,11 +315,13 @@ async fn execute_extension_install_command(
         version,
     ];
 
+    // If the pod is not up yet, do not try and install the extension
     if let Err(e) = cdb.log_pod_status(client.clone(), pod_name).await {
         warn!(
             "Could not fetch or log pod status for instance {}: {:?}",
             coredb_name, e
         );
+        return Err(true);
     }
 
     let result = cdb.exec(pod_name.to_string(), client.clone(), &cmd).await;
@@ -475,11 +477,10 @@ mod tests {
             .iter()
             .filter_map(|pod| pod.metadata.name.clone())
             .collect();
-        assert_eq!(deduplicated_names, vec![
-            "pod1".to_string(),
-            "pod2".to_string(),
-            "pod3".to_string()
-        ]);
+        assert_eq!(
+            deduplicated_names,
+            vec!["pod1".to_string(), "pod2".to_string(), "pod3".to_string()]
+        );
     }
 
     #[test]
