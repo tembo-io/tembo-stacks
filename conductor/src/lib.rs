@@ -394,16 +394,6 @@ pub async fn get_pg_conn(
     Ok(postgres_conn)
 }
 
-pub async fn restart_statefulset(
-    client: Client,
-    namespace: &str,
-    statefulset_name: &str,
-) -> Result<(), ConductorError> {
-    let sts: Api<StatefulSet> = Api::namespaced(client, namespace);
-    sts.restart(statefulset_name).await?;
-    Ok(())
-}
-
 pub async fn restart_cnpg(
     client: Client,
     namespace: &str,
