@@ -1,10 +1,10 @@
-use crate::{apis::coredb_types::CoreDB, Context, Error, Result};
+use crate::{apis::coredb_types::CoreDB, ingress_route_crd::IngressRouteRoutes, Context, Error, Result};
 use k8s_openapi::{
     api::{
         apps::v1::{Deployment, DeploymentSpec},
         core::v1::{
-            Container, ContainerPort, EnvVar, HTTPGetAction, PodSpec, PodTemplateSpec, Probe,
-            SecurityContext, Service, ServicePort, ServiceSpec,
+            Container, ContainerPort, EnvVar, EnvVarSource, HTTPGetAction, PodSpec, PodTemplateSpec, Probe,
+            SecretKeySelector, SecurityContext, Service, ServicePort, ServiceSpec,
         },
     },
     apimachinery::pkg::{
@@ -19,18 +19,23 @@ use kube::{
 };
 use std::{collections::BTreeMap, sync::Arc, time::Duration};
 
-use super::types::AppService;
-use tracing::*;
+use tracing::{debug, error, warn};
+
+
+use super::{
+    ingress::{generate_ingress_routes, reconcile_ingress},
+    types::{AppService, EnvVarRef, Middleware, COMPONENT_NAME},
+};
 
 // private wrapper to hold the AppService Resources
+#[derive(Clone, Debug)]
 struct AppServiceResources {
     deployment: Deployment,
     name: String,
     service: Option<Service>,
+    ingress_routes: Option<Vec<IngressRouteRoutes>>,
 }
 
-
-const COMPONENT_NAME: &str = "appService";
 
 // generates Kubernetes Deployment and Service templates for a AppService
 fn generate_resource(
@@ -38,19 +43,30 @@ fn generate_resource(
     coredb_name: &str,
     namespace: &str,
     oref: OwnerReference,
+    domain: String,
 ) -> AppServiceResources {
     let resource_name = format!("{}-{}", coredb_name, appsvc.name.clone());
     let service = appsvc
-        .ports
+        .routing
         .as_ref()
         .map(|_| generate_service(appsvc, coredb_name, &resource_name, namespace, oref.clone()));
     let deployment = generate_deployment(appsvc, coredb_name, &resource_name, namespace, oref);
+
+    let host_matcher = format!(
+        "Host(`{subdomain}.{domain}`)",
+        subdomain = coredb_name,
+        domain = domain
+    );
+    let ingress_routes =
+        generate_ingress_routes(appsvc, &resource_name, namespace, host_matcher, coredb_name);
     AppServiceResources {
         deployment,
         name: resource_name,
         service,
+        ingress_routes,
     }
 }
+
 
 // templates the Kubernetes Service for an AppService
 fn generate_service(
@@ -61,6 +77,7 @@ fn generate_service(
     oref: OwnerReference,
 ) -> Service {
     let mut selector_labels: BTreeMap<String, String> = BTreeMap::new();
+
     selector_labels.insert("app".to_owned(), resource_name.to_string());
     selector_labels.insert("component".to_owned(), COMPONENT_NAME.to_string());
     selector_labels.insert("coredb.io/name".to_owned(), coredb_name.to_string());
@@ -68,14 +85,16 @@ fn generate_service(
     let mut labels = selector_labels.clone();
     labels.insert("component".to_owned(), COMPONENT_NAME.to_owned());
 
-    let ports = match appsvc.ports.as_ref() {
-        Some(ports) => {
-            let ports: Vec<ServicePort> = ports
+    let ports = match appsvc.routing.as_ref() {
+        Some(routing) => {
+            let ports: Vec<ServicePort> = routing
                 .iter()
-                .map(|pm| ServicePort {
-                    port: pm.container as i32,
-                    name: Some(appsvc.name.clone()),
-                    target_port: Some(IntOrString::String(appsvc.name.clone())),
+                .map(|r| ServicePort {
+                    port: r.port as i32,
+                    // there can be more than one ServicePort per Service
+                    // these must be unique, so we'll use the port number
+                    name: Some(format!("http-{}", r.port)),
+                    target_port: None,
                     ..ServicePort::default()
                 })
                 .collect();
@@ -144,21 +163,16 @@ fn generate_deployment(
             };
             (Some(readiness_probe), Some(liveness_probe))
         }
-        None => {
-            // are there default probes we could configure when none are provided?
-            (None, None)
-        }
+        None => (None, None),
     };
 
-    // container port mapping
-    let container_ports: Option<Vec<ContainerPort>> = match appsvc.ports.as_ref() {
+    // container ports
+    let container_ports: Option<Vec<ContainerPort>> = match appsvc.routing.as_ref() {
         Some(ports) => {
             let container_ports: Vec<ContainerPort> = ports
                 .iter()
                 .map(|pm| ContainerPort {
-                    container_port: pm.container as i32,
-                    host_port: Some(pm.host as i32),
-                    name: Some(appsvc.name.clone()),
+                    container_port: pm.port as i32,
                     protocol: Some("TCP".to_string()),
                     ..ContainerPort::default()
                 })
@@ -174,22 +188,112 @@ fn generate_deployment(
         ..SecurityContext::default()
     };
 
-    let env_vars: Option<Vec<EnvVar>> = appsvc.env.clone().map(|env| {
-        env.into_iter()
-            .map(|(k, v)| EnvVar {
-                name: k,
-                value: Some(v),
-                ..EnvVar::default()
-            })
-            .collect()
-    });
-    // TODO: Container VolumeMounts, currently not in scope
-    // TODO: PodSpec volumes, currently not in scope
+    // ensure hyphen in in env var name (cdb name allows hyphen)
+    let cdb_name_env = coredb_name.to_uppercase().replace('-', "_");
+
+    // map postgres connection secrets to env vars
+    // mapping directly to env vars instead of using a SecretEnvSource
+    // so that we can select which secrets to map into appService
+    // generally, the system roles (e.g. postgres-exporter role) should not be injected to the appService
+    // these three are the only secrets that are mapped into the container
+    let r_conn = format!("{}_R_CONNECTION", cdb_name_env);
+    let ro_conn = format!("{}_RO_CONNECTION", cdb_name_env);
+    let rw_conn = format!("{}_RW_CONNECTION", cdb_name_env);
+
+    // map the secrets we inject to appService containers
+    let secret_envs = vec![
+        EnvVar {
+            name: r_conn,
+            value_from: Some(EnvVarSource {
+                secret_key_ref: Some(SecretKeySelector {
+                    name: Some(format!("{}-connection", coredb_name)),
+                    key: "r_uri".to_string(),
+                    ..SecretKeySelector::default()
+                }),
+                ..EnvVarSource::default()
+            }),
+            ..EnvVar::default()
+        },
+        EnvVar {
+            name: ro_conn,
+            value_from: Some(EnvVarSource {
+                secret_key_ref: Some(SecretKeySelector {
+                    name: Some(format!("{}-connection", coredb_name)),
+                    key: "rw_uri".to_string(),
+                    ..SecretKeySelector::default()
+                }),
+                ..EnvVarSource::default()
+            }),
+            ..EnvVar::default()
+        },
+        EnvVar {
+            name: rw_conn,
+            value_from: Some(EnvVarSource {
+                secret_key_ref: Some(SecretKeySelector {
+                    name: Some(format!("{}-connection", coredb_name)),
+                    key: "ro_uri".to_string(),
+                    ..SecretKeySelector::default()
+                }),
+                ..EnvVarSource::default()
+            }),
+            ..EnvVar::default()
+        },
+    ];
+
+    // map the user provided env vars
+    // users can map certain secrets to env vars of their choice
+    let mut env_vars: Vec<EnvVar> = Vec::new();
+    if let Some(envs) = appsvc.env.clone() {
+        for env in envs {
+            let evar: Option<EnvVar> = match (env.value, env.value_from_platform) {
+                // Value provided
+                (Some(e), _) => Some(EnvVar {
+                    name: env.name,
+                    value: Some(e),
+                    ..EnvVar::default()
+                }),
+                // EnvVarRef provided, and no Value
+                (None, Some(e)) => {
+                    let secret_key = match e {
+                        EnvVarRef::ReadOnlyConnection => "ro_uri",
+                        EnvVarRef::ReadWriteConnection => "rw_uri",
+                    };
+                    Some(EnvVar {
+                        name: env.name,
+                        value_from: Some(EnvVarSource {
+                            secret_key_ref: Some(SecretKeySelector {
+                                name: Some(format!("{}-connection", coredb_name)),
+                                key: secret_key.to_string(),
+                                ..SecretKeySelector::default()
+                            }),
+                            ..EnvVarSource::default()
+                        }),
+                        ..EnvVar::default()
+                    })
+                }
+                // everything missing, skip it
+                _ => {
+                    error!(
+                        "ns: {}, AppService: {}, env var: {} is missing value or valueFromPlatform",
+                        namespace, resource_name, env.name
+                    );
+                    None
+                }
+            };
+            if let Some(e) = evar {
+                env_vars.push(e);
+            }
+        }
+    }
+    // combine the secret env vars and those provided in spec by user
+    env_vars.extend(secret_envs);
+
 
     let pod_spec = PodSpec {
         containers: vec![Container {
             args: appsvc.args.clone(),
-            env: env_vars,
+            command: appsvc.command.clone(),
+            env: Some(env_vars),
             image: Some(appsvc.image.clone()),
             name: appsvc.name.clone(),
             ports: container_ports,
@@ -239,7 +343,8 @@ async fn get_appservice_deployments(
         .collect())
 }
 
-// gets all names of AppService Services in the namespace that have the label "component=AppService"
+// gets all names of AppService Services in the namespace
+// that have the label "component=AppService" and belong to the coredb
 async fn get_appservice_services(
     client: &Client,
     namespace: &str,
@@ -256,8 +361,9 @@ async fn get_appservice_services(
         .collect())
 }
 
+
 // determines AppService deployments
-fn appservice_to_delete(desired: Vec<String>, actual: Vec<String>) -> Option<Vec<String>> {
+pub fn to_delete(desired: Vec<String>, actual: Vec<String>) -> Option<Vec<String>> {
     let mut to_delete: Vec<String> = Vec::new();
     for a in actual {
         // if actual not in desired, put it in the delete vev
@@ -332,20 +438,24 @@ pub async fn reconcile_app_services(cdb: &CoreDB, ctx: Arc<Context>) -> Result<(
     let service_api: Api<Service> = Api::namespaced(client.clone(), &ns);
 
     let desired_deployments = match cdb.spec.app_services.clone() {
-        Some(appsvcs) => appsvcs.iter().map(|a| a.name.clone()).collect(),
+        Some(appsvcs) => appsvcs
+            .iter()
+            .map(|a| format!("{}-{}", coredb_name, a.name.clone()))
+            .collect(),
         None => {
             debug!("No AppServices found in Instance: {}", ns);
             vec![]
         }
     };
 
-    // only deploy the Kubernetes Service when there are port mappings
+    // only deploy the Kubernetes Service when there are routing configurations
     let desired_services = match cdb.spec.app_services.clone() {
         Some(appsvcs) => {
             let mut desired_svc: Vec<String> = Vec::new();
             for appsvc in appsvcs.iter() {
-                if appsvc.ports.as_ref().is_some() {
-                    desired_svc.push(appsvc.name.clone());
+                if appsvc.routing.as_ref().is_some() {
+                    let svc_name = format!("{}-{}", coredb_name, appsvc.name);
+                    desired_svc.push(svc_name.clone());
                 }
             }
             desired_svc
@@ -379,7 +489,7 @@ pub async fn reconcile_app_services(cdb: &CoreDB, ctx: Arc<Context>) -> Result<(
     };
 
     // reap any AppService Deployments that are no longer desired
-    if let Some(to_delete) = appservice_to_delete(desired_deployments, actual_deployments) {
+    if let Some(to_delete) = to_delete(desired_deployments, actual_deployments) {
         for d in to_delete {
             match deployment_api.delete(&d, &Default::default()).await {
                 Ok(_) => {
@@ -394,7 +504,7 @@ pub async fn reconcile_app_services(cdb: &CoreDB, ctx: Arc<Context>) -> Result<(
     }
 
     // reap any AppService  that are no longer desired
-    if let Some(to_delete) = appservice_to_delete(desired_services, actual_services) {
+    if let Some(to_delete) = to_delete(desired_services, actual_services) {
         for d in to_delete {
             match service_api.delete(&d, &Default::default()).await {
                 Ok(_) => {
@@ -412,17 +522,56 @@ pub async fn reconcile_app_services(cdb: &CoreDB, ctx: Arc<Context>) -> Result<(
         Some(appsvcs) => appsvcs,
         None => {
             debug!("ns: {}, No AppServices found in spec", ns);
-            return Ok(());
+            vec![]
         }
     };
 
+    let domain = match std::env::var("DATA_PLANE_BASEDOMAIN") {
+        Ok(domain) => domain,
+        Err(_) => {
+            warn!("`DATA_PLANE_BASEDOMAIN` not set -- assuming `localhost`");
+            "localhost".to_string()
+        }
+    };
     let resources: Vec<AppServiceResources> = appsvcs
         .iter()
-        .map(|appsvc| generate_resource(appsvc, &coredb_name, &ns, oref.clone()))
+        .map(|appsvc| generate_resource(appsvc, &coredb_name, &ns, oref.clone(), domain.to_owned()))
+        .collect();
+    let apply_errored = apply_resources(resources.clone(), &client, &ns).await;
+
+    let desired_routes: Vec<IngressRouteRoutes> = resources
+        .iter()
+        .filter_map(|r| r.ingress_routes.clone())
+        .flatten()
         .collect();
 
+    let desired_middlewares = appsvcs
+        .iter()
+        .filter_map(|appsvc| appsvc.middlewares.clone())
+        .flatten()
+        .collect::<Vec<Middleware>>();
 
-    let apply_errored = apply_resources(resources, &client, &ns).await;
+    match reconcile_ingress(
+        client.clone(),
+        &coredb_name,
+        &ns,
+        oref.clone(),
+        desired_routes,
+        desired_middlewares,
+    )
+    .await
+    {
+        Ok(_) => {
+            debug!("Updated/applied ingress for {}.{}", ns, coredb_name,);
+        }
+        Err(e) => {
+            error!(
+                "Failed to update/apply IngressRoute {}.{}: {}",
+                ns, coredb_name, e
+            );
+            has_errors = true;
+        }
+    }
 
     if has_errors || apply_errored {
         return Err(Action::requeue(Duration::from_secs(300)));

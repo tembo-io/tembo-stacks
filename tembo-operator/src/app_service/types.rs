@@ -1,8 +1,13 @@
+use std::collections::BTreeMap;
+
 use k8s_openapi::api::core::v1::ResourceRequirements;
 use schemars::JsonSchema;
-use serde::{Deserialize, Deserializer, Serialize};
-use std::collections::BTreeMap;
+use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
+
+pub const COMPONENT_NAME: &str = "appService";
+
+
 // defines a app container
 #[derive(Clone, Debug, Serialize, Deserialize, ToSchema, JsonSchema)]
 pub struct AppService {
@@ -10,65 +15,41 @@ pub struct AppService {
     pub image: String,
     pub args: Option<Vec<String>>,
     pub command: Option<Vec<String>>,
-    pub env: Option<BTreeMap<String, String>>,
-    // PortMapping is in format of String "host:container"
-    pub ports: Option<Vec<PortMapping>>,
+    pub env: Option<Vec<EnvVar>>,
     pub resources: Option<ResourceRequirements>,
     pub probes: Option<Probes>,
-    pub metrics: Option<Metrics>,
-}
-
-#[derive(Clone, Debug, PartialEq, Serialize, ToSchema)]
-pub struct PortMapping {
-    pub host: u16,
-    pub container: u16,
+    pub middlewares: Option<Vec<Middleware>>,
+    pub routing: Option<Vec<Routing>>,
 }
 
 
-// attempting to keep the CRD clean
-// this enables ports to be defined as "8080:8081" instead of
-// {"host": "8080", "container": "8081}
-impl<'de> Deserialize<'de> for PortMapping {
-    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
-    where
-        D: Deserializer<'de>,
-    {
-        let s: &str = Deserialize::deserialize(deserializer)?;
-        let parts: Vec<&str> = s.split(':').collect();
-        if parts.len() != 2 {
-            return Err(serde::de::Error::custom("invalid port mapping"));
-        }
-        let host = parts[0].parse().map_err(serde::de::Error::custom)?;
-        let container = parts[1].parse().map_err(serde::de::Error::custom)?;
-        Ok(PortMapping { host, container })
-    }
-}
-
-// required to have a custom JsonSchema trait implementation to support
-// the custom Deserialize trait implementation above.
-// PortMapping is represented as a string in the Schema, but deserializes
-// to the PortMapping struct
-impl JsonSchema for PortMapping {
-    fn schema_name() -> String {
-        "PortMapping".to_owned()
-    }
-
-    fn json_schema(_gen: &mut schemars::gen::SchemaGenerator) -> schemars::schema::Schema {
-        let schema = schemars::schema::SchemaObject {
-            instance_type: Some(schemars::schema::InstanceType::String.into()),
-            ..Default::default()
-        };
-        schema.into()
-    }
+// Secrets are injected into the container as environment variables
+// ths allows users to map these secrets to environment variable of their choice
+#[derive(Clone, Debug, Serialize, Deserialize, ToSchema, JsonSchema)]
+pub struct EnvVar {
+    pub name: String,
+    pub value: Option<String>,
+    #[serde(rename = "valueFromPlatform")]
+    pub value_from_platform: Option<EnvVarRef>,
 }
 
 
-#[allow(non_snake_case)]
-#[derive(Clone, Debug, Serialize, Deserialize, ToSchema, JsonSchema, PartialEq)]
-pub struct Metrics {
-    pub enabled: bool,
-    pub port: String,
-    pub path: String,
+// we will map these from secrets to env vars, if desired
+#[derive(Clone, Debug, Serialize, Deserialize, ToSchema, JsonSchema)]
+pub enum EnvVarRef {
+    ReadOnlyConnection,
+    ReadWriteConnection,
+}
+
+// if there is a Routing port, then a service is created using that Port
+// when ingress_path is present, an ingress is created. Otherwise, no ingress is created
+#[derive(Clone, Debug, Deserialize, PartialEq, Serialize, ToSchema, JsonSchema)]
+pub struct Routing {
+    pub port: u16,
+    #[serde(rename = "ingressPath")]
+    pub ingress_path: Option<String>,
+    // provide name of the middleware resources to apply to this route
+    pub middlewares: Option<Vec<String>>,
 }
 
 
@@ -79,27 +60,71 @@ pub struct Probes {
     pub liveness: Probe,
 }
 
-#[allow(non_snake_case)]
 #[derive(Clone, Debug, Serialize, Deserialize, ToSchema, JsonSchema, PartialEq)]
 pub struct Probe {
     pub path: String,
     pub port: String,
     // this should never be negative
+    #[serde(rename = "initialDelaySeconds")]
     pub initial_delay_seconds: u32,
 }
+
+#[derive(Clone, Debug, Serialize, Deserialize, ToSchema, JsonSchema, PartialEq)]
+pub struct Ingress {
+    pub enabled: bool,
+    pub path: Option<String>,
+}
+
+
+#[derive(Clone, Debug, Serialize, Deserialize, ToSchema, JsonSchema, PartialEq)]
+pub enum Middleware {
+    #[serde(rename = "customRequestHeaders")]
+    CustomRequestHeaders(HeaderConfig),
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize, ToSchema, JsonSchema, PartialEq)]
+pub struct HeaderConfig {
+    pub name: String,
+    #[schemars(schema_with = "preserve_arbitrary")]
+    pub config: BTreeMap<String, String>,
+}
+
+
+// source: https://github.com/kube-rs/kube/issues/844
+fn preserve_arbitrary(_gen: &mut schemars::gen::SchemaGenerator) -> schemars::schema::Schema {
+    let mut obj = schemars::schema::SchemaObject::default();
+    obj.extensions
+        .insert("x-kubernetes-preserve-unknown-fields".into(), true.into());
+    schemars::schema::Schema::Object(obj)
+}
+
 
 #[cfg(test)]
 mod tests {
     use super::*;
 
     #[test]
-    fn test_deserialize_port_mapping() {
-        let input = r#""8080:8081""#;
-        let expected = PortMapping {
-            host: 8080,
-            container: 8081,
-        };
-        let actual: PortMapping = serde_json::from_str(input).unwrap();
-        assert_eq!(actual, expected);
+    fn test_middleware_config() {
+        let middleware = serde_json::json!({
+            "customRequestHeaders": {
+                "name": "my-custom-headers",
+                "config":
+                    {
+                        //remove a header
+                        "Authorization": "",
+                        // add a header
+                        "My-New-Header": "yolo"
+                    }
+            },
+        });
+
+        let mw = serde_json::from_value::<Middleware>(middleware).unwrap();
+        match mw {
+            Middleware::CustomRequestHeaders(mw) => {
+                assert_eq!(mw.name, "my-custom-headers");
+                assert_eq!(mw.config["My-New-Header"], "yolo");
+                assert_eq!(mw.config["Authorization"], "");
+            }
+        }
     }
 }

@@ -39,39 +39,53 @@ spec:
                       nullable: true
                       type: array
                     env:
-                      additionalProperties:
-                        type: string
-                      nullable: true
-                      type: object
-                    image:
-                      type: string
-                    metrics:
-                      nullable: true
-                      properties:
-                        enabled:
-                          type: boolean
-                        path:
-                          type: string
-                        port:
-                          type: string
-                      required:
-                      - enabled
-                      - path
-                      - port
-                      type: object
-                    name:
-                      type: string
-                    ports:
                       items:
-                        type: string
+                        properties:
+                          name:
+                            type: string
+                          value:
+                            nullable: true
+                            type: string
+                          valueFromPlatform:
+                            enum:
+                            - ReadOnlyConnection
+                            - ReadWriteConnection
+                            nullable: true
+                            type: string
+                        required:
+                        - name
+                        type: object
                       nullable: true
                       type: array
+                    image:
+                      type: string
+                    middlewares:
+                      items:
+                        oneOf:
+                        - required:
+                          - customRequestHeaders
+                        properties:
+                          customRequestHeaders:
+                            properties:
+                              config:
+                                x-kubernetes-preserve-unknown-fields: true
+                              name:
+                                type: string
+                            required:
+                            - config
+                            - name
+                            type: object
+                        type: object
+                      nullable: true
+                      type: array
+                    name:
+                      type: string
                     probes:
                       nullable: true
                       properties:
                         liveness:
                           properties:
-                            initial_delay_seconds:
+                            initialDelaySeconds:
                               format: uint32
                               minimum: 0.0
                               type: integer
@@ -80,13 +94,13 @@ spec:
                             port:
                               type: string
                           required:
-                          - initial_delay_seconds
+                          - initialDelaySeconds
                           - path
                           - port
                           type: object
                         readiness:
                           properties:
-                            initial_delay_seconds:
+                            initialDelaySeconds:
                               format: uint32
                               minimum: 0.0
                               type: integer
@@ -95,7 +109,7 @@ spec:
                             port:
                               type: string
                           required:
-                          - initial_delay_seconds
+                          - initialDelaySeconds
                           - path
                           - port
                           type: object
@@ -120,6 +134,26 @@ spec:
                           description: 'Requests describes the minimum amount of compute resources required. If Requests is omitted for a container, it defaults to Limits if that is explicitly specified, otherwise to an implementation-defined value. More info: https://kubernetes.io/docs/concepts/configuration/manage-resources-containers/'
                           type: object
                       type: object
+                    routing:
+                      items:
+                        properties:
+                          ingressPath:
+                            nullable: true
+                            type: string
+                          middlewares:
+                            items:
+                              type: string
+                            nullable: true
+                            type: array
+                          port:
+                            format: uint16
+                            minimum: 0.0
+                            type: integer
+                        required:
+                        - port
+                        type: object
+                      nullable: true
+                      type: array
                   required:
                   - image
                   - name
@@ -132,6 +166,9 @@ spec:
                   encryption: AES256
                   retentionPolicy: '30'
                   schedule: 0 0 * * *
+                  endpointURL: null
+                  s3Credentials:
+                    inheritFromIAMRole: true
                 properties:
                   destinationPath:
                     default: s3://
@@ -141,10 +178,66 @@ spec:
                     default: AES256
                     nullable: true
                     type: string
+                  endpointURL:
+                    nullable: true
+                    type: string
                   retentionPolicy:
                     default: '30'
                     nullable: true
                     type: string
+                  s3Credentials:
+                    default:
+                      inheritFromIAMRole: true
+                    nullable: true
+                    properties:
+                      accessKeyId:
+                        nullable: true
+                        properties:
+                          key:
+                            type: string
+                          name:
+                            type: string
+                        required:
+                        - key
+                        - name
+                        type: object
+                      inheritFromIAMRole:
+                        nullable: true
+                        type: boolean
+                      region:
+                        nullable: true
+                        properties:
+                          key:
+                            type: string
+                          name:
+                            type: string
+                        required:
+                        - key
+                        - name
+                        type: object
+                      secretAccessKey:
+                        nullable: true
+                        properties:
+                          key:
+                            type: string
+                          name:
+                            type: string
+                        required:
+                        - key
+                        - name
+                        type: object
+                      sessionToken:
+                        nullable: true
+                        properties:
+                          key:
+                            type: string
+                          name:
+                            type: string
+                        required:
+                        - key
+                        - name
+                        type: object
+                    type: object
                   schedule:
                     default: 0 0 * * *
                     nullable: true
@@ -267,6 +360,71 @@ spec:
                       type: string
                     description: 'Requests describes the minimum amount of compute resources required. If Requests is omitted for a container, it defaults to Limits if that is explicitly specified, otherwise to an implementation-defined value. More info: https://kubernetes.io/docs/concepts/configuration/manage-resources-containers/'
                     type: object
+                type: object
+              restore:
+                nullable: true
+                properties:
+                  endpointURL:
+                    nullable: true
+                    type: string
+                  recoveryTargetTime:
+                    nullable: true
+                    type: string
+                  s3Credentials:
+                    nullable: true
+                    properties:
+                      accessKeyId:
+                        nullable: true
+                        properties:
+                          key:
+                            type: string
+                          name:
+                            type: string
+                        required:
+                        - key
+                        - name
+                        type: object
+                      inheritFromIAMRole:
+                        nullable: true
+                        type: boolean
+                      region:
+                        nullable: true
+                        properties:
+                          key:
+                            type: string
+                          name:
+                            type: string
+                        required:
+                        - key
+                        - name
+                        type: object
+                      secretAccessKey:
+                        nullable: true
+                        properties:
+                          key:
+                            type: string
+                          name:
+                            type: string
+                        required:
+                        - key
+                        - name
+                        type: object
+                      sessionToken:
+                        nullable: true
+                        properties:
+                          key:
+                            type: string
+                          name:
+                            type: string
+                        required:
+                        - key
+                        - name
+                        type: object
+                    type: object
+                  serverName:
+                    type: string
+                required:
+                - serverName
                 type: object
               runtime_config:
                 items:

@@ -1,15 +1,23 @@
 use crate::{
-    apis::coredb_types::CoreDB,
+    apis::{
+        coredb_types::CoreDB,
+        postgres_parameters::{ConfigValue, PgConfig},
+    },
     extensions::{
         types,
         types::{ExtensionInstallLocation, ExtensionInstallLocationStatus, ExtensionStatus},
     },
-    Context,
+    Context, RESTARTED_AT,
 };
-use kube::runtime::controller::Action;
+use chrono::{DateTime, Utc};
+use kube::{runtime::controller::Action, ResourceExt};
 use lazy_static::lazy_static;
 use regex::Regex;
-use std::{collections::HashMap, sync::Arc, time::Duration};
+use std::{
+    collections::{BTreeSet, HashMap},
+    sync::Arc,
+    time::Duration,
+};
 use tracing::{debug, error, info, warn};
 
 lazy_static! {
@@ -136,6 +144,87 @@ pub async fn list_extensions(cdb: &CoreDB, ctx: Arc<Context>, database: &str) ->
     Ok(parse_extensions(&result_string))
 }
 
+/// List all configuration parameters
+pub async fn list_config_params(cdb: &CoreDB, ctx: Arc<Context>) -> Result<Vec<PgConfig>, Action> {
+    let psql_out = cdb
+        .psql("SHOW ALL;".to_owned(), "postgres".to_owned(), ctx)
+        .await?;
+    let result_string = match psql_out.stdout {
+        None => {
+            error!(
+                "No stdout from psql when looking for config values for {}",
+                cdb.metadata.name.clone().unwrap()
+            );
+            return Err(Action::requeue(Duration::from_secs(300)));
+        }
+        Some(out) => out,
+    };
+    Ok(parse_config_params(&result_string))
+}
+
+/// Returns Ok if the given database is running (i.e. not restarting)
+pub async fn is_not_restarting(cdb: &CoreDB, ctx: Arc<Context>, database: &str) -> Result<(), Action> {
+    // chrono strftime declaration to parse Postgres timestamps
+    const PG_TIMESTAMP_DECL: &str = "%Y-%m-%d %H:%M:%S.%f%#z";
+
+    fn parse_psql_output(output: &str) -> Option<&str> {
+        output.lines().nth(2).map(str::trim)
+    }
+
+    let cdb_name = cdb.name_any();
+    let Some(restarted_at) = cdb.annotations().get(RESTARTED_AT) else {
+        // No restartedAt annotation, so we're not restarting
+        return Ok(());
+    };
+
+    let restarted_requested_at: DateTime<Utc> = DateTime::parse_from_rfc3339(restarted_at)
+        .map_err(|err| {
+            tracing::error!("{cdb_name}: Failed to deserialize DateTime from `restartedAt`: {err}");
+
+            Action::requeue(Duration::from_secs(300))
+        })?
+        .into();
+
+    let pg_postmaster = cdb
+        .psql(
+            "select pg_postmaster_start_time();".to_owned(),
+            database.to_owned(),
+            ctx,
+        )
+        .await?
+        .stdout
+        .ok_or_else(|| {
+            tracing::error!("{cdb_name}: select pg_postmaster_start_time() had no stdout");
+
+            Action::requeue(Duration::from_secs(300))
+        })?;
+
+    let pg_postmaster_start_time = parse_psql_output(&pg_postmaster).ok_or_else(|| {
+        tracing::error!("{cdb_name}: failed to parse pg_postmaster_start_time() output");
+
+        Action::requeue(Duration::from_secs(300))
+    })?;
+
+    let server_started_at: DateTime<Utc> = DateTime::parse_from_str(pg_postmaster_start_time, PG_TIMESTAMP_DECL)
+        .map_err(|err| {
+            tracing::error!(
+                "{cdb_name}: Failed to deserialize DateTime from `pg_postmaster_start_time`: {err}, received '{pg_postmaster_start_time}'"
+            );
+
+            Action::requeue(Duration::from_secs(300))
+        })?
+        .into();
+
+    if server_started_at >= restarted_requested_at {
+        // Server started after the moment we requested it to restart,
+        // meaning the restart is done
+        Ok(())
+    } else {
+        // Server hasn't even started restarting yet
+        Err(Action::requeue(Duration::from_secs(5)))
+    }
+}
+
 pub fn parse_extensions(psql_str: &str) -> Vec<ExtRow> {
     let mut extensions = vec![];
     for line in psql_str.lines().skip(2) {
@@ -184,6 +273,40 @@ pub fn parse_sql_output(psql_str: &str) -> Vec<String> {
     }
     let num_results = results.len();
     debug!("Found {} results", num_results);
+    results
+}
+
+/// Parse the output of `SHOW ALL` to get the parameter and its value. Return Vec<PgConfig>
+pub fn parse_config_params(psql_str: &str) -> Vec<PgConfig> {
+    let mut results = vec![];
+    for line in psql_str.lines().skip(2) {
+        let fields: Vec<&str> = line.split('|').map(|s| s.trim()).collect();
+        if fields.len() < 2 {
+            debug!("Skipping last line:{:?}", fields);
+            continue;
+        }
+        // If value is multiple, Set as ConfigValue::Multiple
+        if fields[1].contains(',') {
+            let values: BTreeSet<String> = fields[1].split(',').map(|s| s.trim().to_owned()).collect();
+            let config = PgConfig {
+                name: fields[0].to_owned(),
+                value: ConfigValue::Multiple(values),
+            };
+            results.push(config);
+            continue;
+        }
+        let config = PgConfig {
+            name: fields[0].to_owned(),
+            value: ConfigValue::Single(fields[1].to_owned()),
+        };
+        results.push(config);
+    }
+    let num_results = results.len();
+    debug!("Found {} config values", num_results);
+    // Log config values to debug
+    for result in &results {
+        debug!("Config value: {:?}", result);
+    }
     results
 }
 
@@ -297,7 +420,12 @@ pub async fn toggle_extension(
 
 #[cfg(test)]
 mod tests {
-    use crate::extensions::database_queries::{check_input, parse_extensions, parse_sql_output};
+    use crate::{
+        apis::postgres_parameters::PgConfig,
+        extensions::database_queries::{
+            check_input, parse_config_params, parse_extensions, parse_sql_output,
+        },
+    };
 
     #[test]
     fn test_parse_databases() {
@@ -364,6 +492,34 @@ mod tests {
             ext[8].description,
             "connect to other PostgreSQL databases from within a database".to_owned()
         );
+    }
+
+    #[test]
+    fn test_parse_config_params() {
+        let config_psql = "        name        | setting | unit | category | short_desc | extra_desc | context | vartype | source | min_val | max_val | enumvals | boot_val | reset_val | sourcefile | sourceline | pending_restart
+        ---------------------+---------+------+----------+------------+------------+---------+---------+--------+---------+---------+----------+----------+-----------+------------+------------+-----------------
+         allow_system_table_mods | off     |      | Developer |            |            | postmas | bool    |        |         |         |          | off      | off       |            |            | f
+         application_name      |         |      |          |            |            | user    | string  |        |         |         |          |          |           |            |            |
+         archive_command       |         |      |          |            |            | sighup  | string  |        |         |         |          |          |           |            |            |
+         archive_mode          | off     |      |          |            |            | sighup  | enum    |        |         |         | on,off   | off      | off       |            |            | f";
+        let config = parse_config_params(config_psql);
+        assert_eq!(config.len(), 4);
+        assert_eq!(config[0], PgConfig {
+            name: "allow_system_table_mods".to_owned(),
+            value: "off".parse().unwrap(),
+        });
+        assert_eq!(config[1], PgConfig {
+            name: "application_name".to_owned(),
+            value: "".parse().unwrap(),
+        });
+        assert_eq!(config[2], PgConfig {
+            name: "archive_command".to_owned(),
+            value: "".parse().unwrap(),
+        });
+        assert_eq!(config[3], PgConfig {
+            name: "archive_mode".to_owned(),
+            value: "off".parse().unwrap(),
+        });
     }
 
     #[test]

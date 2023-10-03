@@ -7,21 +7,18 @@ pub mod types;
 
 use crate::aws::cloudformation::{AWSConfigState, CloudFormationParams};
 use aws_sdk_cloudformation::config::Region;
-use controller::{
-    apis::coredb_types::{CoreDB, CoreDBSpec},
-    cloudnativepg::clusters::Cluster,
-};
+use controller::apis::coredb_types::{CoreDB, CoreDBSpec};
 use errors::ConductorError;
 use k8s_openapi::api::apps::v1::StatefulSet;
 use k8s_openapi::api::core::v1::{Namespace, Secret};
 use k8s_openapi::api::networking::v1::NetworkPolicy;
 use kube::api::{DeleteParams, ListParams, Patch, PatchParams};
 
-use chrono::{SecondsFormat, Utc};
+use chrono::{DateTime, SecondsFormat, Utc};
 use kube::{Api, Client};
 use log::{debug, info};
 use rand::Rng;
-use serde_json::{from_str, to_string, Value};
+use serde_json::{from_str, json, to_string, Value};
 
 pub type Result<T, E = ConductorError> = std::result::Result<T, E>;
 
@@ -175,7 +172,12 @@ pub async fn delete(client: Client, namespace: &str, name: &str) -> Result<(), C
     Ok(())
 }
 
-pub async fn create_namespace(client: Client, name: &str) -> Result<(), ConductorError> {
+pub async fn create_namespace(
+    client: Client,
+    name: &str,
+    organization_id: &str,
+    instance_id: &str,
+) -> Result<(), ConductorError> {
     let ns_api: Api<Namespace> = Api::all(client);
     // check if the namespace already exists
     let params = ListParams::default().fields(&format!("metadata.name={}", name));
@@ -194,7 +196,9 @@ pub async fn create_namespace(client: Client, name: &str) -> Result<(), Conducto
         "metadata": {
             "name": format!("{name}"),
             "labels": {
-                "tembo-pod-init.tembo.io/watch": "true"
+                "tembo-pod-init.tembo.io/watch": "true",
+                "tembo.io/instance_id": instance_id,
+                "tembo.io/organization_id": organization_id
             }
         }
     });
@@ -404,9 +408,10 @@ pub async fn restart_cnpg(
     client: Client,
     namespace: &str,
     cluster_name: &str,
+    msg_enqueued_at: DateTime<Utc>,
 ) -> Result<(), ConductorError> {
-    let cluster: Api<Cluster> = Api::namespaced(client, namespace);
-    let restart = Utc::now()
+    let cluster: Api<CoreDB> = Api::namespaced(client, namespace);
+    let restart = msg_enqueued_at
         .to_rfc3339_opts(SecondsFormat::Secs, true)
         .to_string();
 
@@ -420,6 +425,20 @@ pub async fn restart_cnpg(
         }
     });
 
+    info!("Applying `restartedAt == {restart}` to the CoreDB resource. Setting `status.running = false`.");
+
+    // The server will restart, therefore it won't be running
+    patch_merge_cdb_status(
+        &cluster,
+        cluster_name,
+        json!({
+            "status": {
+                "running": false
+            }
+        }),
+    )
+    .await?;
+
     // Use the patch method to update the Cluster resource
     let params = PatchParams::default();
     let _patch = cluster
@@ -427,6 +446,29 @@ pub async fn restart_cnpg(
         .await
         .map_err(ConductorError::KubeError)?;
     Ok(())
+}
+
+async fn patch_merge_cdb_status(
+    cdb: &Api<CoreDB>,
+    name: &str,
+    patch: serde_json::Value,
+) -> Result<(), ConductorError> {
+    let pp = PatchParams {
+        field_manager: Some("cntrlr".to_string()),
+        ..PatchParams::default()
+    };
+    let patch_status = Patch::Merge(patch);
+
+    match cdb.patch_status(name, &pp, &patch_status).await {
+        Ok(_) => {
+            debug!("Successfully updated CoreDB status for {}", name);
+            Ok(())
+        }
+        Err(err) => {
+            log::error!("Error updating CoreDB status for {}: {:?}", name, err);
+            Err(ConductorError::KubeError(err))
+        }
+    }
 }
 
 // Create a cloudformation stack for the database.
