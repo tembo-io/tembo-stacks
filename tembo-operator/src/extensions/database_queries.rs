@@ -18,7 +18,7 @@ use std::{
     sync::Arc,
     time::Duration,
 };
-use tracing::{debug, error, info, instrument, warn};
+use tracing::{debug, error, info, instrument, trace, warn};
 
 lazy_static! {
     static ref VALID_INPUT: Regex = Regex::new(r"^[a-zA-Z]([a-zA-Z0-9]*[-_]?)*[a-zA-Z0-9]+$").unwrap();
@@ -147,6 +147,7 @@ pub async fn list_extensions(cdb: &CoreDB, ctx: Arc<Context>, database: &str) ->
 }
 
 /// List all configuration parameters
+#[instrument(skip(cdb, ctx), fields(cdb_name = %cdb.name_any()))]
 pub async fn list_config_params(cdb: &CoreDB, ctx: Arc<Context>) -> Result<Vec<PgConfig>, Action> {
     let psql_out = cdb
         .psql("SHOW ALL;".to_owned(), "postgres".to_owned(), ctx)
@@ -230,7 +231,7 @@ pub async fn is_not_restarting(cdb: &CoreDB, ctx: Arc<Context>, database: &str) 
     }
 }
 
-#[instrument]
+#[instrument(skip(psql_str))]
 pub fn parse_extensions(psql_str: &str) -> Vec<ExtRow> {
     let mut extensions = vec![];
     for line in psql_str.lines().skip(2) {
@@ -264,7 +265,7 @@ pub async fn list_databases(cdb: &CoreDB, ctx: Arc<Context>) -> Result<Vec<Strin
     Ok(parse_sql_output(&result_string))
 }
 
-#[instrument]
+#[instrument(skip(psql_str))]
 pub fn parse_sql_output(psql_str: &str) -> Vec<String> {
     let mut results = vec![];
     for line in psql_str.lines().skip(2) {
@@ -285,7 +286,7 @@ pub fn parse_sql_output(psql_str: &str) -> Vec<String> {
 }
 
 /// Parse the output of `SHOW ALL` to get the parameter and its value. Return Vec<PgConfig>
-#[instrument]
+#[instrument(skip(psql_str))]
 pub fn parse_config_params(psql_str: &str) -> Vec<PgConfig> {
     let mut results = vec![];
     for line in psql_str.lines().skip(2) {
@@ -314,7 +315,7 @@ pub fn parse_config_params(psql_str: &str) -> Vec<PgConfig> {
     debug!("Found {} config values", num_results);
     // Log config values to debug
     for result in &results {
-        debug!("Config value: {:?}", result);
+        trace!("Config value: {:?}", result);
     }
     results
 }

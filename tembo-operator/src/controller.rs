@@ -631,13 +631,7 @@ impl CoreDB {
                 );
                 Ok(())
             }
-            Err(e) => {
-                error!(
-                    "Failed to get pod {} in namespace {}: {:?}",
-                    pod_name, namespace, e
-                );
-                Err(e)
-            }
+            Err(e) => Err(e),
         }
     }
 

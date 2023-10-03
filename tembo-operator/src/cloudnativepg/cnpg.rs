@@ -1337,7 +1337,7 @@ async fn get_instance_replicas(cdb: &CoreDB, ctx: Arc<Context>) -> Result<i64, A
 
     let cluster: Api<Cluster> = Api::namespaced(ctx.client.clone(), &namespace);
     let co = cluster.get(&cdb.name_any()).await.map_err(|e| {
-        error!("Error getting cluster: {}", e);
+        warn!("Error getting cluster, instance maybe starting: {}", e);
         Action::requeue(Duration::from_secs(300))
     })?;
 
