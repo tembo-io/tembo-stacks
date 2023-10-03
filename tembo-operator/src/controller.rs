@@ -478,6 +478,7 @@ impl CoreDB {
         let is_restore = self.spec.restore.is_some();
 
         // Retrieve the fenced instances from the primary pod's annotations
+        // and convert Option<Option<Vec<String>>> to Option<Vec<String>>
         let fenced_instances = primary
             .metadata
             .annotations
