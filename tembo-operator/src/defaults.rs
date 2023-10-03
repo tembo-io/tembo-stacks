@@ -2,8 +2,7 @@ use k8s_openapi::{api::core::v1::ResourceRequirements, apimachinery::pkg::api::r
 use std::collections::BTreeMap;
 
 use crate::{
-    apis::coredb_types::{Backup, ConnPooler, PgBouncer, S3Credentials, ServiceAccountTemplate},
-    cloudnativepg::poolers::PoolerPgbouncerPoolMode,
+    apis::coredb_types::{Backup, S3Credentials, ServiceAccountTemplate},
     extensions::types::{Extension, TrunkInstall},
 };
 
@@ -125,26 +124,6 @@ pub fn default_backup_schedule() -> Option<String> {
 // Default values from https://www.pgbouncer.org/config.html
 pub fn default_conn_pooler_enabled() -> bool {
     false
-}
-
-pub fn default_pgbouncer_max_client_conn() -> Option<i32> {
-    Some(100)
-}
-
-pub fn default_pgbouncer_default_pool_size() -> Option<i32> {
-    Some(20)
-}
-
-pub fn default_pgbouncer_server_idle_timeout() -> Option<i32> {
-    Some(600)
-}
-
-pub fn default_pgbouncer_server_lifetime() -> Option<i32> {
-    Some(3600)
-}
-
-pub fn default_pgbouncer_query_wait_timeout() -> Option<i32> {
-    Some(120)
 }
 
 // TODO: Add some sensible defaults for pgbouncer resources

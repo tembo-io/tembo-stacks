@@ -249,26 +249,16 @@ spec:
                     type: boolean
                   pooler:
                     properties:
-                      defaultPoolSize:
-                        default: 20
-                        format: int32
+                      parameters:
+                        additionalProperties:
+                          type: string
                         nullable: true
-                        type: integer
-                      maxClientConn:
-                        default: 100
-                        format: int32
-                        nullable: true
-                        type: integer
+                        type: object
                       poolMode:
                         enum:
                         - session
                         - transaction
                         type: string
-                      queryWaitTimeout:
-                        default: 120
-                        format: int32
-                        nullable: true
-                        type: integer
                       resources:
                         description: ResourceRequirements describes the compute resource requirements.
                         nullable: true
@@ -286,16 +276,6 @@ spec:
                             description: 'Requests describes the minimum amount of compute resources required. If Requests is omitted for a container, it defaults to Limits if that is explicitly specified, otherwise to an implementation-defined value. More info: https://kubernetes.io/docs/concepts/configuration/manage-resources-containers/'
                             type: object
                         type: object
-                      serverIdleTimeout:
-                        default: 600
-                        format: int32
-                        nullable: true
-                        type: integer
-                      serverLifetime:
-                        default: 3600
-                        format: int32
-                        nullable: true
-                        type: integer
                     required:
                     - poolMode
                     type: object

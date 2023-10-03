@@ -945,6 +945,7 @@ pub async fn reconcile_cnpg(cdb: &CoreDB, ctx: Arc<Context>) -> Result<(), Actio
 // Reconcile a Pooler
 async fn reconcile_pooler(cdb: &CoreDB, ctx: Arc<Context>) -> Result<(), Action> {
     let owner_reference = cdb.controller_owner_ref(&()).unwrap();
+
     let pooler = Pooler {
         metadata: ObjectMeta {
             name: Some(cdb.name_any() + "-pooler"),
@@ -960,7 +961,7 @@ async fn reconcile_pooler(cdb: &CoreDB, ctx: Arc<Context>) -> Result<(), Action>
             pgbouncer: PoolerPgbouncer {
                 auth_query: None,
                 auth_query_secret: None,
-                parameters: None,
+                parameters: cdb.spec.connPooler.pooler.parameters.clone(),
                 paused: None,
                 pg_hba: None,
                 pool_mode: cdb.spec.connPooler.pooler.poolMode.clone(),
