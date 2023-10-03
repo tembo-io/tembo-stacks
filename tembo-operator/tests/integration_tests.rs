@@ -3824,6 +3824,33 @@ mod test {
         let result = psql_with_retry(context.clone(), coredb_resource.clone(), "\\dx".to_string()).await;
         assert!(result.stdout.clone().unwrap().contains("plpgsql"));
 
+        // Assert that the extensions are installed on both replicas
+        let retrieved_pods_result = coredb_resource.pods_by_cluster(client.clone()).await;
+
+        let retrieved_pods = match retrieved_pods_result {
+            Ok(pods_list) => pods_list,
+            Err(e) => {
+                panic!("Failed to retrieve pods: {:?}", e);
+            }
+        };
+        for pod in &retrieved_pods {
+            let cmd = vec![
+                "/bin/sh".to_owned(),
+                "-c".to_owned(),
+                "ls /var/lib/postgresql/data/tembo/extension/pgmq.control".to_owned(),
+            ];
+            let pod_name = pod.metadata.name.clone().expect("Pod should have a name");
+            pod_ready_and_running(restore_pods.clone(), pod_name.clone()).await;
+            let result = run_command_in_container(
+                restore_pods.clone(),
+                pod_name,
+                cmd.clone(),
+                Some("postgres".to_string()),
+            )
+            .await;
+            assert!(result.contains("pgmq.control"));
+        }
+
         // Check to make sure the data from the original database is present
         let result = psql_with_retry(
             context.clone(),
