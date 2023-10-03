@@ -141,9 +141,9 @@ impl ConfigValue {
             (ConfigValue::Single(_), _) | (_, ConfigValue::Single(_)) => {
                 Err(MergeError::SingleValueNotAllowed)
             }
-            (ConfigValue::Multiple(set1), ConfigValue::Multiple(set2)) => {
-                let set = set1.union(&set2).cloned().collect();
-                Ok(ConfigValue::Multiple(set))
+            (ConfigValue::Multiple(mut set1), ConfigValue::Multiple(mut set2)) => {
+                set1.append(&mut set2);
+                Ok(ConfigValue::Multiple(set1))
             }
         }
     }
