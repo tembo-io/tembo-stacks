@@ -9,7 +9,7 @@ use crate::aws::cloudformation::{AWSConfigState, CloudFormationParams};
 use aws_sdk_cloudformation::config::Region;
 use controller::apis::coredb_types::{CoreDB, CoreDBSpec};
 use errors::ConductorError;
-use k8s_openapi::api::apps::v1::StatefulSet;
+
 use k8s_openapi::api::core::v1::{Namespace, Secret};
 use k8s_openapi::api::networking::v1::NetworkPolicy;
 use kube::api::{DeleteParams, ListParams, Patch, PatchParams};
@@ -18,7 +18,7 @@ use chrono::{DateTime, SecondsFormat, Utc};
 use kube::{Api, Client};
 use log::{debug, info};
 use rand::Rng;
-use serde_json::{from_str, json, to_string, Value};
+use serde_json::{from_str, to_string, Value};
 
 pub type Result<T, E = ConductorError> = std::result::Result<T, E>;
 
@@ -424,29 +424,6 @@ pub async fn restart_cnpg(
         .await
         .map_err(ConductorError::KubeError)?;
     Ok(())
-}
-
-async fn patch_merge_cdb_status(
-    cdb: &Api<CoreDB>,
-    name: &str,
-    patch: serde_json::Value,
-) -> Result<(), ConductorError> {
-    let pp = PatchParams {
-        field_manager: Some("cntrlr".to_string()),
-        ..PatchParams::default()
-    };
-    let patch_status = Patch::Merge(patch);
-
-    match cdb.patch_status(name, &pp, &patch_status).await {
-        Ok(_) => {
-            debug!("Successfully updated CoreDB status for {}", name);
-            Ok(())
-        }
-        Err(err) => {
-            log::error!("Error updating CoreDB status for {}: {:?}", name, err);
-            Err(ConductorError::KubeError(err))
-        }
-    }
 }
 
 // Create a cloudformation stack for the database.
