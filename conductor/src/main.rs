@@ -7,7 +7,7 @@ use conductor::{
     create_cloudformation, create_namespace, create_networkpolicy, create_or_update, delete,
     delete_cloudformation, delete_namespace, generate_rand_schedule, generate_spec,
     get_coredb_error_without_status, get_one, get_pg_conn, lookup_role_arn, parse_event_id,
-    restart_cnpg, types,
+    restart_coredb, types,
 };
 use controller::apis::coredb_types::{Backup, CoreDBSpec, S3Credentials, ServiceAccountTemplate};
 use k8s_openapi::apimachinery::pkg::apis::meta::v1::ObjectMeta;
@@ -20,6 +20,7 @@ use pgmq::{Message, PGMQueueExt};
 use std::env;
 use std::sync::{Arc, Mutex};
 use std::{thread, time};
+use std::error::Error;
 
 use crate::status_reporter::run_status_reporter;
 use conductor::routes::health::background_threads_running;
@@ -418,12 +419,19 @@ async fn run(metrics: CustomMetrics) -> Result<(), Box<dyn std::error::Error>> {
                 // move some operations after the Event match
                 info!("{}: handling instance restart", read_msg.msg_id);
                 let msg_enqueued_at = read_msg.enqueued_at;
-                match restart_cnpg(client.clone(), &namespace, &namespace, msg_enqueued_at).await {
-                    Ok(_) => {}
-                    Err(err) => {
-                        error!("error restarting cnpg: {:?}", err);
+                match restart_coredb(client.clone(), &namespace, &namespace, msg_enqueued_at).await {
+                    Ok(is_being_updated) => {
+                        if is_being_updated {
+                            requeue_short(&metrics, &control_plane_events_queue, &queue, &read_msg).await?;
+                            continue;
+                        }
                     }
-                }
+                    Err(_) => {
+                        error!("{}: Error restarting instance", read_msg.msg_id);
+                        requeue_short(&metrics, &control_plane_events_queue, &queue, &read_msg).await?;
+                        continue;
+                    }
+                };
 
                 let result = get_coredb_error_without_status(client.clone(), &namespace).await;
 
@@ -432,20 +440,7 @@ async fn run(metrics: CustomMetrics) -> Result<(), Box<dyn std::error::Error>> {
                         // Safety: we know status exists due to get_coredb_error_without_status
                         let status = coredb.status.as_ref().unwrap();
                         if !status.running {
-                            // Instance is still rebooting, recheck this message later
-                            let _ = queue
-                                .set_vt::<CRUDevent>(
-                                    &control_plane_events_queue,
-                                    read_msg.msg_id,
-                                    REQUEUE_VT_SEC_SHORT,
-                                )
-                                .await?;
-                            metrics.conductor_requeues.add(
-                                &opentelemetry::Context::current(),
-                                1,
-                                &[KeyValue::new("queue_duration", "short")],
-                            );
-
+                            requeue_short(&metrics, &control_plane_events_queue, &queue, &read_msg).await?;
                             continue;
                         }
 
@@ -455,11 +450,7 @@ async fn run(metrics: CustomMetrics) -> Result<(), Box<dyn std::error::Error>> {
                         coredb
                     }
                     Err(_) => {
-                        error!("error getting CoreDB status in {}: {:?}", namespace, result);
-                        metrics
-                            .conductor_errors
-                            .add(&opentelemetry::Context::current(), 1, &[]);
-
+                        requeue_short(&metrics, &control_plane_events_queue, &queue, &read_msg).await?;
                         continue;
                     }
                 };
@@ -503,6 +494,22 @@ async fn run(metrics: CustomMetrics) -> Result<(), Box<dyn std::error::Error>> {
 
         info!("{}: archived: {:?}", read_msg.msg_id, archived);
     }
+}
+
+async fn requeue_short(metrics: &CustomMetrics, control_plane_events_queue: &String, queue: &PGMQueueExt, read_msg: &Message<CRUDevent>) -> Result<(), Box<dyn Error>> {
+    let _ = queue
+        .set_vt::<CRUDevent>(
+            &control_plane_events_queue,
+            read_msg.msg_id,
+            REQUEUE_VT_SEC_SHORT,
+        )
+        .await?;
+    metrics.conductor_requeues.add(
+        &opentelemetry::Context::current(),
+        1,
+        &[KeyValue::new("queue_duration", "short")],
+    );
+    Ok(())
 }
 
 // https://github.com/rust-lang/rust-clippy/issues/6446
