@@ -1,5 +1,6 @@
 image:
-  tag: latest
+  # Set this back to latest after merge
+  tag: d83a1f7
 env:
   - name: ENABLE_INITIAL_BACKUP
     value: "false"
