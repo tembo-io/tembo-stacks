@@ -23,7 +23,10 @@ mod test {
     };
     use pgmq::{Message, PGMQueueExt};
 
-    use conductor::{get_coredb_error_without_status, restart_coredb, types::{self, StateToControlPlane}};
+    use conductor::{
+        get_coredb_error_without_status, restart_coredb,
+        types::{self, StateToControlPlane},
+    };
     use controller::extensions::types::{Extension, ExtensionInstallLocation};
     use controller::{
         apis::coredb_types::{CoreDB, CoreDBSpec},
@@ -322,9 +325,10 @@ mod test {
         // Once CNPG is running we want to restart
         let cluster_name = namespace.clone();
 
-        let mut is_being_updated = restart_coredb(client.clone(), &namespace, &cluster_name, Utc::now())
-            .await
-            .expect("failed restarting cnpg pod");
+        let mut is_being_updated =
+            restart_coredb(client.clone(), &namespace, &cluster_name, Utc::now())
+                .await
+                .expect("failed restarting cnpg pod");
 
         let mut is_ready = false;
         let mut current_iteration = 0;
@@ -333,7 +337,9 @@ mod test {
                 panic!("CNPG pod did not restart after about 50 seconds");
             }
             thread::sleep(time::Duration::from_secs(5));
-            let current_coredb = get_coredb_error_without_status(client.clone(), &namespace).await.unwrap();
+            let current_coredb = get_coredb_error_without_status(client.clone(), &namespace)
+                .await
+                .unwrap();
             if let Some(status) = current_coredb.status {
                 if status.running {
                     is_ready = true;

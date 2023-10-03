@@ -18,9 +18,9 @@ use opentelemetry::sdk::metrics::{controllers, processors, selectors};
 use opentelemetry::{global, KeyValue};
 use pgmq::{Message, PGMQueueExt};
 use std::env;
+use std::error::Error;
 use std::sync::{Arc, Mutex};
 use std::{thread, time};
-use std::error::Error;
 
 use crate::status_reporter::run_status_reporter;
 use conductor::routes::health::background_threads_running;
@@ -419,16 +419,19 @@ async fn run(metrics: CustomMetrics) -> Result<(), Box<dyn std::error::Error>> {
                 // move some operations after the Event match
                 info!("{}: handling instance restart", read_msg.msg_id);
                 let msg_enqueued_at = read_msg.enqueued_at;
-                match restart_coredb(client.clone(), &namespace, &namespace, msg_enqueued_at).await {
+                match restart_coredb(client.clone(), &namespace, &namespace, msg_enqueued_at).await
+                {
                     Ok(is_being_updated) => {
                         if is_being_updated {
-                            requeue_short(&metrics, &control_plane_events_queue, &queue, &read_msg).await?;
+                            requeue_short(&metrics, &control_plane_events_queue, &queue, &read_msg)
+                                .await?;
                             continue;
                         }
                     }
                     Err(_) => {
                         error!("{}: Error restarting instance", read_msg.msg_id);
-                        requeue_short(&metrics, &control_plane_events_queue, &queue, &read_msg).await?;
+                        requeue_short(&metrics, &control_plane_events_queue, &queue, &read_msg)
+                            .await?;
                         continue;
                     }
                 };
@@ -440,7 +443,8 @@ async fn run(metrics: CustomMetrics) -> Result<(), Box<dyn std::error::Error>> {
                         // Safety: we know status exists due to get_coredb_error_without_status
                         let status = coredb.status.as_ref().unwrap();
                         if !status.running {
-                            requeue_short(&metrics, &control_plane_events_queue, &queue, &read_msg).await?;
+                            requeue_short(&metrics, &control_plane_events_queue, &queue, &read_msg)
+                                .await?;
                             continue;
                         }
 
@@ -450,7 +454,8 @@ async fn run(metrics: CustomMetrics) -> Result<(), Box<dyn std::error::Error>> {
                         coredb
                     }
                     Err(_) => {
-                        requeue_short(&metrics, &control_plane_events_queue, &queue, &read_msg).await?;
+                        requeue_short(&metrics, &control_plane_events_queue, &queue, &read_msg)
+                            .await?;
                         continue;
                     }
                 };
@@ -496,7 +501,12 @@ async fn run(metrics: CustomMetrics) -> Result<(), Box<dyn std::error::Error>> {
     }
 }
 
-async fn requeue_short(metrics: &CustomMetrics, control_plane_events_queue: &String, queue: &PGMQueueExt, read_msg: &Message<CRUDevent>) -> Result<(), Box<dyn Error>> {
+async fn requeue_short(
+    metrics: &CustomMetrics,
+    control_plane_events_queue: &String,
+    queue: &PGMQueueExt,
+    read_msg: &Message<CRUDevent>,
+) -> Result<(), Box<dyn Error>> {
     let _ = queue
         .set_vt::<CRUDevent>(
             &control_plane_events_queue,

@@ -410,20 +410,32 @@ pub async fn restart_coredb(
         .await
         .map_err(ConductorError::KubeError)?;
     let mut is_being_updated = false;
-    match current_coredb.annotations().get("kubectl.kubernetes.io/restartedAt") {
+    match current_coredb
+        .annotations()
+        .get("kubectl.kubernetes.io/restartedAt")
+    {
         None => {
-            info!("No restart annotation found on the CoreDB resource, applying for first time: {}", namespace);
+            info!(
+                "No restart annotation found on the CoreDB resource, applying for first time: {}",
+                namespace
+            );
             is_being_updated = true;
         }
         Some(annotation) => {
             if annotation != restart {
-                info!("Annotation found on the CoreDB resource, updating from {} to {}: {}", annotation, restart, namespace);
+                info!(
+                    "Annotation found on the CoreDB resource, updating from {} to {}: {}",
+                    annotation, restart, namespace
+                );
                 is_being_updated = true;
             }
         }
     };
     if !is_being_updated {
-        info!("CoreDB resource already has the correct restart annotation: {}", namespace);
+        info!(
+            "CoreDB resource already has the correct restart annotation: {}",
+            namespace
+        );
         return Ok(is_being_updated);
     }
 
