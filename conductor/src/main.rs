@@ -66,7 +66,7 @@ async fn run(metrics: CustomMetrics) -> Result<(), Box<dyn std::error::Error>> {
     // Infer the runtime environment and try to create a Kubernetes Client
     let client = Client::try_default().await?;
 
-   loop {
+    loop {
         // Read from queue (check for new message)
         // messages that dont fit a CRUDevent will error
         // set visibility timeout to 90 seconds
