@@ -122,15 +122,36 @@ pub fn default_backup_schedule() -> Option<String> {
     Some("0 0 * * *".to_owned())
 }
 
-pub fn default_conn_pooler() -> ConnPooler {
-    ConnPooler {
-        enabled: false,
-        pooler: PgBouncer {
-            poolMode: PoolerPgbouncerPoolMode::Session,
-            maxClientConn: Some(100),
-        },
-    }
+// Default values from https://www.pgbouncer.org/config.html
+pub fn default_conn_pooler_enabled() -> bool {
+    false
 }
+
+pub fn default_pgbouncer_max_client_conn() -> Option<i32> {
+    Some(100)
+}
+
+pub fn default_pgbouncer_default_pool_size() -> Option<i32> {
+    Some(20)
+}
+
+pub fn default_pgbouncer_server_idle_timeout() -> Option<i32> {
+    Some(600)
+}
+
+pub fn default_pgbouncer_server_lifetime() -> Option<i32> {
+    Some(3600)
+}
+
+pub fn default_pgbouncer_query_wait_timeout() -> Option<i32> {
+    Some(120)
+}
+
+// TODO: Add some sensible defaults for pgbouncer resources
+pub fn default_pgbouncer_resources() -> Option<ResourceRequirements> {
+    None
+}
+
 pub fn default_s3_credentials() -> Option<S3Credentials> {
     Some(S3Credentials {
         inherit_from_iam_role: Some(true),

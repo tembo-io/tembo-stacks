@@ -113,7 +113,18 @@ pub struct ConnPooler {
 #[allow(non_snake_case)]
 pub struct PgBouncer {
     pub poolMode: PoolerPgbouncerPoolMode,
+    #[serde(default = "defaults::default_pgbouncer_max_client_conn")]
     pub maxClientConn: Option<i32>,
+    #[serde(default = "defaults::default_pgbouncer_default_pool_size")]
+    pub defaultPoolSize: Option<i32>,
+    #[serde(default = "defaults::default_pgbouncer_server_idle_timeout")]
+    pub serverIdleTimeout: Option<i32>,
+    #[serde(default = "defaults::default_pgbouncer_server_lifetime")]
+    pub serverLifetime: Option<i32>,
+    #[serde(default = "defaults::default_pgbouncer_query_wait_timeout")]
+    pub queryWaitTimeout: Option<i32>,
+    #[serde(default = "defaults::default_pgbouncer_resources")]
+    pub resources: Option<ResourceRequirements>,
 }
 
 /// Generate the Kubernetes wrapper struct `CoreDB` from our Spec and Status struct
@@ -180,7 +191,6 @@ pub struct CoreDBSpec {
     // configuration overrides, typically defined by the user
     pub override_configs: Option<Vec<PgConfig>>,
     // Connection pooler configuration
-    #[serde(default = "defaults::default_conn_pooler")]
     pub connPooler: ConnPooler,
     #[serde(rename = "appServices")]
     pub app_services: Option<Vec<AppService>>,
