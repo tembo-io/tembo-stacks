@@ -3560,7 +3560,53 @@ mod test {
                         "key": "MINIO_SECRET_KEY"
                         }
                     }
-                }
+                },
+                "trunk_installs": [
+                    {
+                        "name": "pg_partman",
+                        "version": "4.7.3",
+                    },
+                    {
+                        "name": "pgmq",
+                        "version": "0.10.0",
+                    },
+                    {
+                        "name": "pg_stat_statements",
+                        "version": "1.10.0",
+                    },
+                ],
+                "extensions": [
+                    {
+                        "name": "pg_partman",
+                        "description": "pg_partman extension",
+                        "locations": [{
+                            "enabled": false,
+                            "version": "4.7.3",
+                            "database": "postgres",
+                            "schema": "public"}
+                        ]
+                    },
+                    {
+                        "name": "pgmq",
+                        "description": "pgmq extension",
+                        "locations": [{
+                            "enabled": false,
+                            "version": "0.10.0",
+                            "database": "postgres",
+                            "schema": "public"}
+                        ]
+                    },
+                    {
+                        "name": "pg_stat_statements",
+                        "description": "pg_stat_statements extension",
+                        "locations": [{
+                            "enabled": false,
+                            "version": "1.10.0",
+                            "database": "postgres",
+                            "schema": "public"}
+                        ]
+                    },
+                ]
             }
         });
         let params = PatchParams::apply("tembo-integration-test");
@@ -3701,6 +3747,52 @@ mod test {
                         }
                     }
                 }
+                "trunk_installs": [
+                    {
+                        "name": "pg_partman",
+                        "version": "4.7.3",
+                    },
+                    {
+                        "name": "pgmq",
+                        "version": "0.10.0",
+                    },
+                    {
+                        "name": "pg_stat_statements",
+                        "version": "1.10.0",
+                    },
+                ],
+                "extensions": [
+                    {
+                        "name": "pg_partman",
+                        "description": "pg_partman extension",
+                        "locations": [{
+                            "enabled": false,
+                            "version": "4.7.3",
+                            "database": "postgres",
+                            "schema": "public"}
+                        ]
+                    },
+                    {
+                        "name": "pgmq",
+                        "description": "pgmq extension",
+                        "locations": [{
+                            "enabled": false,
+                            "version": "0.10.0",
+                            "database": "postgres",
+                            "schema": "public"}
+                        ]
+                    },
+                    {
+                        "name": "pg_stat_statements",
+                        "description": "pg_stat_statements extension",
+                        "locations": [{
+                            "enabled": false,
+                            "version": "1.10.0",
+                            "database": "postgres",
+                            "schema": "public"}
+                        ]
+                    },
+                ]
             }
         });
         let params = PatchParams::apply("tembo-integration-test");
