@@ -2,10 +2,10 @@ use k8s_openapi::{api::core::v1::ResourceRequirements, apimachinery::pkg::api::r
 use std::collections::BTreeMap;
 
 use crate::{
-    apis::coredb_types::{Backup, S3Credentials, ServiceAccountTemplate},
+    apis::coredb_types::{Backup, ConnPooler, PgBouncer, S3Credentials, ServiceAccountTemplate},
+    cloudnativepg::poolers::PoolerPgbouncerPoolMode,
     extensions::types::{Extension, TrunkInstall},
 };
-use crate::apis::coredb_types::ConnPooler;
 
 pub fn default_replicas() -> i32 {
     1
@@ -125,8 +125,10 @@ pub fn default_backup_schedule() -> Option<String> {
 pub fn default_conn_pooler() -> ConnPooler {
     ConnPooler {
         enabled: false,
-        // TODO(ianstanton) uncomment once PoolerSpec is slimmed down and exposed
-        // pooler: None,
+        pooler: PgBouncer {
+            poolMode: PoolerPgbouncerPoolMode::Session,
+            maxClientConn: Some(100),
+        },
     }
 }
 pub fn default_s3_credentials() -> Option<S3Credentials> {

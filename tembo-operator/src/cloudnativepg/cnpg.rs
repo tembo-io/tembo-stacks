@@ -28,7 +28,7 @@ use crate::{
             ClusterReplicationSlotsHighAvailability, ClusterResources, ClusterServiceAccountTemplate,
             ClusterServiceAccountTemplateMetadata, ClusterSpec, ClusterStorage, ClusterSuperuserSecret,
         },
-        poolers::{Pooler, PoolerCluster, PoolerPgbouncer, PoolerPgbouncerPoolMode, PoolerSpec, PoolerType},
+        poolers::{Pooler, PoolerCluster, PoolerPgbouncer, PoolerSpec, PoolerType},
         scheduledbackups::{
             ScheduledBackup, ScheduledBackupBackupOwnerReference, ScheduledBackupCluster, ScheduledBackupSpec,
         },
@@ -963,7 +963,7 @@ async fn reconcile_pooler(cdb: &CoreDB, ctx: Arc<Context>) -> Result<(), Action>
                 parameters: None,
                 paused: None,
                 pg_hba: None,
-                pool_mode: PoolerPgbouncerPoolMode::Session,
+                pool_mode: cdb.spec.connPooler.pooler.poolMode.clone(),
             },
             template: None,
             r#type: PoolerType::Rw,

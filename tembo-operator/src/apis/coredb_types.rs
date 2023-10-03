@@ -13,6 +13,7 @@ use k8s_openapi::{
     apimachinery::pkg::{api::resource::Quantity, apis::meta::v1::ObjectMeta},
 };
 
+use crate::cloudnativepg::poolers::PoolerPgbouncerPoolMode;
 use chrono::{DateTime, Utc};
 use kube::CustomResource;
 use schemars::JsonSchema;
@@ -105,8 +106,14 @@ pub struct Restore {
 #[allow(non_snake_case)]
 pub struct ConnPooler {
     pub enabled: bool,
-    // TODO(ianstanton) create a slimmed-down version of PoolerSpec before exposing in spec
-    // pub pooler: Option<PoolerSpec>,
+    pub pooler: PgBouncer,
+}
+
+#[derive(Deserialize, Serialize, Clone, Debug, JsonSchema, Default)]
+#[allow(non_snake_case)]
+pub struct PgBouncer {
+    pub poolMode: PoolerPgbouncerPoolMode,
+    pub maxClientConn: Option<i32>,
 }
 
 /// Generate the Kubernetes wrapper struct `CoreDB` from our Spec and Status struct
