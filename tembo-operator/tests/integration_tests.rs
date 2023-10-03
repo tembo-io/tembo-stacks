@@ -3746,7 +3746,7 @@ mod test {
                             "key": "MINIO_SECRET_KEY"
                         }
                     }
-                }
+                },
                 "trunk_installs": [
                     {
                         "name": "pg_partman",
