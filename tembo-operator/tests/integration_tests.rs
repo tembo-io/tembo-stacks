@@ -330,7 +330,6 @@ mod test {
         move |obj: Option<&Backup>| {
             if let Some(backup) = &obj {
                 if let Some(status) = &backup.status {
-                    println!("Backup status: {:?}", status.phase);
                     if status.phase.as_deref() == Some("completed") {
                         return true;
                     }
@@ -349,12 +348,8 @@ mod test {
 
         loop {
             let backup_result = backups.list(&lp).await;
-            println!("Backup result: {:?}", backup_result);
-
             let mut backup_completed = false;
-
             if let Ok(backup_list) = backup_result {
-                println!("Backups: {:?}", backup_list);
                 for backup in backup_list.items {
                     if let Some(backup_name) = &backup.metadata.name {
                         println!("Found backup: {}", backup_name);
@@ -384,8 +379,6 @@ mod test {
                     "Failed to find completed backup {} after waiting {} seconds",
                     name, TIMEOUT_SECONDS_BACKUP_COMPLETED
                 );
-                // Handle the timeout as per your application logic
-                // For example, retry, log an error, or return an Err result
                 break;
             }
 
