@@ -4,9 +4,7 @@ persistence:
   size: 10Gi
 resources:
   requests:
-    memory: 100Mi
-  limits:
-    memory: 2Gi
+    memory: ~
 users:
   - accessKey: tembo
     secretKey: tembo12345
