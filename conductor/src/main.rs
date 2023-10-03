@@ -28,6 +28,14 @@ use types::{CRUDevent, Event};
 
 mod status_reporter;
 
+// Amount of time to wait after requeueing a message for an expected failure,
+// where we will want to check often until it's ready.
+const REQUEUE_VT_SEC_SHORT: i32 = 5;
+
+// Amount of time to wait after requeueing a message for an unexpected failure
+// that we would want to try again after awhile.
+const REQUEUE_VT_SEC_LONG: i32 = 300;
+
 async fn run(metrics: CustomMetrics) -> Result<(), Box<dyn std::error::Error>> {
     // Read connection info from environment variable
     let pg_conn_url =
@@ -58,15 +66,7 @@ async fn run(metrics: CustomMetrics) -> Result<(), Box<dyn std::error::Error>> {
     // Infer the runtime environment and try to create a Kubernetes Client
     let client = Client::try_default().await?;
 
-    // Amount of time to wait after requeueing a message for an expected failure,
-    // where we will want to check often until it's ready.
-    const REQUEUE_VT_SEC_SHORT: i32 = 5;
-
-    // Amount of time to wait after requeueing a message for an unexpected failure
-    // that we would want to try again after awhile.
-    const REQUEUE_VT_SEC_LONG: i32 = 300;
-
-    loop {
+   loop {
         // Read from queue (check for new message)
         // messages that dont fit a CRUDevent will error
         // set visibility timeout to 90 seconds

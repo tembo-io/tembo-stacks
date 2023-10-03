@@ -422,7 +422,7 @@ pub async fn restart_coredb(
             is_being_updated = true;
         }
         Some(annotation) => {
-            if annotation != restart {
+            if annotation != &restart {
                 info!(
                     "Annotation found on the CoreDB resource, updating from {} to {}: {}",
                     annotation, restart, namespace
@@ -457,7 +457,7 @@ pub async fn restart_coredb(
         .patch(cluster_name, &params, &Patch::Merge(patch_json))
         .await
         .map_err(ConductorError::KubeError)?;
-    Ok(true);
+    Ok(true)
 }
 
 // Create a cloudformation stack for the database.
