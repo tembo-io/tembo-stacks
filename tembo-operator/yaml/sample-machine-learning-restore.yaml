@@ -28,7 +28,6 @@ spec:
       secretAccessKey:
         name: s3creds
         key: MINIO_SECRET_KEY
-  replicas: 2
   stop: false
   stack:
     name: MachineLearning
@@ -46,12 +45,10 @@ spec:
       version: 0.5.0
     - name: pgml
       version: 2.7.1
-    - name: pg_embedding
-      version: 0.1.0
     - name: pg_cron
       version: 1.5.2
     - name: pgmq
-      version: 0.14.2
+      version: 0.28.0
     - name: vectorize
       version: 0.0.2
     - name: pg_later
@@ -69,12 +66,6 @@ spec:
         - database: postgres
           enabled: true
           version: 2.7.1
-    # trunk project pg_embedding
-    - name: embedding
-      locations:
-        - database: postgres
-          enabled: false
-          version: 0.1.0
     - name: pg_cron
       description: pg_cron
       locations:
@@ -86,7 +77,7 @@ spec:
       locations:
         - database: postgres
           enabled: true
-          version: 0.14.2
+          version: 0.28.0
     - name: vectorize
       description: simple vector search
       locations:

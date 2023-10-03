@@ -292,7 +292,6 @@ impl CoreDB {
         let new_status = match self.spec.stop {
             false => {
                 if self.spec.restore.is_none() {
-                    debug!("Restoring from backup is not set for {}", self.name_any());
                     let primary_pod_cnpg = self.primary_pod_cnpg(ctx.client.clone()).await?;
 
                     if !is_postgres_ready().matches_object(Some(&primary_pod_cnpg)) {
@@ -484,7 +483,7 @@ impl CoreDB {
             .annotations
             .as_ref()
             .and_then(|ann| get_fenced_instances_from_annotations(ann).ok())
-            .flatten(); // This will convert Option<Option<Vec<String>>> to Option<Vec<String>>
+            .flatten();
 
         // Check if the primary pod is one of the fenced instances
         let primary_is_fenced = fenced_instances
