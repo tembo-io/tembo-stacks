@@ -425,19 +425,7 @@ pub async fn restart_cnpg(
         }
     });
 
-    info!("Applying `restartedAt == {restart}` to the CoreDB resource. Setting `status.running = false`.");
-
-    // The server will restart, therefore it won't be running
-    patch_merge_cdb_status(
-        &cluster,
-        cluster_name,
-        json!({
-            "status": {
-                "running": false
-            }
-        }),
-    )
-    .await?;
+    info!("Applying `restartedAt == {restart}` to the CoreDB resource.");
 
     // Use the patch method to update the Cluster resource
     let params = PatchParams::default();
