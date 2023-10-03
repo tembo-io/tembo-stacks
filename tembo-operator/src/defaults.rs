@@ -2,7 +2,7 @@ use k8s_openapi::{api::core::v1::ResourceRequirements, apimachinery::pkg::api::r
 use std::collections::BTreeMap;
 
 use crate::{
-    apis::coredb_types::{Backup, S3Credentials, ServiceAccountTemplate},
+    apis::coredb_types::{Backup, ConnPooler, S3Credentials, ServiceAccountTemplate},
     extensions::types::{Extension, TrunkInstall},
 };
 
@@ -121,9 +121,11 @@ pub fn default_backup_schedule() -> Option<String> {
     Some("0 0 * * *".to_owned())
 }
 
-// Default values from https://www.pgbouncer.org/config.html
-pub fn default_conn_pooler_enabled() -> bool {
-    false
+pub fn default_conn_pooler() -> ConnPooler {
+    ConnPooler {
+        enabled: false,
+        ..Default::default()
+    }
 }
 
 // TODO: Add some sensible defaults for pgbouncer resources

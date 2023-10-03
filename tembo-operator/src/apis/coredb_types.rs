@@ -113,6 +113,7 @@ pub struct ConnPooler {
 #[allow(non_snake_case)]
 pub struct PgBouncer {
     pub poolMode: PoolerPgbouncerPoolMode,
+    // Valid parameter values can be found at https://www.pgbouncer.org/config.html
     pub parameters: Option<BTreeMap<String, String>>,
     pub resources: Option<ResourceRequirements>,
 }
@@ -181,6 +182,7 @@ pub struct CoreDBSpec {
     // configuration overrides, typically defined by the user
     pub override_configs: Option<Vec<PgConfig>>,
     // Connection pooler configuration
+    #[serde(default = "defaults::default_conn_pooler")]
     pub connPooler: ConnPooler,
     #[serde(rename = "appServices")]
     pub app_services: Option<Vec<AppService>>,

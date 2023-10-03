@@ -244,6 +244,12 @@ spec:
                     type: string
                 type: object
               connPooler:
+                default:
+                  enabled: false
+                  pooler:
+                    poolMode: session
+                    parameters: null
+                    resources: null
                 properties:
                   enabled:
                     type: boolean
@@ -659,8 +665,6 @@ spec:
                 default: 999
                 format: int32
                 type: integer
-            required:
-            - connPooler
             type: object
           status:
             description: The status object of `CoreDB`
