@@ -325,10 +325,9 @@ mod test {
         // Once CNPG is running we want to restart
         let cluster_name = namespace.clone();
 
-        let mut _is_being_updated =
-            restart_coredb(client.clone(), &namespace, &cluster_name, Utc::now())
-                .await
-                .expect("failed restarting cnpg pod");
+        restart_coredb(client.clone(), &namespace, &cluster_name, Utc::now())
+            .await
+            .expect("failed restarting cnpg pod");
 
         let mut is_ready = false;
         let mut current_iteration = 0;

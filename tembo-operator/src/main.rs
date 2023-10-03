@@ -38,7 +38,7 @@ async fn app_main() -> anyhow::Result<()> {
             .service(health)
             .service(metrics)
     })
-    .bind("0.0.0.0:8080")?
+    .bind("0.0.0.0:8081")?
     .shutdown_timeout(5);
 
     // Both runtimes implements graceful shutdown, so poll until both are done
