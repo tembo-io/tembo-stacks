@@ -751,8 +751,7 @@ fn update_restarted_at(cdb: &CoreDB, maybe_cluster: Option<&Cluster>, new_spec: 
     };
 
     // Remember the previous value of the annotation, if any
-    let previous_restarted_at = maybe_cluster
-        .and_then(|cluster| cluster.annotations().get(RESTARTED_AT)).clone();
+    let previous_restarted_at = maybe_cluster.and_then(|cluster| cluster.annotations().get(RESTARTED_AT));
 
     // Forward the `restartedAt` annotation from CoreDB over to the CNPG cluster,
     // does not matter if changed or not.
@@ -886,7 +885,7 @@ pub async fn reconcile_cnpg(cdb: &CoreDB, ctx: Arc<Context>) -> Result<(), Actio
         }
     }
 
-   let ps = PatchParams::apply("cntrlr");
+    let ps = PatchParams::apply("cntrlr");
     let _o = cluster_api
         .patch(&name, &ps, &Patch::Apply(&cluster))
         .await
@@ -909,8 +908,11 @@ pub async fn reconcile_cnpg(cdb: &CoreDB, ctx: Arc<Context>) -> Result<(), Actio
                 }
             }),
         )
-            .await?;
-        info!("Updated status.running to false in {}, requeuing 10 seconds", &name);
+        .await?;
+        info!(
+            "Updated status.running to false in {}, requeuing 10 seconds",
+            &name
+        );
         return Err(Action::requeue(Duration::from_secs(10)));
     }
 

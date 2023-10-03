@@ -509,7 +509,7 @@ async fn requeue_short(
 ) -> Result<(), Box<dyn Error>> {
     let _ = queue
         .set_vt::<CRUDevent>(
-            &control_plane_events_queue,
+            control_plane_events_queue,
             read_msg.msg_id,
             REQUEUE_VT_SEC_SHORT,
         )
