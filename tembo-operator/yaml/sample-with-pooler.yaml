@@ -26,5 +26,8 @@ spec:
     enabled: true
     pooler:
       poolMode: transaction
-      parameters: ~
+      # Valid parameter values can be found at https://www.pgbouncer.org/config.html
+      parameters:
+        default_pool_size: "50"
+        max_client_conn: "5000"
       resources: ~
