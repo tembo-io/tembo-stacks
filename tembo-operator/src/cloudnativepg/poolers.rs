@@ -87,8 +87,8 @@ pub struct PoolerPgbouncerAuthQuerySecret {
 #[derive(Serialize, Deserialize, Clone, Debug, JsonSchema, Default)]
 pub enum PoolerPgbouncerPoolMode {
     #[serde(rename = "session")]
-    #[default]
     Session,
+    #[default]
     #[serde(rename = "transaction")]
     Transaction,
 }

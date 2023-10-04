@@ -2,11 +2,10 @@ use k8s_openapi::{api::core::v1::ResourceRequirements, apimachinery::pkg::api::r
 use std::collections::BTreeMap;
 
 use crate::{
-    apis::coredb_types::{Backup, ConnPooler, S3Credentials, ServiceAccountTemplate},
+    apis::coredb_types::{Backup, ConnPooler, PgBouncer, S3Credentials, ServiceAccountTemplate},
+    cloudnativepg::poolers::PoolerPgbouncerPoolMode,
     extensions::types::{Extension, TrunkInstall},
 };
-use crate::apis::coredb_types::PgBouncer;
-use crate::cloudnativepg::poolers::PoolerPgbouncerPoolMode;
 
 pub fn default_replicas() -> i32 {
     1
