@@ -7,7 +7,7 @@ use crate::{
     cloudnativepg::{
         backups::Backup,
         cnpg::{
-            cnpg_cluster_from_cdb, get_fenced_instances_from_annotations, get_fenced_pods, reconcile_cnpg,
+            cnpg_cluster_from_cdb, get_fenced_instances_from_annotations, reconcile_cnpg,
             reconcile_cnpg_scheduled_backup,
         },
     },
@@ -291,91 +291,29 @@ impl CoreDB {
 
         let new_status = match self.spec.stop {
             false => {
-                if self.spec.restore.is_none() {
-                    let primary_pod_cnpg = self.primary_pod_cnpg(ctx.client.clone()).await?;
+                let (trunk_installs, extensions) =
+                    reconcile_extensions(self, ctx.clone(), &coredbs, &name).await?;
 
-                    if !is_postgres_ready().matches_object(Some(&primary_pod_cnpg)) {
-                        debug!(
-                            "Did not find postgres ready {}, waiting a short period",
-                            self.name_any()
-                        );
-                        return Ok(Action::requeue(Duration::from_secs(5)));
+                let patch_status = json!({
+                    "apiVersion": "coredb.io/v1alpha1",
+                    "kind": "CoreDB",
+                    "status": {
+                        "running": true
                     }
+                });
+                patch_cdb_status_merge(&coredbs, &name, patch_status).await?;
+                let recovery_time = self.get_recovery_time(ctx.clone()).await?;
 
-                    let patch_status = json!({
-                        "apiVersion": "coredb.io/v1alpha1",
-                        "kind": "CoreDB",
-                        "status": {
-                            "running": true
-                        }
-                    });
-                    patch_cdb_status_merge(&coredbs, &name, patch_status).await?;
-
-                    let (trunk_installs, extensions) =
-                        reconcile_extensions(self, ctx.clone(), &coredbs, &name).await?;
-
-                    let recovery_time = self.get_recovery_time(ctx.clone()).await?;
-
-                    let current_config_values = get_current_config_values(self, ctx.clone()).await?;
-                    CoreDBStatus {
-                        running: true,
-                        extensionsUpdating: false,
-                        storage: Some(self.spec.storage.clone()),
-                        extensions: Some(extensions),
-                        trunk_installs: Some(trunk_installs),
-                        resources: Some(self.spec.resources.clone()),
-                        runtime_config: Some(current_config_values),
-                        first_recoverability_time: recovery_time,
-                    }
-                } else {
-                    match get_fenced_pods(self, ctx.clone()).await {
-                        Ok(Some(fenced_pods)) => {
-                            let patch_status = json!({
-                                "apiVersion": "coredb.io/v1alpha1",
-                                "kind": "CoreDB",
-                                "status": {
-                                    "running": true
-                                }
-                            });
-                            debug!(
-                                "Fenced pods ({:?}) found during restore for instance: {}",
-                                fenced_pods,
-                                self.name_any()
-                            );
-                            patch_cdb_status_merge(&coredbs, &name, patch_status).await?;
-
-                            let (trunk_installs, extensions) =
-                                reconcile_extensions(self, ctx.clone(), &coredbs, &name).await?;
-
-                            let recovery_time = self.get_recovery_time(ctx.clone()).await?;
-
-                            let current_config_values = get_current_config_values(self, ctx.clone()).await?;
-
-                            CoreDBStatus {
-                                running: true,
-                                extensionsUpdating: false,
-                                storage: Some(self.spec.storage.clone()),
-                                extensions: Some(extensions),
-                                trunk_installs: Some(trunk_installs),
-                                resources: Some(self.spec.resources.clone()),
-                                runtime_config: Some(current_config_values),
-                                first_recoverability_time: recovery_time,
-                            }
-                        }
-                        Ok(None) | Err(_) => CoreDBStatus {
-                            running: true,
-                            extensionsUpdating: false,
-                            storage: Some(self.spec.storage.clone()),
-                            extensions: self.status.clone().and_then(|f| f.extensions),
-                            trunk_installs: self.status.clone().and_then(|f| f.trunk_installs),
-                            resources: Some(self.spec.resources.clone()),
-                            runtime_config: None,
-                            first_recoverability_time: self
-                                .status
-                                .as_ref()
-                                .and_then(|f| f.first_recoverability_time),
-                        },
-                    }
+                let current_config_values = get_current_config_values(self, ctx.clone()).await?;
+                CoreDBStatus {
+                    running: true,
+                    extensionsUpdating: false,
+                    storage: Some(self.spec.storage.clone()),
+                    extensions: Some(extensions),
+                    trunk_installs: Some(trunk_installs),
+                    resources: Some(self.spec.resources.clone()),
+                    runtime_config: Some(current_config_values),
+                    first_recoverability_time: recovery_time,
                 }
             }
             true => {

@@ -28,6 +28,7 @@ spec:
       secretAccessKey:
         name: s3creds
         key: MINIO_SECRET_KEY
+  replicas: 2
   stop: false
   stack:
     name: MachineLearning
