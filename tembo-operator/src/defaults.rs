@@ -1,6 +1,5 @@
 use k8s_openapi::{api::core::v1::ResourceRequirements, apimachinery::pkg::api::resource::Quantity};
 use std::collections::BTreeMap;
-use serde::de::Unexpected::Str;
 
 use crate::{
     apis::coredb_types::{Backup, ConnPooler, S3Credentials, ServiceAccountTemplate},
