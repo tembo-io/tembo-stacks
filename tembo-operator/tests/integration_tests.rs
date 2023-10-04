@@ -3377,8 +3377,17 @@ mod test {
     #[ignore]
     async fn functional_test_status_configs() {
         async fn runtime_cfg(coredbs: &Api<CoreDB>, name: &str) -> Option<Vec<PgConfig>> {
-            let spec = coredbs.get(name).await.expect("spec not found");
-            spec.status.expect("Expected status to be present").runtime_config
+            let started_waiting = Utc::now();
+            let max_wait_time = chrono::Duration::seconds(45);
+
+            while Utc::now().signed_duration_since(started_waiting) <= max_wait_time {
+                let coredb = coredbs.get(name).await.expect("spec not found");
+                if coredb.status.is_some() {
+                    return coredb.status.unwrap().runtime_config.clone();
+                }
+                tokio::time::sleep(Duration::from_secs(2)).await;
+            }
+            panic!("Status was not populated fast enough");
         }
 
         // Initialize the Kubernetes client
