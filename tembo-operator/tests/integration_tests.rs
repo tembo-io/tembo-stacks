@@ -474,7 +474,7 @@ mod test {
         // Initialize the Kubernetes client
         let client = kube_client().await;
         let state = State::default();
-        let _context = state.create_context(client.clone());
+        let context = state.create_context(client.clone());
 
         // Configurations
         let mut rng = rand::thread_rng();
@@ -525,7 +525,7 @@ mod test {
         });
         let params = PatchParams::apply("tembo-integration-test");
         let patch = Patch::Apply(&coredb_json);
-        let _coredb_resource = coredbs.patch(name, &params, &patch).await.unwrap();
+        let coredb_resource = coredbs.patch(name, &params, &patch).await.unwrap();
 
         // Wait for CNPG Pod to be created
         let pod_name = format!("{}-1", name);
@@ -541,7 +541,16 @@ mod test {
 
         pod_ready_and_running(pods.clone(), exporter_pod_name.clone()).await;
 
-        let coredb_resource = coredbs.patch(name, &params, &patch).await.unwrap();
+        let _ = wait_until_psql_contains(
+            context.clone(),
+            coredb_resource.clone(),
+            "\\dx".to_string(),
+            "pg_jsonschema".to_string(),
+            false,
+        )
+        .await;
+
+        let coredb_resource = coredbs.get(name).await.unwrap();
         let mut found_extension = false;
         for extension in coredb_resource.status.unwrap().extensions.unwrap() {
             for location in extension.locations {
