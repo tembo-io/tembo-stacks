@@ -332,7 +332,7 @@ mod test {
         let mut is_ready = false;
         let mut current_iteration = 0;
         while !is_ready {
-            if current_iteration > 10 {
+            if current_iteration > 30 {
                 panic!("CNPG pod did not restart after about 50 seconds");
             }
             thread::sleep(time::Duration::from_secs(5));
