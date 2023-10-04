@@ -333,7 +333,7 @@ mod test {
         let mut current_iteration = 0;
         while !is_ready {
             if current_iteration > 30 {
-                panic!("CNPG pod did not restart after about 50 seconds");
+                panic!("CNPG pod did not restart after about 150 seconds");
             }
             thread::sleep(time::Duration::from_secs(5));
             let current_coredb = get_coredb_error_without_status(client.clone(), &namespace)
