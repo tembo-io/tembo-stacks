@@ -247,13 +247,18 @@ spec:
                 default:
                   enabled: false
                   pooler:
-                    poolMode: session
+                    poolMode: transaction
                     parameters: null
                     resources: null
                 properties:
                   enabled:
+                    default: false
                     type: boolean
                   pooler:
+                    default:
+                      poolMode: transaction
+                      parameters: null
+                      resources: null
                     properties:
                       parameters:
                         additionalProperties:
@@ -285,9 +290,6 @@ spec:
                     required:
                     - poolMode
                     type: object
-                required:
-                - enabled
-                - pooler
                 type: object
               extensions:
                 default: []

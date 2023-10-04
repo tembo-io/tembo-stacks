@@ -105,7 +105,9 @@ pub struct Restore {
 #[derive(Deserialize, Serialize, Clone, Debug, JsonSchema, Default)]
 #[allow(non_snake_case)]
 pub struct ConnPooler {
+    #[serde(default = "defaults::default_conn_pooler_enabled")]
     pub enabled: bool,
+    #[serde(default = "defaults::default_pgbouncer")]
     pub pooler: PgBouncer,
 }
 
