@@ -798,7 +798,7 @@ fn update_restarted_at(cdb: &CoreDB, maybe_cluster: Option<&Cluster>, new_spec: 
     restart_annotation_updated
 }
 
-#[instrument(skip(cdb, ctx) fields(trace_id))]
+#[instrument(skip(cdb, cluster) fields(trace_id))]
 fn did_restarted_at_change(cdb: &CoreDB, cluster: &Cluster) -> bool {
     let existing_restarted_at_annotation = cluster
         .metadata
