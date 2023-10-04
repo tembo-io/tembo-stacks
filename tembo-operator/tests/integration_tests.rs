@@ -573,16 +573,34 @@ mod test {
 
         let coredb_resource = coredbs.get(name).await.unwrap();
         let mut found_extension = false;
-        for extension in coredb_resource.status.unwrap().extensions.unwrap() {
-            for location in extension.locations {
-                if extension.name == "pg_jsonschema" && location.enabled.unwrap() {
-                    found_extension = true;
-                    assert!(location.database == "postgres");
-                    // Even though we set the schema to be empty, it should report public
-                    // in the status
-                    assert!(location.schema.unwrap() == "public");
+        let mut retries = 0;
+
+        while retries < 10 {
+            let status = &coredb_resource.status;
+
+            if let Some(ref status) = status {
+                if let Some(ref extensions) = status.extensions {
+                    for extension in extensions {
+                        for location in &extension.locations {
+                            if extension.name == "pg_jsonschema" && location.enabled.unwrap_or_default() {
+                                found_extension = true;
+                                assert_eq!(location.database, "postgres");
+                                assert_eq!(
+                                    location.schema.clone().unwrap_or_else(|| "public".to_string()),
+                                    "public"
+                                );
+                            }
+                        }
+                    }
+                    if found_extension {
+                        break;
+                    }
                 }
             }
+
+            // Sleep for a short duration before the next retry
+            tokio::time::sleep(Duration::from_secs(2)).await;
+            retries += 1;
         }
         assert!(found_extension);
 

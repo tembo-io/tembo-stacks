@@ -798,27 +798,6 @@ fn update_restarted_at(cdb: &CoreDB, maybe_cluster: Option<&Cluster>, new_spec: 
     restart_annotation_updated
 }
 
-#[instrument(skip(cdb, cluster) fields(trace_id))]
-fn did_restarted_at_change(cdb: &CoreDB, cluster: &Cluster) -> bool {
-    let existing_restarted_at_annotation = cluster
-        .metadata
-        .annotations
-        .as_ref()
-        .and_then(|annotations| annotations.get(RESTARTED_AT));
-
-    let Some(cdb_restarted_at) = cdb.annotations().get(RESTARTED_AT) else {
-        return false;
-    };
-
-    let name = cdb.metadata.name.clone().unwrap();
-    info!("{name}: Checking for restartedAt: CNPG has {existing_restarted_at_annotation:?}, CoreDB has {cdb_restarted_at}");
-
-    match existing_restarted_at_annotation {
-        Some(cluster_timestamp) if cluster_timestamp == cdb_restarted_at => false,
-        Some(_) | None => true,
-    }
-}
-
 #[instrument(skip(cdb, ctx) fields(trace_id, instance_name = %cdb.name_any()))]
 pub async fn reconcile_cnpg(cdb: &CoreDB, ctx: Arc<Context>) -> Result<(), Action> {
     let pods_to_fence = pods_to_fence(cdb, ctx.clone()).await?;
@@ -1270,14 +1249,7 @@ pub async fn get_fenced_pods(cdb: &CoreDB, ctx: Arc<Context>) -> Result<Option<V
             fenced_instances, instance_name
         );
 
-        // Get the primary pods name
-        let primary_pod_name = match cdb.primary_pod_cnpg(ctx.client.clone()).await {
-            Ok(pod) => pod.name_any(),
-            Err(_) => {
-                info!("Primary pod is not available yet for instance {}", instance_name);
-                return Err(Action::requeue(Duration::from_secs(30)));
-            }
-        };
+        let primary_pod_name = cdb.primary_pod_cnpg(ctx.client.clone()).await?.name_any();
 
         // Check if primary pod is initialized
         let is_primary_initialized = fenced_pods_initialized(cdb, ctx.clone(), &primary_pod_name).await?;
@@ -1337,8 +1309,12 @@ async fn get_instance_replicas(cdb: &CoreDB, ctx: Arc<Context>) -> Result<i64, A
 
     let cluster: Api<Cluster> = Api::namespaced(ctx.client.clone(), &namespace);
     let co = cluster.get(&cdb.name_any()).await.map_err(|e| {
-        warn!("Error getting cluster, instance maybe starting: {}", e);
-        Action::requeue(Duration::from_secs(300))
+        info!(
+            "Cluster is missing, instance {} maybe starting: {}",
+            cdb.name_any(),
+            e
+        );
+        Action::requeue(Duration::from_secs(30))
     })?;
 
     Ok(co.spec.instances)
