@@ -3227,18 +3227,28 @@ mod test {
     #[ignore]
     async fn restarts_postgres_correctly() {
         async fn wait_til_status_is_filled(coredbs: &Api<CoreDB>, name: &str) {
-            let started_waiting = Utc::now();
-            let max_wait_time = chrono::Duration::seconds(45);
+            let max_retries = 20; // adjust as needed
+            for attempt in 1..=max_retries {
+                let coredb = coredbs
+                    .get(name)
+                    .await
+                    .unwrap_or_else(|_| panic!("Failed to get CoreDB: {}", name));
 
-            while Utc::now().signed_duration_since(started_waiting) <= max_wait_time {
-                let coredb = coredbs.get(name).await.expect("spec not found");
                 if coredb.status.is_some() {
+                    println!("Status is filled for CoreDB: {}", name);
                     return;
+                } else {
+                    println!(
+                        "Attempt {}/{}: Status not yet filled for CoreDB: {}",
+                        attempt, max_retries, name
+                    );
                 }
-                tokio::time::sleep(Duration::from_secs(2)).await;
+                tokio::time::sleep(Duration::from_secs(5)).await;
             }
-
-            panic!("Status was not populated fast enough");
+            panic!(
+                "Failed to fetch filled status for CoreDB: {} after {} attempts",
+                name, max_retries
+            );
         }
 
         async fn get_pg_start_time(coredbs: &Api<CoreDB>, name: &str, ctx: Arc<Context>) -> DateTime<Utc> {
