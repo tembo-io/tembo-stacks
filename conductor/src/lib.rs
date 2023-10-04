@@ -122,6 +122,15 @@ pub fn get_event_id_from_coredb(coredb: &CoreDB) -> Result<String, Box<Conductor
     Ok(event_id)
 }
 
+pub async fn get_all(client: Client, namespace: &str) -> Vec<CoreDB> {
+    let coredb_api: Api<CoreDB> = Api::namespaced(client, namespace);
+    let pg_list = coredb_api
+        .list(&ListParams::default())
+        .await
+        .expect("could not get CoreDBs");
+    pg_list.items
+}
+
 pub async fn get_one(client: Client, namespace: &str) -> Result<CoreDB, ConductorError> {
     let coredb_api: Api<CoreDB> = Api::namespaced(client, namespace);
     let pg_instance = coredb_api.get(namespace).await?;
