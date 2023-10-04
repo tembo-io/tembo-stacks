@@ -999,7 +999,7 @@ mod test {
                 "runtime_config": [
                     {
                         "name": "shared_preload_libraries",
-                        "value": "pg_stat_statements,pg_partman_bgw"
+                        "value": "pg_stat_statements"
                     },
                     {
                         "name": "pg_partman_bgw.interval",
