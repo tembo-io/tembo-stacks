@@ -517,7 +517,7 @@ async fn run(metrics: CustomMetrics) -> Result<(), Box<dyn std::error::Error>> {
 
 async fn requeue_short(
     metrics: &CustomMetrics,
-    control_plane_events_queue: &String,
+    control_plane_events_queue: &str,
     queue: &PGMQueueExt,
     read_msg: &Message<CRUDevent>,
 ) -> Result<(), Box<dyn Error>> {
