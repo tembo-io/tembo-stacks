@@ -175,7 +175,10 @@ pub struct CoreDBSpec {
 impl CoreDBSpec {
     // extracts all postgres configurations
     // configs can be defined in several different places (from a stack, user override, from an extension installation, user overrides, etc)
-    pub fn get_pg_configs(&self, requires_load: BTreeMap<String, String>) -> Result<Option<Vec<PgConfig>>, MergeError> {
+    pub fn get_pg_configs(
+        &self,
+        requires_load: BTreeMap<String, String>,
+    ) -> Result<Option<Vec<PgConfig>>, MergeError> {
         let stack_configs = self
             .stack
             .as_ref()
@@ -196,7 +199,10 @@ impl CoreDBSpec {
                         include_with_shared_preload_libraries.insert(library_name.clone());
                     } else {
                         // coredb name not in scope, so can't be included in log
-                        error!("Extension {} requires load but no library name was found", ext.name);
+                        error!(
+                            "Extension {} requires load but no library name was found",
+                            ext.name
+                        );
                     }
                     break 'loc;
                 }

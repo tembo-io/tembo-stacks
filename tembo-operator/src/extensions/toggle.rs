@@ -16,8 +16,7 @@ use crate::{
     },
     trunk::extensions_that_require_load,
 };
-use std::{sync::Arc, time::Duration};
-use std::collections::BTreeMap;
+use std::{collections::BTreeMap, sync::Arc, time::Duration};
 use tracing::{error, warn};
 
 pub async fn reconcile_extension_toggle_state(

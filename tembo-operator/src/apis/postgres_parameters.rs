@@ -376,9 +376,9 @@ impl<'de> Deserialize<'de> for PgConfig {
 
 #[cfg(test)]
 mod pg_param_tests {
-    use std::collections::BTreeMap;
     use super::*;
     use crate::apis::coredb_types::{CoreDBSpec, Stack};
+    use std::collections::BTreeMap;
 
     #[test]
     fn test_pg_config() {
