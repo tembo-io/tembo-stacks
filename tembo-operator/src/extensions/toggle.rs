@@ -17,6 +17,7 @@ use crate::{
     trunk::extensions_that_require_load,
 };
 use std::{sync::Arc, time::Duration};
+use std::collections::BTreeMap;
 use tracing::{error, warn};
 
 pub async fn reconcile_extension_toggle_state(
@@ -50,7 +51,7 @@ async fn toggle_extensions(
             // and also is not present in shared_preload_libraries,
             // then requeue.
             if location_to_toggle.enabled
-                && requires_load.contains(&extension_to_toggle.name)
+                && requires_load.contains_key(&extension_to_toggle.name)
                 && !current_shared_preload_libraries.contains(&extension_to_toggle.name)
             {
                 warn!(
@@ -111,7 +112,7 @@ async fn toggle_extensions(
 fn requeue_if_expecting_shared_preload_library(
     cdb: &CoreDB,
     extension_to_toggle: &str,
-    requires_load: Vec<String>,
+    requires_load: BTreeMap<String, String>,
 ) -> Result<(), Action> {
     // Get config by name
     match cdb
