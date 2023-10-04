@@ -416,11 +416,11 @@ mod test {
 
     use controller::{
         apis::postgres_parameters::{ConfigValue, PgConfig},
+        cloudnativepg::poolers::Pooler,
         errors,
     };
     use k8s_openapi::NamespaceResourceScope;
     use serde::{de::DeserializeOwned, Deserialize};
-    use controller::cloudnativepg::poolers::Pooler;
 
     // helper function retrieve all instances of a resource in namespace
     // used repeatedly in appService tests
@@ -3868,13 +3868,13 @@ mod test {
             Duration::from_secs(TIMEOUT_SECONDS_COREDB_DELETED),
             await_condition(coredbs.clone(), name, conditions::is_deleted("")),
         )
-            .await
-            .unwrap_or_else(|_| {
-                panic!(
-                    "CoreDB {} was not deleted after waiting {} seconds",
-                    name, TIMEOUT_SECONDS_COREDB_DELETED
-                )
-            });
+        .await
+        .unwrap_or_else(|_| {
+            panic!(
+                "CoreDB {} was not deleted after waiting {} seconds",
+                name, TIMEOUT_SECONDS_COREDB_DELETED
+            )
+        });
         println!("CoreDB resource deleted {}", name);
 
         // Delete namespace
