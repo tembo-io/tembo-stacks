@@ -24,7 +24,7 @@ mod test {
     use pgmq::{Message, PGMQueueExt};
 
     use conductor::{
-        restart_cnpg,
+        get_coredb_error_without_status, restart_coredb,
         types::{self, StateToControlPlane},
     };
     use controller::extensions::types::{Extension, ExtensionInstallLocation};
@@ -126,10 +126,12 @@ mod test {
             serde_json::from_value(custom_metrics).expect("failed to deserialize");
 
         // conductor receives a CRUDevent from control plane
-        let mut install_location = ExtensionInstallLocation::default();
-        install_location.enabled = true;
-        install_location.version = Some("1.3.0".to_owned());
-        install_location.database = "postgres".to_owned();
+        let install_location = ExtensionInstallLocation {
+            enabled: true,
+            version: Some("1.3.0".to_owned()),
+            database: "postgres".to_owned(),
+            ..ExtensionInstallLocation::default()
+        };
         let install_location = install_location.clone();
         let spec_js = serde_json::json!({
             "extensions": Some(vec![Extension {
@@ -239,10 +241,13 @@ mod test {
         // conductor receives a CRUDevent from control plane
         // take note of number of extensions at this point in time
         let mut extensions_add = extensions.clone();
-        let mut install_location = ExtensionInstallLocation::default();
-        install_location.enabled = true;
-        install_location.version = Some("0.1.4".to_owned());
-        install_location.database = "postgres".to_owned();
+        let _install_location = ExtensionInstallLocation::default();
+        let install_location = ExtensionInstallLocation {
+            enabled: true,
+            version: Some("0.1.4".to_owned()),
+            database: "postgres".to_owned(),
+            ..ExtensionInstallLocation::default()
+        };
         let install_location = install_location.clone();
         extensions_add.push(Extension {
             name: "pg_jsonschema".to_owned(),
@@ -319,14 +324,29 @@ mod test {
 
         // Once CNPG is running we want to restart
         let cluster_name = namespace.clone();
-        restart_cnpg(client.clone(), &namespace, &cluster_name, Utc::now())
+
+        restart_coredb(client.clone(), &namespace, &cluster_name, Utc::now())
             .await
             .expect("failed restarting cnpg pod");
 
-        // Restarting of the pod can take some time (20-40 seconds) as CNPG does various
-        // checks before shutting down.  We will need to wait up to 40 seconds
-        // then check that the pod is running and ready
-        thread::sleep(time::Duration::from_secs(40));
+        let mut is_ready = false;
+        let mut current_iteration = 0;
+        while !is_ready {
+            if current_iteration > 30 {
+                panic!("CNPG pod did not restart after about 150 seconds");
+            }
+            thread::sleep(time::Duration::from_secs(5));
+            let current_coredb = get_coredb_error_without_status(client.clone(), &namespace)
+                .await
+                .unwrap();
+            if let Some(status) = current_coredb.status {
+                if status.running {
+                    is_ready = true;
+                }
+            }
+            current_iteration += 1;
+        }
+
         pod_ready_and_running(pods.clone(), pod_name).await;
         let exporter_pods = pods.list(&lp).await.expect("could not get pods");
         let exporter_pod_name = exporter_pods.items[0].metadata.name.as_ref().unwrap();
