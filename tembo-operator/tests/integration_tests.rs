@@ -3869,6 +3869,38 @@ mod test {
         let _pooler_secret = pooler_secrets.get(&pooler_name).await.unwrap();
         println!("Found pooler secret: {}", pooler_name);
 
+        // Update coredb to disable pooler
+        let coredb_json = serde_json::json!({
+            "apiVersion": API_VERSION,
+            "kind": kind,
+            "metadata": {
+                "name": name
+            },
+            "spec": {
+                "replicas": replicas,
+                "connPooler": {
+                    "enabled": false,
+                },
+            }
+        });
+
+        let _coredb_resource = coredbs.patch(name, &params, &patch).await.unwrap();
+
+        // Wait for pooler to be deleted
+        let _assert_pooler_deleted = tokio::time::timeout(
+            Duration::from_secs(30),
+            await_condition(poolers.clone(), &pooler_name, conditions::is_deleted("")),
+        );
+        println!("Pooler deleted: {}", pooler_name);
+
+        // Wait for pooler service to be deleted
+        let _assert_pooler_service_deleted = tokio::time::timeout(
+            Duration::from_secs(30),
+            await_condition(pooler_services.clone(), &pooler_name, conditions::is_deleted("")),
+        );
+
+        println!("Pooler service deleted: {}", pooler_name);
+
         // CLEANUP TEST
         // Cleanup CoreDB
         coredbs.delete(name, &Default::default()).await.unwrap();
