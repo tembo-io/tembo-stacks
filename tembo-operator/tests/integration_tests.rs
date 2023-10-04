@@ -1916,13 +1916,26 @@ mod test {
         assert!(result.stdout.clone().unwrap().contains("plpgsql"));
 
         // Assert that both pods are replicating successfully
-        let result = psql_with_retry(
-            context.clone(),
-            coredb_resource.clone(),
-            "SELECT state FROM pg_stat_replication".to_string(),
-        )
-        .await;
-        assert!(result.stdout.clone().unwrap().contains("streaming"));
+        let mut retries = 0;
+        loop {
+            let result = psql_with_retry(
+                context.clone(),
+                coredb_resource.clone(),
+                "SELECT state FROM pg_stat_replication".to_string(),
+            )
+            .await;
+
+            if result.stdout.is_some() && result.stdout.clone().unwrap().contains("streaming") {
+                println!("Replication is streaming.");
+                assert!(result.stdout.clone().unwrap().contains("streaming"));
+                break;
+            } else if retries >= 10 {
+                panic!("Replication is not streaming after 10 retries");
+            } else {
+                retries += 1;
+                tokio::time::sleep(Duration::from_secs(5)).await;
+            }
+        }
 
         // Revert replicas back to 1 to disable HA
         let replicas = 1;
@@ -2673,6 +2686,7 @@ mod test {
                     break;
                 } else {
                     retries += 1;
+                    println!("Waiting for pgmq.control to be present, retry: {}/10", retries);
                     tokio::time::sleep(Duration::from_secs(5)).await;
                 }
             }
