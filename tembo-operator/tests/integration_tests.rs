@@ -2659,11 +2659,23 @@ mod test {
                 "ls /var/lib/postgresql/data/tembo/extension/pgmq.control".to_owned(),
             ];
             let pod_name = pod.metadata.name.clone().expect("Pod should have a name");
-            let result =
-                run_command_in_container(pods.clone(), pod_name, cmd.clone(), Some("postgres".to_string()))
-                    .await;
-            println!("result: {}", result);
-            assert!(result.contains("pgmq.control"));
+            let mut retries = 0;
+            loop {
+                let result = run_command_in_container(
+                    pods.clone(),
+                    pod_name.clone(),
+                    cmd.clone(),
+                    Some("postgres".to_string()),
+                )
+                .await;
+                if !result.is_empty() || retries >= 10 {
+                    assert!(result.contains("pgmq.control"));
+                    break;
+                } else {
+                    retries += 1;
+                    tokio::time::sleep(Duration::from_secs(5)).await;
+                }
+            }
         }
 
         // Now lets make the instance HA and ensure that all extenstions are present on both
