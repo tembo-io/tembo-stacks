@@ -3857,8 +3857,17 @@ mod test {
         let pooler_name = format!("{}-pooler", name);
         let poolers: Api<Pooler> = Api::namespaced(client.clone(), &namespace);
         let _pooler = poolers.get(&pooler_name).await.unwrap();
-
         println!("Found pooler: {}", pooler_name);
+
+        // Check for pooler service
+        let pooler_services: Api<Service> = Api::namespaced(client.clone(), &namespace);
+        let _pooler_service = pooler_services.get(&pooler_name).await.unwrap();
+        println!("Found pooler service: {}", pooler_name);
+
+        // Check for pooler secret
+        let pooler_secrets: Api<Secret> = Api::namespaced(client.clone(), &namespace);
+        let _pooler_secret = pooler_secrets.get(&pooler_name).await.unwrap();
+        println!("Found pooler secret: {}", pooler_name);
 
         // CLEANUP TEST
         // Cleanup CoreDB
