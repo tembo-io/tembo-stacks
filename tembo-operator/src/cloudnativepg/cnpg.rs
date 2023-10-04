@@ -1347,94 +1347,8 @@ fn remove_pod_from_fenced_instances_annotation(
     }
 }
 
-// pub async fn patch_cluster_merge(
-//     cluster: &Api<Cluster>,
-//     name: &str,
-//     patch: serde_json::Value,
-// ) -> Result<(), Action> {
-//     let pp = PatchParams {
-//         field_manager: Some("cntrlr".to_string()),
-//         ..PatchParams::default()
-//     };
-//     let patch_status = Patch::Json(patch.clone());
-//
-//     match cluster.patch(name, &pp, &patch_status).await {
-//         Ok(_) => {
-//             debug!("Successfully updated CoreDB status for {}", name);
-//             Ok(())
-//         }
-//         Err(e) => {
-//             error!("Error updating CoreDB status for {}: {:?}", name, e);
-//             Err(Action::requeue(Duration::from_secs(10)))
-//         }
-//     }
-// }
-
 // unfence_pod function will remove the fencing annotation from the cluster object
 #[instrument(skip(cdb, ctx), fields(trace_id, instance_name = %cdb.name_any(), pod_name))]
-// pub async fn unfence_pod(cdb: &CoreDB, ctx: Arc<Context>, pod_name: &str) -> Result<(), Action> {
-//     let instance_name = cdb.metadata.name.as_deref().unwrap_or_default();
-//     let namespace = match cdb.namespace() {
-//         Some(ns) => ns,
-//         None => {
-//             error!("Namespace is not set for CoreDB for instance {}", instance_name);
-//             return Err(Action::requeue(Duration::from_secs(300)));
-//         }
-//     };
-//
-//     let cluster: Api<Cluster> = Api::namespaced(ctx.client.clone(), &namespace);
-//     let cluster_resource = cluster.get(instance_name).await.map_err(|e| {
-//         error!("Error getting cluster: {}", e);
-//         Action::requeue(Duration::from_secs(300))
-//     })?;
-//
-//     let current_annotation = cluster_resource.annotations().get("cnpg.io/fencedInstances");
-//     debug!(
-//         "Instance initial annotations for instance {}: {:?}",
-//         instance_name, current_annotation
-//     );
-//
-//     if let Some(annotations) = annotations_clone {
-//         // Use the remove_pod_from_fenced_instances function
-//         let updated_annotations = remove_pod_from_fenced_instances_annotation(&annotations, pod_name);
-//
-//         if let Ok(Some(updated_annotations)) = updated_annotations {
-//             let patch_annotations = json!({
-//                 "apiVersion": "postgresql.cnpg.io/v1",
-//                 "kind": "Cluster",
-//                 "metadata": {
-//                     "anotations":
-//                         updated_annotations
-//                 }
-//             });
-//
-//             // Patch the cluster object
-//             debug!("Patching Cluster annotations for instance {}", instance_name);
-//             patch_cluster_merge(&cluster, instance_name, patch_annotations).await?;
-//             Ok(())
-//         } else {
-//             debug!("The fencedInstances annotation is not set in the Cluster Status for instance {}. Removing the key.", instance_name);
-//             // Remove the "cnpg.io/fencedInstances" annotation
-//             let mut updated_annotations = annotations.clone();
-//             updated_annotations.remove("cnpg.io/fencedInstances");
-//             let patch_annotations = json!({
-//                 "apiVersion": "postgresql.cnpg.io/v1",
-//                 "kind": "Cluster",
-//                 "metadata": {
-//                     "anotations":
-//                         updated_annotations
-//                 }
-//             });
-//
-//             debug!("Cluster annotations patched for instance {}", instance_name);
-//             patch_cluster_merge(&cluster, instance_name, patch_annotations).await?;
-//             Ok(())
-//         }
-//     } else {
-//         info!("Cluster Status is not set for {}", instance_name);
-//         Ok(())
-//     }
-// }
 pub async fn unfence_pod(cdb: &CoreDB, ctx: Arc<Context>, pod_name: &str) -> Result<(), Action> {
     let instance_name = cdb.metadata.name.as_deref().unwrap_or_default();
     let namespace = match cdb.namespace() {
@@ -1504,14 +1418,17 @@ pub async fn unfence_pod(cdb: &CoreDB, ctx: Arc<Context>, pod_name: &str) -> Res
             cluster_resource.metadata.managed_fields = None;
 
             // Patch the cluster object
-            debug!("Patch CoreDBSpec for instance {}", instance_name);
+            debug!("Patch Cluster annotation for instance {}", instance_name);
             let ps = PatchParams::apply("cntrlr");
             let _o = cluster
                 .patch(instance_name, &ps, &Patch::Apply(&cluster_resource))
                 .await
                 .map_err(|e| {
-                    error!("Error patching cluster: {}", e);
-                    Action::requeue(Duration::from_secs(300))
+                    warn!(
+                        "Issue patching annotation for instance {}, will requeue: {}",
+                        instance_name, e
+                    );
+                    Action::requeue(Duration::from_secs(30))
                 })?;
             debug!("Cluster annotations patched for instance {}", instance_name);
             Ok(())

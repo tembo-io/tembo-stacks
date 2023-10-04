@@ -9,8 +9,10 @@ use crate::{
     extensions::types::{ExtensionStatus, TrunkInstallStatus},
     is_postgres_ready, Context,
 };
-use kube::runtime::wait::Condition;
-use kube::{runtime::controller::Action, Api};
+use kube::{
+    runtime::{controller::Action, wait::Condition},
+    Api,
+};
 use std::{sync::Arc, time::Duration};
 use tracing::debug;
 
