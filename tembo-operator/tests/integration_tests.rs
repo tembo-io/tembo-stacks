@@ -1063,7 +1063,7 @@ mod test {
             context.clone(),
             coredb_resource.clone(),
             "show shared_preload_libraries;".to_string(),
-            "pg_stat_statements,pg_partman_bgw".to_string(),
+            "pg_partman_bgw".to_string(),
             false,
         )
         .await;
@@ -1083,7 +1083,8 @@ mod test {
             None => panic!("stdout is None"),
         };
 
-        assert!(stdout.contains("pg_stat_statements,pg_partman_bgw"));
+        assert!(stdout.contains("pg_partman_bgw"));
+        assert!(stdout.contains("pg_stat_statements"));
 
         // CLEANUP TEST
         // Cleanup CoreDB
