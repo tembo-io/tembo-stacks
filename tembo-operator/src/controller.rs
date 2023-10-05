@@ -291,9 +291,6 @@ impl CoreDB {
 
         let new_status = match self.spec.stop {
             false => {
-                let (trunk_installs, extensions) =
-                    reconcile_extensions(self, ctx.clone(), &coredbs, &name).await?;
-
                 let patch_status = json!({
                     "apiVersion": "coredb.io/v1alpha1",
                     "kind": "CoreDB",
@@ -302,6 +299,9 @@ impl CoreDB {
                     }
                 });
                 patch_cdb_status_merge(&coredbs, &name, patch_status).await?;
+                let (trunk_installs, extensions) =
+                    reconcile_extensions(self, ctx.clone(), &coredbs, &name).await?;
+
                 let recovery_time = self.get_recovery_time(ctx.clone()).await?;
 
                 let current_config_values = get_current_config_values(self, ctx.clone()).await?;
@@ -712,8 +712,7 @@ pub async fn patch_cdb_status_merge(
         field_manager: Some("cntrlr".to_string()),
         ..PatchParams::default()
     };
-    let patch_status = Patch::Merge(patch.clone()); // clone to log later if needed
-
+    let patch_status = Patch::Merge(patch.clone());
     match cdb.patch_status(name, &pp, &patch_status).await {
         Ok(_) => {
             debug!("Successfully updated CoreDB status for {}", name);

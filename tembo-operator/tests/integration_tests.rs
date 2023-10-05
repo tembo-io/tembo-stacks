@@ -3243,7 +3243,7 @@ mod test {
                         attempt, max_retries, name
                     );
                 }
-                tokio::time::sleep(Duration::from_secs(5)).await;
+                tokio::time::sleep(Duration::from_secs(10)).await;
             }
             panic!(
                 "Failed to fetch filled status for CoreDB: {} after {} attempts",
@@ -3307,12 +3307,10 @@ mod test {
             "apiVersion": API_VERSION,
             "kind": "CoreDB",
             "metadata": {
-                "name": name
+                "name": name,
             },
             "spec": {
                 "replicas": 1,
-                "extensions": [],
-                "trunk_installs": []
             }
         });
 
