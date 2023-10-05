@@ -7,10 +7,10 @@ use kube::{
 use serde_json::Value;
 use std::{net::IpAddr, time::Duration};
 use tracing::{debug, error};
-use trust_dns_resolver::Resolver;
+use trust_dns_resolver::TokioAsyncResolver;
 
 pub async fn reconcile_network_policies(client: Client, namespace: &str) -> Result<(), Action> {
-    let kubernetes_api_ip_addresses = lookup_kubernetes_api_ips()?;
+    let kubernetes_api_ip_addresses = lookup_kubernetes_api_ips().await?;
 
     let np_api: Api<NetworkPolicy> = Api::namespaced(client, namespace);
 
@@ -220,16 +220,17 @@ pub async fn reconcile_network_policies(client: Client, namespace: &str) -> Resu
     Ok(())
 }
 
-fn lookup_kubernetes_api_ips() -> Result<Vec<String>, Action> {
-    let resolver = match Resolver::default() {
+async fn lookup_kubernetes_api_ips() -> Result<Vec<String>, Action> {
+    let resolver = match TokioAsyncResolver::tokio_from_system_conf() {
         Ok(resolver) => resolver,
         Err(_) => {
             error!("Failed to create DNS resolver");
             return Err(Action::requeue(Duration::from_secs(300)));
         }
     };
+
     // Perform the DNS lookup
-    let response = match resolver.lookup_ip("kubernetes.default.svc.cluster.local") {
+    let response = match resolver.lookup_ip("kubernetes.default.svc.cluster.local").await {
         Ok(dns_lookup) => dns_lookup,
         Err(_) => {
             error!("Failed to DNS resolve kubernetes service address");
