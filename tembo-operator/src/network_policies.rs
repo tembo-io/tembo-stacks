@@ -1,16 +1,15 @@
-use k8s_openapi::api::networking::v1::NetworkPolicy;
+use k8s_openapi::api::{core::v1::Service, networking::v1::NetworkPolicy};
 use kube::{
     api::{Patch, PatchParams},
     runtime::controller::Action,
     Api, Client,
 };
 use serde_json::Value;
-use std::{net::IpAddr, time::Duration};
+use std::time::Duration;
 use tracing::{debug, error};
-use trust_dns_resolver::TokioAsyncResolver;
 
 pub async fn reconcile_network_policies(client: Client, namespace: &str) -> Result<(), Action> {
-    let kubernetes_api_ip_addresses = lookup_kubernetes_api_ips().await?;
+    let kubernetes_api_ip_address = lookup_kubernetes_api_ip(&client).await?;
 
     let np_api: Api<NetworkPolicy> = Api::namespaced(client, namespace);
 
@@ -187,17 +186,6 @@ pub async fn reconcile_network_policies(client: Client, namespace: &str) -> Resu
     });
     apply_network_policy(namespace, &np_api, allow_within_namespace).await?;
 
-    let mut kube_api_blocks = Vec::new();
-    for ip in kubernetes_api_ip_addresses {
-        let allowed_cidr = format!("{}/32", ip);
-        let to_block_entry = serde_json::json!({
-            "ipBlock": {
-                "cidr": allowed_cidr,
-            }
-        });
-        kube_api_blocks.push(to_block_entry);
-    }
-
     let allow_kube_api = serde_json::json!({
         "apiVersion": "networking.k8s.io/v1",
         "kind": "NetworkPolicy",
@@ -210,7 +198,13 @@ pub async fn reconcile_network_policies(client: Client, namespace: &str) -> Resu
           "policyTypes": ["Egress"],
           "egress": [
             {
-              "to": kube_api_blocks
+              "to": [
+                {
+                  "ipBlock": {
+                    "cidr": format!("{}/32", kubernetes_api_ip_address)
+                  }
+                }
+              ]
             }
           ]
         }
@@ -220,44 +214,31 @@ pub async fn reconcile_network_policies(client: Client, namespace: &str) -> Resu
     Ok(())
 }
 
-async fn lookup_kubernetes_api_ips() -> Result<Vec<String>, Action> {
-    let resolver = match TokioAsyncResolver::tokio_from_system_conf() {
-        Ok(resolver) => resolver,
+async fn lookup_kubernetes_api_ip(client: &Client) -> Result<String, Action> {
+    let service_api = Api::<Service>::namespaced(client.clone(), "default");
+    // Look up IP address of 'kubernetes' service in default namespace
+    let kubernetes_service = match service_api.get("kubernetes").await {
+        Ok(s) => s,
         Err(_) => {
-            error!("Failed to create DNS resolver");
+            error!("Failed to get kubernetes service");
             return Err(Action::requeue(Duration::from_secs(300)));
         }
     };
-
-    // Perform the DNS lookup
-    let response = match resolver.lookup_ip("kubernetes.default.svc.cluster.local").await {
-        Ok(dns_lookup) => dns_lookup,
-        Err(_) => {
-            error!("Failed to DNS resolve kubernetes service address");
+    let kubernetes_service_spec = match kubernetes_service.spec {
+        Some(s) => s,
+        None => {
+            error!("while discovering kubernetes API IP address, service has no spec");
             return Err(Action::requeue(Duration::from_secs(300)));
         }
     };
-    // Iterate through the IP addresses returned
-    let mut results = vec![];
-    for ip in response.iter() {
-        match ip {
-            IpAddr::V4(v4) => {
-                results.push(v4.to_string());
-                println!("IPv4 address: {}", v4);
-            }
-            IpAddr::V6(v6) => {
-                error!("Found an IPv6 address while looking up kube API IP: {}", v6);
-                return Err(Action::requeue(Duration::from_secs(300)));
-            }
+    let cluster_ip = match kubernetes_service_spec.cluster_ip.clone() {
+        Some(c) => c,
+        None => {
+            error!("while discovering kubernetes API IP address, service has no cluster IP");
+            return Err(Action::requeue(Duration::from_secs(300)));
         }
-    }
-    // Deterministic ordering
-    results.sort();
-    if results.is_empty() {
-        error!("Failed to find any IP addresses for kubernetes service");
-        return Err(Action::requeue(Duration::from_secs(300)));
-    }
-    Ok(results)
+    };
+    Ok(cluster_ip)
 }
 
 async fn apply_network_policy(namespace: &str, np_api: &Api<NetworkPolicy>, np: Value) -> Result<(), Action> {
