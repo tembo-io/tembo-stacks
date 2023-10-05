@@ -58,7 +58,7 @@ pub async fn reconcile_network_policies(client: Client, namespace: &str) -> Resu
                   },
                   "namespaceSelector": {
                     "matchLabels": {
-                      "name": "kube-system"
+                      "kubernetes.io/metadata.name": "kube-system"
                     }
                   }
                 }
@@ -95,28 +95,28 @@ pub async fn reconcile_network_policies(client: Client, namespace: &str) -> Resu
                 {
                   "namespaceSelector": {
                     "matchLabels": {
-                      "name": "monitoring"
+                      "kubernetes.io/metadata.name": "monitoring"
                     }
                   }
                 },
                 {
                   "namespaceSelector": {
                     "matchLabels": {
-                      "name": "cnpg-system"
+                      "kubernetes.io/metadata.name": "cnpg-system"
                     }
                   }
                 },
                 {
                   "namespaceSelector": {
                     "matchLabels": {
-                      "name": "coredb-operator"
+                      "kubernetes.io/metadata.name": "coredb-operator"
                     }
                   }
                 },
                 {
                   "namespaceSelector": {
                     "matchLabels": {
-                      "name": "traefik"
+                      "kubernetes.io/metadata.name": "traefik"
                     }
                   }
                 }
