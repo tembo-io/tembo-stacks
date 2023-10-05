@@ -79,6 +79,7 @@ pub async fn reconcile_network_policies(client: Client, namespace: &str) -> Resu
     });
     apply_network_policy(namespace, &np_api, allow_dns).await?;
 
+    // Namespaces that should be allowed to access an instance namespace
     let allow_system_ingress = serde_json::json!({
         "apiVersion": "networking.k8s.io/v1",
         "kind": "NetworkPolicy",
@@ -126,6 +127,34 @@ pub async fn reconcile_network_policies(client: Client, namespace: &str) -> Resu
         }
     });
     apply_network_policy(namespace, &np_api, allow_system_ingress).await?;
+
+    // Namespaces that should be accessible from instance namespaces
+    let allow_system_egress = serde_json::json!({
+        "apiVersion": "networking.k8s.io/v1",
+        "kind": "NetworkPolicy",
+        "metadata": {
+          "name": "allow-system-egress",
+          "namespace": format!("{namespace}"),
+        },
+        "spec": {
+          "podSelector": {},
+          "policyTypes": ["Egress"],
+          "egress": [
+            {
+              "to": [
+                {
+                  "namespaceSelector": {
+                    "matchLabels": {
+                      "kubernetes.io/metadata.name": "minio"
+                    }
+                  }
+                }
+              ]
+            }
+          ]
+        }
+    });
+    apply_network_policy(namespace, &np_api, allow_system_egress).await?;
 
     let allow_public_internet = serde_json::json!({
         "apiVersion": "networking.k8s.io/v1",
