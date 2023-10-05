@@ -25,14 +25,10 @@ postgres_config:
     value: 30min
   - name: cron.host
     value: /controller/run
-  - name: log_min_duration_statement
-    value: 10000
   - name: pg_stat_statements.track
-    value: all
+    value: top
   - name: random_page_cost
     value: 1.5
-  - name: seq_page_cost
-    value: 1.0
   - name: shared_preload_libraries
     value: pg_stat_statements,pg_cron
   - name: track_io_timing

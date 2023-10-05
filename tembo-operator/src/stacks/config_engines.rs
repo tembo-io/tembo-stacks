@@ -71,13 +71,13 @@ pub fn olap_config_engine(stack: &Stack) -> Vec<PgConfig> {
 
     let shared_buffer_val_mb = standard_shared_buffers(sys_mem_mb);
     let max_connections: i32 = olap_max_connections(sys_mem_mb as i32);
-    let work_mem = olap_work_mem(sys_mem_mb as i32, shared_buffer_val_mb, max_connections);
+    let work_mem = dynamic_work_mem(sys_mem_mb as i32, shared_buffer_val_mb, max_connections);
     let effective_cache_size_mb = dynamic_effective_cache_size_mb(sys_mem_mb as i32);
     let maintenance_work_mem_mb = olap_maintenance_work_mem_mb(sys_mem_mb as i32);
     let max_wal_size_gb: i32 = dynamic_max_wal_size(sys_storage_gb as i32);
     let max_parallel_workers = olap_max_parallel_workers(vcpu);
     let max_parallel_workers_per_gather = olap_max_parallel_workers_per_gather(vcpu);
-
+    let max_worker_processes = olap_max_worker_processes(vcpu);
     vec![
         PgConfig {
             name: "effective_cache_size".to_owned(),
@@ -104,6 +104,10 @@ pub fn olap_config_engine(stack: &Stack) -> Vec<PgConfig> {
             value: ConfigValue::Single(format!("{max_wal_size_gb}GB")),
         },
         PgConfig {
+            name: "max_worker_processes".to_owned(),
+            value: ConfigValue::Single(max_worker_processes.to_string()),
+        },
+        PgConfig {
             name: "shared_buffers".to_owned(),
             value: ConfigValue::Single(format!("{shared_buffer_val_mb}MB")),
         },
@@ -117,17 +121,19 @@ pub fn olap_config_engine(stack: &Stack) -> Vec<PgConfig> {
 // olap formula for max_parallel_workers_per_gather
 fn olap_max_parallel_workers_per_gather(cpu: i32) -> i32 {
     // higher of default (2) or 0.5 * cpu
-    i32::max((cpu as f64 * 0.5).floor() as i32, 2)
+    let scaled = i32::max((cpu as f64 * 0.5).floor() as i32, 2);
+    // cap at 8
+    i32::max(scaled, 8)
 }
 
 fn olap_max_parallel_workers(cpu: i32) -> i32 {
     // higher of the default (8) or 2 * cpu
-    i32::max(2 * cpu, 8)
+    i32::max(8, cpu)
 }
 
-// returns work_mem value in MB
-fn olap_work_mem(sys_mem_mb: i32, shared_buffers_mb: i32, max_connections: i32) -> i32 {
-    (sys_mem_mb - shared_buffers_mb) / (max_connections / 2)
+fn olap_max_worker_processes(cpu: i32) -> i32 {
+    // higher of the default (8) or 2 * cpu
+    i32::max(1, cpu)
 }
 
 // olap formula for maintenance_work_mem
@@ -405,7 +411,6 @@ mod tests {
             description: None,
             stack_version: None,
             postgres_config_engine: Some(ConfigEngine::Standard),
-            services: None,
             postgres_config: None,
             postgres_metrics: None,
         };
