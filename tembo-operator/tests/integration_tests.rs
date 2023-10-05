@@ -3227,7 +3227,7 @@ mod test {
     #[ignore]
     async fn restarts_postgres_correctly() {
         async fn wait_til_status_is_filled(coredbs: &Api<CoreDB>, name: &str) {
-            let max_retries = 20; // adjust as needed
+            let max_retries = 10; // adjust as needed
             for attempt in 1..=max_retries {
                 let coredb = coredbs
                     .get(name)
@@ -3256,15 +3256,8 @@ mod test {
 
             let coredb = coredbs.get(name).await.expect("spec not found");
 
-            let psql_output = coredb
-                .psql(
-                    "SELECT pg_postmaster_start_time()".into(),
-                    "postgres".to_string(),
-                    ctx,
-                )
-                .await
-                .map_err(|err| eprintln!("Error: {:?}", err))
-                .unwrap();
+            let query = "SELECT pg_postmaster_start_time()".to_string();
+            let psql_output = psql_with_retry(ctx.clone(), coredb, query).await;
             let stdout = psql_output
                 .stdout
                 .as_ref()
@@ -3277,9 +3270,26 @@ mod test {
         }
 
         async fn status_running(coredbs: &Api<CoreDB>, name: &str) -> bool {
-            let spec = coredbs.get(name).await.expect("spec not found");
+            let max_retries = 10;
+            let wait_duration = Duration::from_secs(2); // Adjust as needed
 
-            spec.status.expect("Expected status to be present").running
+            for attempt in 1..=max_retries {
+                let coredb = coredbs.get(name).await.expect("Failed to get CoreDB");
+
+                if coredb.status.as_ref().map_or(false, |s| s.running) {
+                    println!("CoreDB {} is running", name);
+                } else {
+                    println!(
+                        "Attempt {}/{}: CoreDB {} is not running yet",
+                        attempt, max_retries, name
+                    );
+                }
+                tokio::time::sleep(wait_duration).await;
+            }
+            panic!(
+                "CoreDB {} did not become running after {} attempts",
+                name, max_retries
+            );
         }
 
         // Initialize tracing
