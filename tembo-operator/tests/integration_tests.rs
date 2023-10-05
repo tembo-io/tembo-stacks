@@ -15,33 +15,45 @@
 
 #[cfg(test)]
 mod test {
-    use chrono::{SecondsFormat, Utc};
+    use anyhow::{Error as AnyError, Result};
+    use chrono::{DateTime, SecondsFormat, Utc};
     use controller::{
         apis::coredb_types::CoreDB,
-        cloudnativepg::clusters::Cluster,
+        cloudnativepg::{backups::Backup, clusters::Cluster},
         defaults::{default_resources, default_storage},
+        ingress_route_crd::IngressRoute,
         ingress_route_tcp_crd::IngressRouteTCP,
         is_pod_ready,
         psql::PsqlOutput,
         Context, State,
     };
+    use futures_util::stream::StreamExt;
     use k8s_openapi::{
         api::{
             apps::v1::Deployment,
             core::v1::{
                 Container, Namespace, PersistentVolumeClaim, Pod, PodSpec, ResourceRequirements, Secret,
+                Service,
             },
         },
         apiextensions_apiserver::pkg::apis::apiextensions::v1::CustomResourceDefinition,
-        apimachinery::pkg::{api::resource::Quantity, apis::meta::v1::ObjectMeta},
+        apimachinery::pkg::{api::resource::Quantity, apis::meta::v1::ObjectMeta, util::intstr::IntOrString},
     };
     use kube::{
-        api::{AttachParams, DeleteParams, ListParams, Patch, PatchParams, PostParams},
+        api::{AttachParams, DeleteParams, ListParams, Patch, PatchParams, PostParams, WatchParams},
         runtime::wait::{await_condition, conditions, Condition},
         Api, Client, Config, Error,
     };
     use rand::Rng;
-    use std::{str, sync::Arc, thread, time::Duration};
+    use reqwest::header::{HeaderMap, HeaderName, HeaderValue};
+    use std::{
+        collections::{BTreeMap, BTreeSet},
+        ops::Not,
+        str,
+        sync::Arc,
+        thread,
+        time::Duration,
+    };
 
     use tokio::io::AsyncReadExt;
 
@@ -50,9 +62,10 @@ mod test {
     const TIMEOUT_SECONDS_START_POD: u64 = 600;
     const TIMEOUT_SECONDS_POD_READY: u64 = 600;
     const TIMEOUT_SECONDS_SECRET_PRESENT: u64 = 120;
-    const TIMEOUT_SECONDS_NS_DELETED: u64 = 120;
-    const TIMEOUT_SECONDS_POD_DELETED: u64 = 120;
-    const TIMEOUT_SECONDS_COREDB_DELETED: u64 = 120;
+    const TIMEOUT_SECONDS_NS_DELETED: u64 = 300;
+    const TIMEOUT_SECONDS_POD_DELETED: u64 = 300;
+    const TIMEOUT_SECONDS_COREDB_DELETED: u64 = 300;
+    const TIMEOUT_SECONDS_BACKUP_COMPLETED: u64 = 600;
 
     async fn kube_client() -> Client {
         // Get the name of the currently selected namespace
@@ -197,6 +210,55 @@ mod test {
         panic!("Timed out waiting for psql result of '{}'", query);
     }
 
+    async fn http_get_with_retry(
+        url: &str,
+        headers: Option<BTreeMap<String, String>>,
+        retries: usize,
+        delay: usize,
+    ) -> Result<reqwest::Response> {
+        let mut headers_map = HeaderMap::new();
+        if let Some(h) = headers {
+            for (key, value) in h {
+                let header_name = HeaderName::from_bytes(key.as_bytes()).unwrap();
+                let header_value = HeaderValue::from_str(&value).unwrap();
+                headers_map.insert(header_name, header_value);
+            }
+        };
+
+
+        let httpclient = reqwest::Client::builder()
+            .danger_accept_invalid_certs(true)
+            .default_headers(headers_map)
+            .build()
+            .unwrap();
+        println!("Sending request to '{}'", url);
+        for i in 1..retries {
+            let response = httpclient.get(url).send().await;
+            if response.is_err() {
+                tokio::time::sleep(Duration::from_secs(delay as u64)).await;
+                println!(
+                    "Retry {}/{} request -- error: {}",
+                    i,
+                    retries,
+                    response.err().unwrap()
+                );
+            } else {
+                let resp = response.unwrap();
+                if resp.status() == 200 {
+                    return Ok(resp);
+                } else {
+                    tokio::time::sleep(Duration::from_secs(delay as u64)).await;
+                    println!("Retry {}/{} request -- status: {}", i, retries, resp.status());
+                }
+            }
+        }
+        Err(AnyError::msg(format!(
+            "Timed out waiting for http response from '{}'",
+            url
+        )))
+    }
+
+
     async fn wait_until_psql_contains(
         context: Arc<Context>,
         coredb_resource: CoreDB,
@@ -270,6 +332,43 @@ mod test {
         println!("Found pod ready: {}", pod_name);
     }
 
+    async fn has_backup_completed(context: Arc<Context>, namespace: &str, name: &str) {
+        println!("Waiting for backup to complete: {}", name);
+        let backups: Api<Backup> = Api::namespaced(context.client.clone(), namespace);
+
+        let wp = WatchParams::default().labels(&format!("cnpg.io/cluster={}", name));
+        let stream_result = backups.watch(&wp, "0").await;
+
+        let mut stream = match stream_result {
+            Ok(s) => Box::pin(s),
+            Err(e) => panic!("Failed to watch backups: {}", e),
+        };
+
+        let watch_result =
+            tokio::time::timeout(Duration::from_secs(TIMEOUT_SECONDS_BACKUP_COMPLETED), async {
+                while let Some(event) = stream.next().await {
+                    match event {
+                        Ok(kube::api::WatchEvent::Modified(backup)) => {
+                            if let Some(status) = &backup.status {
+                                if status.phase.as_deref() == Some("completed") {
+                                    return;
+                                }
+                            }
+                        }
+                        Ok(_) => {} // For other events we do nothing
+                        Err(e) => panic!("Error watching Backup: {}", e),
+                    }
+                }
+                panic!("Watch stream ended prematurely");
+            })
+            .await;
+
+        if watch_result.is_err() {
+            panic!("Timed out waiting for Backup to complete");
+        }
+        println!("Found backup completed: {}", name);
+    }
+
     // Create namespace for the test to run in
     async fn create_namespace(client: Client, name: &str) -> Result<String, Error> {
         let ns_api: Api<Namespace> = Api::all(client);
@@ -315,13 +414,67 @@ mod test {
         Ok(())
     }
 
+    use controller::{
+        apis::postgres_parameters::{ConfigValue, PgConfig},
+        errors,
+    };
+    use k8s_openapi::NamespaceResourceScope;
+    use serde::{de::DeserializeOwned, Deserialize};
+
+    // helper function retrieve all instances of a resource in namespace
+    // used repeatedly in appService tests
+    // handles retries
+    async fn list_resources<R>(
+        client: Client,
+        cdb_name: &str,
+        namespace: &str,
+        num_expected: usize,
+    ) -> Result<Vec<R>, errors::OperatorError>
+    where
+        R: kube::api::Resource<Scope = NamespaceResourceScope>
+            + std::fmt::Debug
+            + 'static
+            + Clone
+            + DeserializeOwned
+            + for<'de> serde::Deserialize<'de>,
+        R::DynamicType: Default,
+    {
+        let api: Api<R> = Api::namespaced(client, namespace);
+        let lp = ListParams::default().labels(format!("coredb.io/name={}", cdb_name).as_str());
+        let retry = 10;
+        let mut passed_retry = false;
+        let mut resource_list: Vec<R> = Vec::new();
+        for _ in 0..retry {
+            let resources = api.list(&lp).await?;
+            if resources.items.len() == num_expected {
+                resource_list.extend(resources.items);
+                passed_retry = true;
+                break;
+            } else {
+                println!(
+                    "ns:{}.cdb:{} Found {}, expected {}",
+                    namespace,
+                    cdb_name,
+                    resources.items.len(),
+                    num_expected
+                );
+            }
+            thread::sleep(Duration::from_millis(2000));
+        }
+        if passed_retry {
+            Ok(resource_list)
+        } else {
+            Err(errors::ValueError::Invalid("Failed to get all resources in namespace".to_string()).into())
+        }
+    }
+
     #[tokio::test]
     #[ignore]
     async fn functional_test_basic_cnpg() {
         // Initialize the Kubernetes client
         let client = kube_client().await;
         let state = State::default();
-        let _context = state.create_context(client.clone());
+        let context = state.create_context(client.clone());
 
         // Configurations
         let mut rng = rand::thread_rng();
@@ -372,7 +525,7 @@ mod test {
         });
         let params = PatchParams::apply("tembo-integration-test");
         let patch = Patch::Apply(&coredb_json);
-        let _coredb_resource = coredbs.patch(name, &params, &patch).await.unwrap();
+        let coredb_resource = coredbs.patch(name, &params, &patch).await.unwrap();
 
         // Wait for CNPG Pod to be created
         let pod_name = format!("{}-1", name);
@@ -388,7 +541,16 @@ mod test {
 
         pod_ready_and_running(pods.clone(), exporter_pod_name.clone()).await;
 
-        let coredb_resource = coredbs.patch(name, &params, &patch).await.unwrap();
+        let _ = wait_until_psql_contains(
+            context.clone(),
+            coredb_resource.clone(),
+            "\\dx".to_string(),
+            "pg_jsonschema".to_string(),
+            false,
+        )
+        .await;
+
+        let coredb_resource = coredbs.get(name).await.unwrap();
         let mut found_extension = false;
         for extension in coredb_resource.status.unwrap().extensions.unwrap() {
             for location in extension.locations {
@@ -846,7 +1008,7 @@ mod test {
                 "runtime_config": [
                     {
                         "name": "shared_preload_libraries",
-                        "value": "pg_stat_statements,pg_partman_bgw"
+                        "value": "pg_stat_statements"
                     },
                     {
                         "name": "pg_partman_bgw.interval",
@@ -910,7 +1072,7 @@ mod test {
             context.clone(),
             coredb_resource.clone(),
             "show shared_preload_libraries;".to_string(),
-            "pg_stat_statements,pg_partman_bgw".to_string(),
+            "pg_partman_bgw".to_string(),
             false,
         )
         .await;
@@ -930,7 +1092,8 @@ mod test {
             None => panic!("stdout is None"),
         };
 
-        assert!(stdout.contains("pg_stat_statements,pg_partman_bgw"));
+        assert!(stdout.contains("pg_partman_bgw"));
+        assert!(stdout.contains("pg_stat_statements"));
 
         // CLEANUP TEST
         // Cleanup CoreDB
@@ -2598,5 +2761,1028 @@ mod test {
 
         // Delete namespace
         let _ = delete_namespace(client.clone(), &namespace).await;
+    }
+
+    #[tokio::test]
+    #[ignore]
+    async fn functional_test_app_service() {
+        // Initialize the Kubernetes client
+        let client = kube_client().await;
+
+        // Configurations
+        let mut rng = rand::thread_rng();
+        let suffix = rng.gen_range(0..100000);
+        let cdb_name = &format!("test-coredb-{}", suffix);
+        let namespace = match create_namespace(client.clone(), cdb_name).await {
+            Ok(namespace) => namespace,
+            Err(e) => {
+                eprintln!("Error creating namespace: {}", e);
+                std::process::exit(1);
+            }
+        };
+
+        let kind = "CoreDB";
+
+        // Apply a basic configuration of CoreDB
+        println!("Creating CoreDB resource {}", cdb_name);
+        let coredbs: Api<CoreDB> = Api::namespaced(client.clone(), &namespace);
+        // generate an instance w/ 2 appServices
+        let coredb_json = serde_json::json!({
+            "apiVersion": API_VERSION,
+            "kind": kind,
+            "metadata": {
+                "name": cdb_name
+            },
+            "spec": {
+                "appServices": [
+                    {
+                        "name": "postgrest",
+                        "image": "postgrest/postgrest:v10.0.0",
+                        "env": [
+                            {
+                                "name": "PGRST_DB_URI",
+                                "valueFromPlatform": "ReadWriteConnection"
+                            },
+                            {
+                                "name": "PGRST_DB_SCHEMA",
+                                "value": "public"
+                            },
+                            {
+                                "name": "PGRST_DB_ANON_ROLE",
+                                "value": "postgres"
+                            }
+                        ],
+                        "routing": [
+                            {
+                                "port": 3000,
+                                "ingressPath": "/"
+                            }
+                        ],
+                        "resources": {
+                            "requests": {
+                                "cpu": "100m",
+                                "memory": "256Mi"
+                            },
+                            "limits": {
+                                "cpu": "100m",
+                                "memory": "256Mi"
+                            }
+                        }
+                    },
+                    {
+                        "name": "test-app-1",
+                        "image": "crccheck/hello-world:latest",
+                        "resources": {
+                            "requests": {
+                                "cpu": "50m",
+                                "memory": "128Mi"
+                            },
+                            "limits": {
+                                "cpu": "50m",
+                                "memory": "128Mi"
+                            }
+                        }
+                    }
+                ],
+                "postgresExporterEnabled": false
+            }
+        });
+        let params = PatchParams::apply("tembo-integration-test");
+        let patch = Patch::Apply(&coredb_json);
+        coredbs.patch(cdb_name, &params, &patch).await.unwrap();
+
+        // assert we created two Deployments, with the names we provided
+        let deployment_items: Vec<Deployment> = list_resources(client.clone(), cdb_name, &namespace, 2)
+            .await
+            .unwrap();
+        // two AppService deployments. the postgres exporter is disabled
+        assert!(deployment_items.len() == 2);
+
+        let service_items: Vec<Service> = list_resources(client.clone(), cdb_name, &namespace, 1)
+            .await
+            .unwrap();
+        // one AppService Service, since only ports exposed on one
+        assert!(service_items.len() == 1);
+
+        let app_0 = deployment_items[0].clone();
+        let app_1 = deployment_items[1].clone();
+        assert_eq!(app_0.metadata.name.unwrap(), format!("{cdb_name}-postgrest"));
+        assert_eq!(app_1.metadata.name.unwrap(), format!("{cdb_name}-test-app-1"));
+
+        // Assert resources in first appService
+        // select the pod
+        let selector_map = app_0
+            .spec
+            .as_ref()
+            .and_then(|s| s.selector.match_labels.as_ref())
+            .expect("Deployment should have a selector");
+        let selector = selector_map
+            .iter()
+            .map(|(k, v)| format!("{}={}", k, v))
+            .collect::<Vec<_>>()
+            .join(",");
+        let lp = ListParams::default().labels(&selector);
+        let pods: Api<Pod> = Api::namespaced(client.clone(), &namespace);
+        // Fetch and print all the pods matching the label selector
+        let pod_list = pods.list(&lp).await.unwrap();
+        assert_eq!(pod_list.items.len(), 1);
+        let app_0_pod = pod_list.items[0].clone();
+        let app_0_container = app_0_pod.spec.unwrap().containers[0].clone();
+
+        let expected: ResourceRequirements = serde_json::from_value(serde_json::json!({
+            "requests": {
+                "cpu": "100m",
+                "memory": "256Mi"
+            },
+            "limits": {
+                "cpu": "100m",
+                "memory": "256Mi"
+            }
+        }))
+        .unwrap();
+        let app_0_resources = app_0_container.resources.unwrap();
+        assert_eq!(app_0_resources, expected);
+
+        let ingresses: Result<Vec<IngressRoute>, errors::OperatorError> =
+            list_resources(client.clone(), cdb_name, &namespace, 1).await;
+        let ingress = ingresses.unwrap();
+        assert_eq!(ingress.len(), 1);
+        let ingress_route = ingress[0].clone();
+        let routes = ingress_route.spec.clone().routes.clone();
+        assert_eq!(routes.len(), 1);
+        let route = routes[0].clone();
+        assert_eq!(
+            route.r#match,
+            format!("Host(`{}.localhost`) && PathPrefix(`/`)", cdb_name)
+        );
+        let services = routes[0].services.clone().unwrap();
+        assert_eq!(services.len(), 1);
+        assert_eq!(services[0].name, format!("{}-postgrest", cdb_name));
+        assert_eq!(services[0].port.clone().unwrap(), IntOrString::Int(3000));
+
+        // Assert resources in second AppService
+        let selector_map = app_1
+            .spec
+            .as_ref()
+            .and_then(|s| s.selector.match_labels.as_ref())
+            .expect("Deployment should have a selector");
+        let selector = selector_map
+            .iter()
+            .map(|(k, v)| format!("{}={}", k, v))
+            .collect::<Vec<_>>()
+            .join(",");
+        let lp = ListParams::default().labels(&selector);
+        let pod_list = pods.list(&lp).await.unwrap();
+        assert_eq!(pod_list.items.len(), 1);
+        let app_1_pod = pod_list.items[0].clone();
+        let app_1_container = app_1_pod.spec.unwrap().containers[0].clone();
+
+        let expected: ResourceRequirements = serde_json::from_value(serde_json::json!({
+            "requests": {
+                "cpu": "50m",
+                "memory": "128Mi"
+            },
+            "limits": {
+                "cpu": "50m",
+                "memory": "128Mi"
+            }
+        }))
+        .unwrap();
+        let app_1_resources = app_1_container.resources.unwrap();
+        assert_eq!(app_1_resources, expected);
+
+        // Delete the one without a service, but leave the postgrest appService
+        let coredb_json = serde_json::json!({
+            "apiVersion": API_VERSION,
+            "kind": kind,
+            "metadata": {
+                "name": cdb_name
+            },
+            "spec": {
+                "appServices": [
+                    {
+                        "name": "postgrest",
+                        "image": "postgrest/postgrest:v10.0.0",
+                        "env": [
+                            {
+                                "name": "PGRST_DB_URI",
+                                "valueFromPlatform": "ReadWriteConnection"
+                            },
+                            {
+                                "name": "PGRST_DB_SCHEMA",
+                                "value": "public"
+                            },
+                            {
+                                "name": "PGRST_DB_ANON_ROLE",
+                                "value": "postgres"
+                            }
+                        ],
+                        "routing": [
+                            {
+                                "port": 3000,
+                                "ingressPath": "/"
+                            }
+                        ],
+                    }
+                ],
+                "postgresExporterEnabled": false
+            }
+        });
+        let params = PatchParams::apply("tembo-integration-test");
+        let patch = Patch::Apply(&coredb_json);
+        coredbs.patch(cdb_name, &params, &patch).await.unwrap();
+
+        let deployment_items: Vec<Deployment> = list_resources(client.clone(), cdb_name, &namespace, 1)
+            .await
+            .unwrap();
+        assert!(deployment_items.len() == 1);
+        let app_0 = deployment_items[0].clone();
+        assert_eq!(app_0.metadata.name.unwrap(), format!("{cdb_name}-postgrest"));
+
+        // should still be just one Service
+        let service_items: Vec<Service> = list_resources(client.clone(), cdb_name, &namespace, 1)
+            .await
+            .unwrap();
+        // One appService Services
+        assert!(service_items.len() == 1);
+
+
+        // send a request to postgres
+        #[derive(Debug, Deserialize)]
+        struct ApiResponse {
+            info: ApiInfo,
+        }
+
+        #[derive(Debug, Deserialize)]
+        struct ApiInfo {
+            title: String,
+        }
+        let postgres_url = format!("https://{}.localhost:8443/", cdb_name);
+        // with no headers, request will succeed against postgREST
+        let response = http_get_with_retry(&postgres_url, None, 100, 5).await.unwrap();
+        let body: ApiResponse = response.json().await.unwrap();
+        assert_eq!(body.info.title, "PostgREST API");
+
+        // add an auth header and request will fail (have not configured server side JWT)
+        let headers: BTreeMap<String, String> =
+            [(String::from("Authrization"), String::from("Bearer SomeKey"))]
+                .iter()
+                .cloned()
+                .collect();
+        let response = http_get_with_retry(&postgres_url, Some(headers.clone()), 1, 0).await;
+        assert!(response.is_err());
+
+        // patch the postgREST appService with middleware modifying request header
+        let coredb_json = serde_json::json!({
+            "apiVersion": API_VERSION,
+            "kind": kind,
+            "metadata": {
+                "name": cdb_name
+            },
+            "spec": {
+                "appServices": [
+                    {
+                        "name": "postgrest",
+                        "image": "postgrest/postgrest:v10.0.0",
+                        "env": [
+                            {
+                                "name": "PGRST_DB_URI",
+                                "valueFromPlatform": "ReadWriteConnection"
+                            },
+                            {
+                                "name": "PGRST_DB_SCHEMA",
+                                "value": "public"
+                            },
+                            {
+                                "name": "PGRST_DB_ANON_ROLE",
+                                "value": "postgres"
+                            }
+                        ],
+                        "middlewares": [
+                            {
+                                "customRequestHeaders": {
+                                    "name": "strip-auth-header",
+                                    "config": {
+                                        "Authorization": ""
+                                    }
+                                }
+                            }
+                        ],
+                        "routing": [
+                            {
+                                "port": 3000,
+                                "ingressPath": "/",
+                                "middlewares": [
+                                    "strip-auth-header"
+                                ]
+                            }
+                        ],
+                    }
+                ],
+                "postgresExporterEnabled": false
+            }
+        });
+        let params = PatchParams::apply("tembo-integration-test");
+        let patch = Patch::Apply(&coredb_json);
+        coredbs.patch(cdb_name, &params, &patch).await.unwrap();
+        // same request with auth header will now succeed
+        // add some retries to give change a chance to apply
+        let response = http_get_with_retry(&postgres_url, Some(headers), 2, 5)
+            .await
+            .unwrap();
+        let body: ApiResponse = response.json().await.unwrap();
+        assert_eq!(body.info.title, "PostgREST API");
+
+
+        // Delete all of them
+        let coredb_json = serde_json::json!({
+            "apiVersion": API_VERSION,
+            "kind": kind,
+            "metadata": {
+                "name": cdb_name
+            },
+            "spec": {
+                "postgresExporterEnabled": false
+            }
+        });
+        let params = PatchParams::apply("tembo-integration-test");
+        let patch = Patch::Apply(&coredb_json);
+        coredbs.patch(cdb_name, &params, &patch).await.unwrap();
+        let deployment_items: Vec<Deployment> = list_resources(client.clone(), cdb_name, &namespace, 0)
+            .await
+            .unwrap();
+        assert!(deployment_items.is_empty());
+
+        let service_items: Vec<Service> = list_resources(client.clone(), cdb_name, &namespace, 0)
+            .await
+            .unwrap();
+        assert!(service_items.is_empty());
+        // should be no Services
+
+        // ingress must be gone
+        let ingresses: Vec<IngressRoute> = list_resources(client.clone(), cdb_name, &namespace, 0)
+            .await
+            .unwrap();
+        assert_eq!(ingresses.len(), 0);
+
+        // CLEANUP TEST
+        // Cleanup CoreDB
+        coredbs.delete(cdb_name, &Default::default()).await.unwrap();
+        println!("Waiting for CoreDB to be deleted: {}", &cdb_name);
+        let _assert_coredb_deleted = tokio::time::timeout(
+            Duration::from_secs(TIMEOUT_SECONDS_COREDB_DELETED),
+            await_condition(coredbs.clone(), cdb_name, conditions::is_deleted("")),
+        )
+        .await
+        .unwrap_or_else(|_| {
+            panic!(
+                "CoreDB {} was not deleted after waiting {} seconds",
+                cdb_name, TIMEOUT_SECONDS_COREDB_DELETED
+            )
+        });
+        println!("CoreDB resource deleted {}", cdb_name);
+
+        // Delete namespace
+        let _ = delete_namespace(client.clone(), &namespace).await;
+    }
+
+    #[tokio::test]
+    #[ignore]
+    async fn restarts_postgres_correctly() {
+        async fn wait_til_status_is_filled(coredbs: &Api<CoreDB>, name: &str) {
+            let started_waiting = Utc::now();
+            let max_wait_time = chrono::Duration::seconds(45);
+
+            while Utc::now().signed_duration_since(started_waiting) <= max_wait_time {
+                let coredb = coredbs.get(name).await.expect("spec not found");
+                if coredb.status.is_some() {
+                    return;
+                }
+                tokio::time::sleep(Duration::from_secs(2)).await;
+            }
+
+            panic!("Status was not populated fast enough");
+        }
+
+        async fn get_pg_start_time(coredbs: &Api<CoreDB>, name: &str, ctx: Arc<Context>) -> DateTime<Utc> {
+            const PG_TIMESTAMP_DECL: &str = "%Y-%m-%d %H:%M:%S.%f%#z";
+
+            let coredb = coredbs.get(name).await.expect("spec not found");
+
+            let psql_output = coredb
+                .psql(
+                    "SELECT pg_postmaster_start_time()".into(),
+                    "postgres".to_string(),
+                    ctx,
+                )
+                .await
+                .map_err(|err| eprintln!("Error: {:?}", err))
+                .unwrap();
+            let stdout = psql_output
+                .stdout
+                .as_ref()
+                .and_then(|stdout| stdout.lines().nth(2).map(str::trim))
+                .expect("expected stdout");
+
+            DateTime::parse_from_str(stdout, PG_TIMESTAMP_DECL)
+                .unwrap()
+                .into()
+        }
+
+        async fn status_running(coredbs: &Api<CoreDB>, name: &str) -> bool {
+            let spec = coredbs.get(name).await.expect("spec not found");
+
+            spec.status.expect("Expected status to be present").running
+        }
+
+        // Initialize tracing
+        tracing_subscriber::fmt().init();
+
+        // Initialize the Kubernetes client
+        let client = kube_client().await;
+        let state = State::default();
+        let context = state.create_context(client.clone());
+
+        let name = {
+            let mut rng = rand::thread_rng();
+            let suffix = rng.gen_range(0..100000);
+
+            format!("test-coredb-{}", suffix)
+        };
+
+        let namespace = create_namespace(client.clone(), &name).await.unwrap();
+
+        // Apply a basic configuration of CoreDB
+        let coredbs: Api<CoreDB> = Api::namespaced(client.clone(), &namespace);
+        let pods: Api<Pod> = Api::namespaced(client.clone(), &namespace);
+
+        let coredb_json = serde_json::json!({
+            "apiVersion": API_VERSION,
+            "kind": "CoreDB",
+            "metadata": {
+                "name": name
+            },
+            "spec": {
+                "replicas": 1,
+                "extensions": [],
+                "trunk_installs": []
+            }
+        });
+
+        let params = PatchParams::apply("tembo-integration-test");
+        let patch = Patch::Apply(&coredb_json);
+        coredbs.patch(&name, &params, &patch).await.unwrap();
+
+        // Wait for CNPG Pod to be created
+        {
+            let pod_name = format!("{}-1", name);
+
+            pod_ready_and_running(pods.clone(), pod_name.clone()).await;
+            wait_til_status_is_filled(&coredbs, &name).await;
+        }
+
+        // Ensure status.running is true
+        assert!(status_running(&coredbs, &name).await);
+        let initial_start_time = get_pg_start_time(&coredbs, &name, context.clone()).await;
+
+        // Apply the annotation to restart Postgres
+        {
+            let restart = Utc::now().to_rfc3339_opts(SecondsFormat::Secs, true).to_string();
+
+            let patch_json = serde_json::json!({
+                "metadata": {
+                    "annotations": {
+                        "kubectl.kubernetes.io/restartedAt": restart
+                    }
+                }
+            });
+
+            let patch = Patch::Merge(&patch_json);
+            coredbs
+                .patch(&name, &PatchParams::default(), &patch)
+                .await
+                .unwrap();
+        }
+
+        // Ensure that eventually `status.running` becomes false to reflect
+        // that Postgres is down
+        {
+            let started = Utc::now();
+            let max_wait_time = chrono::Duration::seconds(30);
+            let mut running_became_false = false;
+            while Utc::now().signed_duration_since(started) < max_wait_time {
+                if status_running(&coredbs, &name).await {
+                    println!("status.running is still true. Retrying in 1 sec.");
+                    tokio::time::sleep(Duration::from_secs(1)).await;
+                } else {
+                    println!("status.running is now false!");
+
+                    running_became_false = true;
+                    break;
+                }
+            }
+
+            assert!(
+                running_became_false,
+                "status.running should've become false after restart"
+            );
+        }
+
+        // Wait for Postgres to restart
+        {
+            let started = Utc::now();
+            let max_wait_time = chrono::Duration::seconds(TIMEOUT_SECONDS_POD_READY as _);
+            let mut running_became_true = false;
+            while Utc::now().signed_duration_since(started) < max_wait_time {
+                if status_running(&coredbs, &name).await.not() {
+                    println!("status.running is still false. Retrying in 3 secs.");
+                    tokio::time::sleep(Duration::from_secs(3)).await;
+                } else {
+                    println!("status.running is now true once again!");
+
+                    running_became_true = true;
+                    break;
+                }
+            }
+
+            assert!(
+                running_became_true,
+                "status.running should've become true once restarted"
+            );
+
+            let reboot_start_time = get_pg_start_time(&coredbs, &name, context).await;
+
+            assert!(
+                reboot_start_time > initial_start_time,
+                "start time should've changed"
+            );
+        }
+
+        // Perform cleanup
+        {
+            coredbs.delete(&name, &Default::default()).await.unwrap();
+            println!("Waiting for CoreDB to be deleted: {name}");
+            let _assert_coredb_deleted = tokio::time::timeout(
+                Duration::from_secs(TIMEOUT_SECONDS_COREDB_DELETED),
+                await_condition(coredbs.clone(), &name, conditions::is_deleted("")),
+            )
+            .await
+            .unwrap_or_else(|_| {
+                panic!(
+                    "CoreDB {} was not deleted after waiting {} seconds",
+                    name, TIMEOUT_SECONDS_COREDB_DELETED
+                )
+            });
+            println!("CoreDB resource deleted {name}");
+
+            // Delete namespace
+            let _ = delete_namespace(client.clone(), &namespace).await;
+        }
+    }
+
+    #[tokio::test]
+    #[ignore]
+    async fn functional_test_status_configs() {
+        async fn runtime_cfg(coredbs: &Api<CoreDB>, name: &str) -> Option<Vec<PgConfig>> {
+            let spec = coredbs.get(name).await.expect("spec not found");
+            spec.status.expect("Expected status to be present").runtime_config
+        }
+
+        // Initialize the Kubernetes client
+        let client = kube_client().await;
+        let state = State::default();
+        let _context = state.create_context(client.clone());
+
+        // Configurations
+        let mut rng = rand::thread_rng();
+        let suffix = rng.gen_range(0..100000);
+        let name = &format!("test-coredb-{}", suffix);
+        let namespace = match create_namespace(client.clone(), name).await {
+            Ok(namespace) => namespace,
+            Err(e) => {
+                eprintln!("Error creating namespace: {}", e);
+                std::process::exit(1);
+            }
+        };
+
+        let kind = "CoreDB";
+        let replicas = 1;
+
+        // Create a pod we can use to run commands in the cluster
+        let pods: Api<Pod> = Api::namespaced(client.clone(), &namespace);
+
+        // Apply a basic configuration of CoreDB
+        println!("Creating CoreDB resource {}", name);
+        let coredbs: Api<CoreDB> = Api::namespaced(client.clone(), &namespace);
+        // Generate basic CoreDB resource to start with
+        let coredb_json = serde_json::json!({
+            "apiVersion": API_VERSION,
+            "kind": kind,
+            "metadata": {
+                "name": name
+            },
+            "spec": {
+                "replicas": replicas,
+                "trunk_installs": [
+                    {
+                        "name": "pg_partman",
+                        "version": "4.7.3",
+                    },
+                    {
+                        "name": "pgmq",
+                        "version": "0.10.0",
+                    },
+                    {
+                        "name": "pg_stat_statements",
+                        "version": "1.10.0",
+                    },
+                ],
+                "extensions": [
+                    {
+                        "name": "pg_partman",
+                        "locations": [
+                        {
+                          "enabled": true,
+                          "version": "4.7.3",
+                          "database": "postgres",
+                          "schema": "public"
+                        }]
+                    },
+                    {
+                        "name": "pgmq",
+                        "locations": [
+                        {
+                          "enabled": true,
+                          "version": "0.10.0",
+                          "database": "postgres",
+                          "schema": "public"
+                        }]
+                    },
+                    {
+                        "name": "pg_stat_statements",
+                        "locations": [
+                        {
+                          "enabled": true,
+                          "version": "1.10.0",
+                          "database": "postgres",
+                          "schema": "public"
+                        }]
+                    }
+                ],
+                "runtime_config": [
+                    {
+                        "name": "shared_preload_libraries",
+                        "value": "pg_stat_statements,pg_partman_bgw"
+                    }
+                ]
+            }
+        });
+        let params = PatchParams::apply("tembo-integration-test");
+        let patch = Patch::Apply(&coredb_json);
+        let _coredb_resource = coredbs.patch(name, &params, &patch).await.unwrap();
+
+        // Wait for CNPG Pod to be created
+        let pod_name = format!("{}-1", name);
+
+        pod_ready_and_running(pods.clone(), pod_name.clone()).await;
+
+        let pods: Api<Pod> = Api::namespaced(client.clone(), &namespace);
+        let lp =
+            ListParams::default().labels(format!("app=postgres-exporter,coredb.io/name={}", name).as_str());
+        let exporter_pods = pods.list(&lp).await.expect("could not get pods");
+        let exporter_pod_name = exporter_pods.items[0].metadata.name.as_ref().unwrap();
+        println!("Exporter pod name: {}", &exporter_pod_name);
+
+        pod_ready_and_running(pods.clone(), exporter_pod_name.clone()).await;
+
+        // Assert status contains configs
+        let mut found_configs = false;
+        let expected_config = ConfigValue::Multiple(BTreeSet::from_iter(vec![
+            "pg_stat_statements".to_string(),
+            "pg_partman_bgw".to_string(),
+        ]));
+
+        // Wait for status.runtime_config to contain expected_config
+        while !found_configs {
+            let runtime_config = runtime_cfg(&coredbs, name).await;
+            if runtime_config.is_some() {
+                let runtime_config = runtime_config.unwrap();
+                for config in runtime_config {
+                    if config.name == "shared_preload_libraries" && config.value == expected_config {
+                        found_configs = true;
+                    }
+                }
+            }
+            println!("Waiting for runtime_config to be populated with expected values");
+            tokio::time::sleep(Duration::from_secs(5)).await;
+        }
+
+        // Assert status.runtime_config length is greater than 350. It should be around 362, but
+        // that will fluctuate between postgres versions. This is a sanity check to ensure that
+        // the runtime_config is being populated with all config values.
+        let runtime_cfg = runtime_cfg(&coredbs, name).await.unwrap();
+        assert!(runtime_cfg.len() > 350);
+        println!("Found {} runtime_config values", runtime_cfg.len());
+
+        // Assert status.runtime_config
+        assert!(found_configs);
+
+        // CLEANUP TEST
+        // Cleanup CoreDB
+        coredbs.delete(name, &Default::default()).await.unwrap();
+        println!("Waiting for CoreDB to be deleted: {}", &name);
+        let _assert_coredb_deleted = tokio::time::timeout(
+            Duration::from_secs(TIMEOUT_SECONDS_COREDB_DELETED),
+            await_condition(coredbs.clone(), name, conditions::is_deleted("")),
+        )
+        .await
+        .unwrap_or_else(|_| {
+            panic!(
+                "CoreDB {} was not deleted after waiting {} seconds",
+                name, TIMEOUT_SECONDS_COREDB_DELETED
+            )
+        });
+        println!("CoreDB resource deleted {}", name);
+
+        // Delete namespace
+        let _ = delete_namespace(client.clone(), &namespace).await;
+    }
+
+    #[tokio::test]
+    #[ignore]
+    async fn functional_test_backup_and_restore() {
+        // Initialize the Kubernetes client
+        let client = kube_client().await;
+        let state = State::default();
+        let context = state.create_context(client.clone());
+
+        // Configurations
+        let mut rng = rand::thread_rng();
+        let suffix = rng.gen_range(0..100000);
+        let name = &format!("test-coredb-{}", suffix);
+        let namespace = match create_namespace(client.clone(), name).await {
+            Ok(namespace) => namespace,
+            Err(e) => {
+                eprintln!("Error creating namespace: {}", e);
+                std::process::exit(1);
+            }
+        };
+
+        let kind = "CoreDB";
+        let replicas = 1;
+
+        // Create a pod we can use to run commands in the cluster
+        let pods: Api<Pod> = Api::namespaced(client.clone(), &namespace);
+        let backup_location = format!("s3://tembo-backup/{}", name);
+
+        // Apply a basic configuration of CoreDB
+        println!("Creating CoreDB resource {}", name);
+        let coredbs: Api<CoreDB> = Api::namespaced(client.clone(), &namespace);
+        // Generate basic CoreDB resource to start with
+        let coredb_json = serde_json::json!({
+            "apiVersion": API_VERSION,
+            "kind": kind,
+            "metadata": {
+                "name": name
+            },
+            "spec": {
+            "replicas": replicas,
+                "backup": {
+                    "destinationPath": backup_location,
+                    "retentionPolicy": "30",
+                    "schedule": "17 9 * * *",
+                    "encryption": "",
+                    "endpointURL": "http://minio.minio.svc.cluster.local:9000",
+                    "s3Credentials": {
+                        "accessKeyId": {
+                        "name": "s3creds",
+                        "key": "MINIO_ACCESS_KEY"
+                        },
+                        "secretAccessKey": {
+                        "name": "s3creds",
+                        "key": "MINIO_SECRET_KEY"
+                        }
+                    }
+                }
+            }
+        });
+        let params = PatchParams::apply("tembo-integration-test");
+        let patch = Patch::Apply(&coredb_json);
+        let coredb_resource = coredbs.patch(name, &params, &patch).await.unwrap();
+
+        // Wait for CNPG Pod to be created
+        let pod_name = format!("{}-1", name);
+        pod_ready_and_running(pods.clone(), pod_name.clone()).await;
+
+        let pods: Api<Pod> = Api::namespaced(client.clone(), &namespace);
+        let lp =
+            ListParams::default().labels(format!("app=postgres-exporter,coredb.io/name={}", name).as_str());
+        let exporter_pods = pods.list(&lp).await.expect("could not get pods");
+        let exporter_pod_name = exporter_pods.items[0].metadata.name.as_ref().unwrap();
+        println!("Exporter pod name: {}", &exporter_pod_name);
+
+        // Wait for CNPG Cluster to be created by looping over replicas until
+        // they are in a running state
+        for i in 1..=replicas {
+            let pod_name = format!("{}-{}", name, i);
+            pod_ready_and_running(pods.clone(), pod_name).await;
+        }
+
+        // Assert that we can query the database with \dx;
+        let result = psql_with_retry(context.clone(), coredb_resource.clone(), "\\dx".to_string()).await;
+        assert!(result.stdout.clone().unwrap().contains("plpgsql"));
+
+        // Check to make sure the initial backup has run and its completed
+        has_backup_completed(context.clone(), &namespace, name).await;
+
+        // Create a table and insert some data
+        let result = psql_with_retry(
+            context.clone(),
+            coredb_resource.clone(),
+            "CREATE TABLE test (id SERIAL PRIMARY KEY, name VARCHAR(255));".to_string(),
+        )
+        .await;
+        assert!(result.stdout.clone().unwrap().contains("CREATE TABLE"));
+
+        let result = psql_with_retry(
+            context.clone(),
+            coredb_resource.clone(),
+            "INSERT INTO test (name) VALUES ('test');".to_string(),
+        )
+        .await;
+        assert!(result.stdout.clone().unwrap().contains("INSERT 0 1"));
+
+        // Now take a new backup of the instance
+        let backup: Api<Backup> = Api::namespaced(client.clone(), &namespace);
+        let backup_name = format!("{}-backup", name);
+        let backup_json = serde_json::json!({
+            "apiVersion": "postgresql.cnpg.io/v1",
+            "kind": "Backup",
+            "metadata": {
+                "name": backup_name,
+                "labels": {
+                    "cnpg.io/cluster": backup_name,
+                    "cnpg.io/immediateBackup": "false",
+                    "cnpg.io/scheduled-backup": name
+                },
+            },
+            "spec": {
+                "cluster": {
+                    "name": name,
+                }
+            },
+        });
+        let params = PatchParams::apply("tembo-integration-test");
+        let patch = Patch::Apply(&backup_json);
+        let _backup_resource = backup.patch(&backup_name, &params, &patch).await.unwrap();
+
+        // Assert that we can query the database with \dx;
+        let result = psql_with_retry(context.clone(), coredb_resource.clone(), "\\dx".to_string()).await;
+        assert!(result.stdout.clone().unwrap().contains("plpgsql"));
+
+        // Wait for backup to complete
+        has_backup_completed(context.clone(), &namespace, &backup_name).await;
+
+        // If the backup is complete, we can now restore to a new instance in a new namespace
+        let suffix = rng.gen_range(0..100000);
+        let restore_name = &format!("test-coredb-restore-{}", suffix);
+        let restore_namespace = match create_namespace(client.clone(), restore_name).await {
+            Ok(restore_namespace) => restore_namespace,
+            Err(e) => {
+                eprintln!("Error creating namespace: {}", e);
+                std::process::exit(1);
+            }
+        };
+
+        let kind = "CoreDB";
+        let replicas = 1;
+
+        // Create a pod we can use to run commands in the cluster
+        let restore_pods: Api<Pod> = Api::namespaced(client.clone(), &restore_namespace);
+        let restore_backup_location = format!("s3://tembo-backup/{}", restore_name);
+
+        // Apply a basic configuration of CoreDB
+        println!("Creating CoreDB resource {}", restore_name);
+        let restore_coredbs: Api<CoreDB> = Api::namespaced(client.clone(), &restore_namespace);
+        // Generate basic CoreDB resource to start with
+        let restore_coredb_json = serde_json::json!({
+            "apiVersion": API_VERSION,
+            "kind": kind,
+            "metadata": {
+                "name": restore_name
+            },
+            "spec": {
+                "replicas": replicas,
+                "backup": {
+                    "destinationPath": restore_backup_location,
+                    "retentionPolicy": "30",
+                    "schedule": "17 9 * * *",
+                    "endpointURL": "http://minio.minio.svc.cluster.local:9000",
+                    "encryption": "",
+                    "s3Credentials": {
+                        "accessKeyId": {
+                            "name": "s3creds",
+                            "key": "MINIO_ACCESS_KEY"
+                        },
+                        "secretAccessKey": {
+                            "name": "s3creds",
+                            "key": "MINIO_SECRET_KEY"
+                        }
+                    }
+                },
+                "restore": {
+                    "serverName": name,
+                    "endpointURL": "http://minio.minio.svc.cluster.local:9000",
+                    "s3Credentials": {
+                        "accessKeyId": {
+                            "name": "s3creds",
+                            "key": "MINIO_ACCESS_KEY"
+                        },
+                        "secretAccessKey": {
+                            "name": "s3creds",
+                            "key": "MINIO_SECRET_KEY"
+                        }
+                    }
+                }
+            }
+        });
+        let params = PatchParams::apply("tembo-integration-test");
+        let patch = Patch::Apply(&restore_coredb_json);
+        let coredb_resource = restore_coredbs
+            .patch(restore_name, &params, &patch)
+            .await
+            .unwrap();
+
+        // Wait for CNPG Pod to be created
+        let restore_pod_name = format!("{}-1", restore_name);
+        pod_ready_and_running(restore_pods.clone(), restore_pod_name.clone()).await;
+
+        let restore_pods: Api<Pod> = Api::namespaced(client.clone(), &restore_namespace);
+        let lp = ListParams::default()
+            .labels(format!("app=postgres-exporter,coredb.io/name={}", restore_name).as_str());
+        let exporter_pods = restore_pods.list(&lp).await.expect("could not get pods");
+        let exporter_pod_name = exporter_pods.items[0].metadata.name.as_ref().unwrap();
+        println!("Exporter pod name: {}", &exporter_pod_name);
+
+        // Wait for CNPG Cluster to be created by looping over replicas until
+        // they are in a running state
+        for i in 1..=replicas {
+            let restore_pod_name = format!("{}-{}", restore_name, i);
+            pod_ready_and_running(restore_pods.clone(), restore_pod_name).await;
+        }
+
+        // Assert that we can query the database with \dx;
+        let result = psql_with_retry(context.clone(), coredb_resource.clone(), "\\dx".to_string()).await;
+        assert!(result.stdout.clone().unwrap().contains("plpgsql"));
+
+        // Check to make sure the data from the original database is present
+        let result = psql_with_retry(
+            context.clone(),
+            coredb_resource.clone(),
+            "SELECT * FROM test;".to_string(),
+        )
+        .await;
+        assert!(result.stdout.clone().unwrap().contains("test"));
+
+        // CLEANUP TEST
+        // Cleanup CoreDB
+        coredbs.delete(name, &Default::default()).await.unwrap();
+        println!("Waiting for CoreDB to be deleted: {}", &name);
+        let _assert_coredb_deleted = tokio::time::timeout(
+            Duration::from_secs(TIMEOUT_SECONDS_COREDB_DELETED),
+            await_condition(coredbs.clone(), name, conditions::is_deleted("")),
+        )
+        .await
+        .unwrap_or_else(|_| {
+            panic!(
+                "CoreDB {} was not deleted after waiting {} seconds",
+                name, TIMEOUT_SECONDS_COREDB_DELETED
+            )
+        });
+        println!("CoreDB resource deleted {}", name);
+
+        // Delete namespace
+        let _ = delete_namespace(client.clone(), &namespace).await;
+
+        restore_coredbs
+            .delete(restore_name, &Default::default())
+            .await
+            .unwrap();
+        println!("Waiting for CoreDB to be deleted: {}", &restore_name);
+        let _assert_coredb_deleted = tokio::time::timeout(
+            Duration::from_secs(TIMEOUT_SECONDS_COREDB_DELETED),
+            await_condition(restore_coredbs.clone(), restore_name, conditions::is_deleted("")),
+        )
+        .await
+        .unwrap_or_else(|_| {
+            panic!(
+                "CoreDB {} was not deleted after waiting {} seconds",
+                restore_name, TIMEOUT_SECONDS_COREDB_DELETED
+            )
+        });
+        println!("CoreDB resource deleted {}", restore_name);
+
+        // Delete namespace
+        let _ = delete_namespace(client.clone(), &restore_namespace).await;
     }
 }

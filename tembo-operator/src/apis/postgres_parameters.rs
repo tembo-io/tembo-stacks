@@ -141,9 +141,9 @@ impl ConfigValue {
             (ConfigValue::Single(_), _) | (_, ConfigValue::Single(_)) => {
                 Err(MergeError::SingleValueNotAllowed)
             }
-            (ConfigValue::Multiple(set1), ConfigValue::Multiple(set2)) => {
-                let set = set1.union(&set2).cloned().collect();
-                Ok(ConfigValue::Multiple(set))
+            (ConfigValue::Multiple(mut set1), ConfigValue::Multiple(mut set2)) => {
+                set1.append(&mut set2);
+                Ok(ConfigValue::Multiple(set1))
             }
         }
     }
@@ -154,8 +154,8 @@ pub fn merge_pg_configs(
     vec2: &[PgConfig],
     name: &str,
 ) -> Result<Option<PgConfig>, MergeError> {
-    let config1 = vec1.iter().cloned().find(|config| config.name == name);
-    let config2 = vec2.iter().cloned().find(|config| config.name == name);
+    let config1 = vec1.iter().find(|config| config.name == name).cloned();
+    let config2 = vec2.iter().find(|config| config.name == name).cloned();
     match (config1, config2) {
         (Some(mut c1), Some(c2)) => match c1.value.combine(c2.value) {
             Ok(combined_value) => {
@@ -378,6 +378,7 @@ impl<'de> Deserialize<'de> for PgConfig {
 mod pg_param_tests {
     use super::*;
     use crate::apis::coredb_types::{CoreDBSpec, Stack};
+    use std::collections::BTreeMap;
 
     #[test]
     fn test_pg_config() {
@@ -429,11 +430,12 @@ mod pg_param_tests {
                         value: "yolo".parse().unwrap(),
                     },
                 ]),
-                ..Default::default()
             }),
             ..Default::default()
         };
-        let requires_load: Vec<String> = vec!["pg_cron".to_string(), "pg_stat_statements".to_string()];
+        let mut requires_load: BTreeMap<String, String> = BTreeMap::new();
+        requires_load.insert("pg_cron".to_string(), "pg_cron".to_string());
+        requires_load.insert("pg_stat_statements".to_string(), "pg_stat_statements".to_string());
         let pg_configs = spec
             .get_pg_configs(requires_load)
             .expect("failed to get pg configs")

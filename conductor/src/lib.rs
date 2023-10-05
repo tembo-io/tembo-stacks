@@ -7,18 +7,15 @@ pub mod types;
 
 use crate::aws::cloudformation::{AWSConfigState, CloudFormationParams};
 use aws_sdk_cloudformation::config::Region;
-use controller::{
-    apis::coredb_types::{CoreDB, CoreDBSpec},
-    cloudnativepg::clusters::Cluster,
-};
+use controller::apis::coredb_types::{CoreDB, CoreDBSpec};
 use errors::ConductorError;
-use k8s_openapi::api::apps::v1::StatefulSet;
+
 use k8s_openapi::api::core::v1::{Namespace, Secret};
 use k8s_openapi::api::networking::v1::NetworkPolicy;
 use kube::api::{DeleteParams, ListParams, Patch, PatchParams};
 
-use chrono::{SecondsFormat, Utc};
-use kube::{Api, Client};
+use chrono::{DateTime, SecondsFormat, Utc};
+use kube::{Api, Client, ResourceExt};
 use log::{debug, info};
 use rand::Rng;
 use serde_json::{from_str, to_string, Value};
@@ -175,7 +172,12 @@ pub async fn delete(client: Client, namespace: &str, name: &str) -> Result<(), C
     Ok(())
 }
 
-pub async fn create_namespace(client: Client, name: &str) -> Result<(), ConductorError> {
+pub async fn create_namespace(
+    client: Client,
+    name: &str,
+    organization_id: &str,
+    instance_id: &str,
+) -> Result<(), ConductorError> {
     let ns_api: Api<Namespace> = Api::all(client);
     // check if the namespace already exists
     let params = ListParams::default().fields(&format!("metadata.name={}", name));
@@ -194,7 +196,9 @@ pub async fn create_namespace(client: Client, name: &str) -> Result<(), Conducto
         "metadata": {
             "name": format!("{name}"),
             "labels": {
-                "tembo-pod-init.tembo.io/watch": "true"
+                "tembo-pod-init.tembo.io/watch": "true",
+                "tembo.io/instance_id": instance_id,
+                "tembo.io/organization_id": organization_id
             }
         }
     });
@@ -390,25 +394,50 @@ pub async fn get_pg_conn(
     Ok(postgres_conn)
 }
 
-pub async fn restart_statefulset(
-    client: Client,
-    namespace: &str,
-    statefulset_name: &str,
-) -> Result<(), ConductorError> {
-    let sts: Api<StatefulSet> = Api::namespaced(client, namespace);
-    sts.restart(statefulset_name).await?;
-    Ok(())
-}
-
-pub async fn restart_cnpg(
+pub async fn restart_coredb(
     client: Client,
     namespace: &str,
     cluster_name: &str,
-) -> Result<(), ConductorError> {
-    let cluster: Api<Cluster> = Api::namespaced(client, namespace);
-    let restart = Utc::now()
+    msg_enqueued_at: DateTime<Utc>,
+) -> Result<bool, ConductorError> {
+    let coredb_api: Api<CoreDB> = Api::namespaced(client, namespace);
+    let restart = msg_enqueued_at
         .to_rfc3339_opts(SecondsFormat::Secs, true)
         .to_string();
+
+    let current_coredb = coredb_api
+        .get(cluster_name)
+        .await
+        .map_err(ConductorError::KubeError)?;
+    let mut is_being_updated = false;
+    match current_coredb
+        .annotations()
+        .get("kubectl.kubernetes.io/restartedAt")
+    {
+        None => {
+            info!(
+                "No restart annotation found on the CoreDB resource, applying for first time: {}",
+                namespace
+            );
+            is_being_updated = true;
+        }
+        Some(annotation) => {
+            if annotation != &restart {
+                info!(
+                    "Annotation found on the CoreDB resource, updating from {} to {}: {}",
+                    annotation, restart, namespace
+                );
+                is_being_updated = true;
+            }
+        }
+    };
+    if !is_being_updated {
+        info!(
+            "CoreDB resource already has the correct restart annotation: {}",
+            namespace
+        );
+        return Ok(is_being_updated);
+    }
 
     // To restart the CNPG pod we need to annotate the Cluster resource with
     // kubectl.kubernetes.io/restartedAt: <timestamp>
@@ -420,13 +449,15 @@ pub async fn restart_cnpg(
         }
     });
 
+    info!("Applying `restartedAt == {restart}` to the CoreDB resource.");
+
     // Use the patch method to update the Cluster resource
     let params = PatchParams::default();
-    let _patch = cluster
+    let _patch = coredb_api
         .patch(cluster_name, &params, &Patch::Merge(patch_json))
         .await
         .map_err(ConductorError::KubeError)?;
-    Ok(())
+    Ok(true)
 }
 
 // Create a cloudformation stack for the database.
