@@ -11,7 +11,7 @@ use controller::apis::coredb_types::{CoreDB, CoreDBSpec};
 use errors::ConductorError;
 
 use k8s_openapi::api::core::v1::{Namespace, Secret};
-use k8s_openapi::api::networking::v1::NetworkPolicy;
+
 use kube::api::{DeleteParams, ListParams, Patch, PatchParams};
 
 use chrono::{DateTime, SecondsFormat, Utc};

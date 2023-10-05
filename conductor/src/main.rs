@@ -4,10 +4,9 @@ use conductor::errors::ConductorError;
 use conductor::extensions::extensions_still_processing;
 use conductor::monitoring::CustomMetrics;
 use conductor::{
-    create_cloudformation, create_namespace, create_or_update, delete,
-    delete_cloudformation, delete_namespace, generate_rand_schedule, generate_spec,
-    get_coredb_error_without_status, get_one, get_pg_conn, lookup_role_arn, parse_event_id,
-    restart_coredb, types,
+    create_cloudformation, create_namespace, create_or_update, delete, delete_cloudformation,
+    delete_namespace, generate_rand_schedule, generate_spec, get_coredb_error_without_status,
+    get_one, get_pg_conn, lookup_role_arn, parse_event_id, restart_coredb, types,
 };
 use controller::apis::coredb_types::{Backup, CoreDBSpec, S3Credentials, ServiceAccountTemplate};
 use k8s_openapi::apimachinery::pkg::apis::meta::v1::ObjectMeta;
