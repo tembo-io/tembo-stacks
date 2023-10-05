@@ -3853,7 +3853,7 @@ mod test {
 
         pod_ready_and_running(pods.clone(), exporter_pod_name.clone()).await;
 
-        // Check Pooler is created
+        // Check for pooler
         let pooler_name = format!("{}-pooler", name);
         let poolers: Api<Pooler> = Api::namespaced(client.clone(), &namespace);
         let _pooler = poolers.get(&pooler_name).await.unwrap();
@@ -3898,10 +3898,8 @@ mod test {
             Duration::from_secs(30),
             await_condition(pooler_services.clone(), &pooler_name, conditions::is_deleted("")),
         );
-
         println!("Pooler service deleted: {}", pooler_name);
 
-        // CLEANUP TEST
         // Cleanup CoreDB
         coredbs.delete(name, &Default::default()).await.unwrap();
         println!("Waiting for CoreDB to be deleted: {}", &name);
