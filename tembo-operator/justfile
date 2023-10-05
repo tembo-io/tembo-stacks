@@ -13,8 +13,7 @@ generate-crd:
   cargo run --bin crdgen > ../charts/tembo-operator/templates/crd.yaml
 
 install-calico:
-	kubectl create -f https://raw.githubusercontent.com/projectcalico/calico/v3.26.1/manifests/tigera-operator.yaml
-	kubectl create -f https://raw.githubusercontent.com/projectcalico/calico/v3.26.1/manifests/custom-resources.yaml
+	helm upgrade --install --create-namespace --namespace=tigera-operator --version=3.26.1 --values=./testdata/calico.yaml calico projectcalico/tigera-operator
 
 install-traefik:
 	kubectl create namespace traefik || true
@@ -82,6 +81,7 @@ update-helm-repos:
 	helm repo add grafana https://grafana.github.io/helm-charts
 	helm repo add minio https://charts.min.io/
 	helm repo add emberstack https://emberstack.github.io/helm-charts
+	helm repo add projectcalico https://docs.tigera.io/calico/charts
 	helm repo update
 
 # generate and install crd into the cluster
