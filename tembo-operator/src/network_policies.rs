@@ -1,4 +1,7 @@
-use k8s_openapi::api::{core::v1::Service, networking::v1::NetworkPolicy};
+use k8s_openapi::api::{
+    core::v1::{Endpoints, Service},
+    networking::v1::NetworkPolicy,
+};
 use kube::{
     api::{Patch, PatchParams},
     runtime::controller::Action,
@@ -9,7 +12,7 @@ use std::time::Duration;
 use tracing::{debug, error};
 
 pub async fn reconcile_network_policies(client: Client, namespace: &str) -> Result<(), Action> {
-    let kubernetes_api_ip_address = lookup_kubernetes_api_ip(&client).await?;
+    let kubernetes_api_ip_addresses = lookup_kubernetes_api_ips(&client).await?;
 
     let np_api: Api<NetworkPolicy> = Api::namespaced(client, namespace);
 
@@ -186,6 +189,15 @@ pub async fn reconcile_network_policies(client: Client, namespace: &str) -> Resu
     });
     apply_network_policy(namespace, &np_api, allow_within_namespace).await?;
 
+    let mut ip_list_kube_api = Vec::new();
+    for ip_address in kubernetes_api_ip_addresses {
+        ip_list_kube_api.push(serde_json::json!({
+            "ipBlock": {
+                "cidr": format!("{}/32", ip_address)
+            }
+        }));
+    }
+
     let allow_kube_api = serde_json::json!({
         "apiVersion": "networking.k8s.io/v1",
         "kind": "NetworkPolicy",
@@ -198,13 +210,7 @@ pub async fn reconcile_network_policies(client: Client, namespace: &str) -> Resu
           "policyTypes": ["Egress"],
           "egress": [
             {
-              "to": [
-                {
-                  "ipBlock": {
-                    "cidr": format!("{}/32", kubernetes_api_ip_address)
-                  }
-                }
-              ]
+              "to": ip_list_kube_api
             }
           ]
         }
@@ -214,7 +220,11 @@ pub async fn reconcile_network_policies(client: Client, namespace: &str) -> Resu
     Ok(())
 }
 
-async fn lookup_kubernetes_api_ip(client: &Client) -> Result<String, Action> {
+// This function essentially does
+// kubectl get svc -n default kubernetes
+// kubectl get endpoints -n default kubernetes
+// To return the IP addresses of the kubernetes API server
+async fn lookup_kubernetes_api_ips(client: &Client) -> Result<Vec<String>, Action> {
     let service_api = Api::<Service>::namespaced(client.clone(), "default");
     // Look up IP address of 'kubernetes' service in default namespace
     let kubernetes_service = match service_api.get("kubernetes").await {
@@ -238,7 +248,41 @@ async fn lookup_kubernetes_api_ip(client: &Client) -> Result<String, Action> {
             return Err(Action::requeue(Duration::from_secs(300)));
         }
     };
-    Ok(cluster_ip)
+    let mut results = Vec::new();
+    results.push(cluster_ip);
+    let endpoints_api = Api::<Endpoints>::namespaced(client.clone(), "default");
+    let kubernetes_endpoint = match endpoints_api.get("kubernetes").await {
+        Ok(endpoint) => endpoint,
+        Err(e) => {
+            error!("Failed to get kubernetes endpoint: {}", e);
+            return Err(Action::requeue(Duration::from_secs(300)));
+        }
+    };
+    let kubernetes_endpoint_subsets = match kubernetes_endpoint.subsets {
+        Some(s) => s,
+        None => {
+            error!("while discovering kubernetes API IP address, endpoint has no subsets");
+            return Err(Action::requeue(Duration::from_secs(300)));
+        }
+    };
+    if kubernetes_endpoint_subsets.is_empty() {
+        error!("While discovering kubernetes API IP address, found no endpoints");
+        return Err(Action::requeue(Duration::from_secs(300)));
+    }
+    for subset in kubernetes_endpoint_subsets {
+        let addresses = match subset.addresses {
+            Some(a) => a,
+            None => {
+                error!("while discovering kubernetes API IP address, endpoint subset has no addresses");
+                return Err(Action::requeue(Duration::from_secs(300)));
+            }
+        };
+        for address in addresses {
+            results.push(address.ip);
+        }
+    }
+    results.sort();
+    Ok(results)
 }
 
 async fn apply_network_policy(namespace: &str, np_api: &Api<NetworkPolicy>, np: Value) -> Result<(), Action> {
