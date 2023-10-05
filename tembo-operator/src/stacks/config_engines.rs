@@ -132,7 +132,6 @@ fn olap_max_parallel_workers(cpu: i32) -> i32 {
 }
 
 fn olap_max_worker_processes(cpu: i32) -> i32 {
-    // higher of the default (8) or 2 * cpu
     i32::max(1, cpu)
 }
 
