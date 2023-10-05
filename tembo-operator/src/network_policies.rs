@@ -199,7 +199,7 @@ async fn apply_network_policy(namespace: &str, np_api: &Api<NetworkPolicy>, np: 
         .metadata
         .name
         .clone()
-        .expect("There is always a name")
+        .expect("There is always a name for a network policy")
         .clone();
     let params: PatchParams = PatchParams::apply("conductor").force();
     debug!("\nApplying Network Policy {} in namespace {}", name, namespace);
