@@ -439,6 +439,7 @@ fn generate_ip_allow_list_middleware_tcp(cdb: &CoreDB) -> MiddlewareTCP {
     MiddlewareTCP {
         metadata: ObjectMeta {
             name: Some(cdb.name_any()),
+            namespace: cdb.namespace(),
             owner_references,
             ..Default::default()
         },
