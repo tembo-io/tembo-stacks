@@ -3,10 +3,15 @@
 // kopium version: 0.14.0
 
 use kube::CustomResource;
-use serde::{Serialize, Deserialize};
+use serde::{Deserialize, Serialize};
 
 #[derive(CustomResource, Serialize, Deserialize, Clone, Debug, Default)]
-#[kube(group = "traefik.containo.us", version = "v1alpha1", kind = "MiddlewareTCP", plural = "middlewaretcps")]
+#[kube(
+    group = "traefik.containo.us",
+    version = "v1alpha1",
+    kind = "MiddlewareTCP",
+    plural = "middlewaretcps"
+)]
 #[kube(namespaced)]
 #[kube(schema = "disabled")]
 pub struct MiddlewareTCPSpec {
@@ -27,4 +32,3 @@ pub struct MiddlewareTCPIpWhiteList {
     #[serde(default, skip_serializing_if = "Option::is_none", rename = "sourceRange")]
     pub source_range: Option<Vec<String>>,
 }
-
