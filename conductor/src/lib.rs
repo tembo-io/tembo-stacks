@@ -11,7 +11,7 @@ use controller::apis::coredb_types::{CoreDB, CoreDBSpec};
 use errors::ConductorError;
 
 use k8s_openapi::api::core::v1::{Namespace, Secret};
-use k8s_openapi::api::networking::v1::NetworkPolicy;
+
 use kube::api::{DeleteParams, ListParams, Patch, PatchParams};
 
 use chrono::{DateTime, SecondsFormat, Utc};
@@ -108,9 +108,8 @@ pub fn get_event_id_from_coredb(coredb: &CoreDB) -> Result<String, Box<Conductor
     };
     let workspace_id = match annotations.get("tembo.io/workspace_id") {
         Some(workspace_id) => workspace_id.to_string(),
-        None => {
-            return Err(Box::new(ConductorError::EventIDFormat));
-        }
+        // Left over-concept, to be removed
+        None => "NA".to_string(),
     };
     let entity_name = match annotations.get("tembo.io/entity_name") {
         Some(entity_name) => entity_name.to_string(),
@@ -213,79 +212,6 @@ pub async fn create_namespace(
         .patch(name, &params, &Patch::Apply(&ns))
         .await
         .map_err(ConductorError::KubeError)?;
-    Ok(())
-}
-
-pub async fn create_networkpolicy(client: Client, name: &str) -> Result<(), ConductorError> {
-    let np_api: Api<NetworkPolicy> = Api::namespaced(client, name);
-    let params: PatchParams = PatchParams::apply("conductor").force();
-    let np = serde_json::json!({
-        "apiVersion": "networking.k8s.io/v1",
-        "kind": "NetworkPolicy",
-        "metadata": {
-            "name": format!("{name}"),
-            "namespace": format!("{name}"),
-        },
-        "spec": {
-            "podSelector": {
-                "matchLabels": {
-                    "app": "coredb",
-                    "coredb.io/name": format!("{name}"),
-                    "statefulset": format!("{name}")
-                }
-            },
-            "policyTypes": [
-                    "Egress"
-            ],
-            "egress": [
-                {
-                    "to": [
-                        {
-                            "namespaceSelector": {
-                                "matchLabels": {
-                                    "kubernetes.io/metadata.name": "kube-system"
-                                }
-                            }
-                        },
-                        {
-                            "podSelector": {
-                                "matchLabels": {
-                                    "k8s-app": "kube-dns"
-                                }
-                            }
-                        }
-                    ],
-                    "ports": [
-                        {
-                            "protocol": "UDP",
-                            "port": 53
-                        }
-                    ]
-                },
-                {
-                    "to": [
-                        {
-                            "ipBlock": {
-                                "cidr": "0.0.0.0/0",
-                                "except": [
-                                    "10.0.0.0/8",
-                                    "172.16.0.0/12",
-                                    "192.168.0.0/16"
-                                ]
-                            }
-                        },
-                    ]
-                }
-            ]
-        }
-    });
-
-    info!("\nCreating Network Policy {} if it does not exist", name);
-    let _o: NetworkPolicy = np_api
-        .patch(name, &params, &Patch::Apply(&np))
-        .await
-        .map_err(ConductorError::KubeError)?;
-
     Ok(())
 }
 
