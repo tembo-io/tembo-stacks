@@ -27,7 +27,6 @@ mod test {
         psql::PsqlOutput,
         Context, State,
     };
-    use futures_util::stream::StreamExt;
     use k8s_openapi::{
         api::{
             apps::v1::Deployment,

@@ -10,10 +10,18 @@ use kube::{
     api::{DeleteParams, Patch, PatchParams},
     Api, Resource, ResourceExt,
 };
+use regex::Regex;
 use std::sync::Arc;
 
-use crate::{apis::coredb_types::CoreDB, errors::OperatorError, Context};
+use crate::{
+    apis::coredb_types::CoreDB,
+    errors::OperatorError,
+    traefik::middleware_tcp_crd::{MiddlewareTCP, MiddlewareTCPIpWhiteList, MiddlewareTCPSpec},
+    Context,
+};
 use tracing::{debug, error, info, warn};
+
+pub const VALID_IPV4_CIDR_BLOCK: &str = "^((25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\\.){3}(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)(/(3[0-2]|2[0-9]|1[0-9]|[0-9]))?$";
 
 fn postgres_ingress_route_tcp(
     name: String,
@@ -336,4 +344,122 @@ pub async fn reconcile_postgres_ing_route_tcp(
     }
 
     Ok(())
+}
+
+// TODO: delete before merge
+#[allow(dead_code)]
+fn generate_ip_allow_list_middleware_tcp(cdb: &CoreDB) -> Option<MiddlewareTCP> {
+    let source_range = match cdb.spec.ip_allow_list.clone() {
+        None => {
+            return None;
+        }
+        Some(ips) => ips,
+    };
+
+    // Validate each IP address or CIDR block against the regex
+    let cidr_regex = Regex::new(VALID_IPV4_CIDR_BLOCK).expect("Failed to compile regex for IPv4 CIDR block");
+    let mut valid_ips = Vec::new();
+    for ip in source_range.iter() {
+        if !cidr_regex.is_match(ip) {
+            error!(
+                "Invalid IP address or CIDR block '{}' on DB {}, skipping",
+                ip,
+                cdb.name_any()
+            );
+        } else {
+            valid_ips.push(ip.clone());
+        }
+    }
+    valid_ips.sort();
+    if valid_ips.is_empty() {
+        return None;
+    }
+
+    let owner_references = cdb.controller_owner_ref(&()).map(|oref| vec![oref]);
+
+    Some(MiddlewareTCP {
+        metadata: ObjectMeta {
+            name: Some(format!("{}-ip-allow", cdb.name_any())),
+            owner_references,
+            ..Default::default()
+        },
+        spec: MiddlewareTCPSpec {
+            ip_white_list: Some(MiddlewareTCPIpWhiteList {
+                source_range: Some(valid_ips),
+            }),
+            ..Default::default()
+        },
+    })
+}
+
+
+#[cfg(test)]
+mod tests {
+    use crate::{
+        apis::coredb_types::{CoreDB, CoreDBSpec},
+        ingress::generate_ip_allow_list_middleware_tcp,
+    };
+    use k8s_openapi::apimachinery::pkg::apis::meta::v1::ObjectMeta;
+
+    #[test]
+    fn test_no_ip_allow_list() {
+        let cdb = CoreDB {
+            metadata: ObjectMeta::default(),
+            spec: CoreDBSpec {
+                ip_allow_list: None,
+                ..CoreDBSpec::default()
+            },
+            status: None,
+        };
+        let result = generate_ip_allow_list_middleware_tcp(&cdb);
+        assert!(result.is_none());
+    }
+
+    #[test]
+    fn test_invalid_ips() {
+        let cdb = CoreDB {
+            metadata: ObjectMeta::default(),
+            spec: CoreDBSpec {
+                ip_allow_list: Some(vec!["10.0.0.256".to_string(), "192.168.1.0/33".to_string()]),
+                ..CoreDBSpec::default()
+            },
+            status: None,
+        };
+        let result = generate_ip_allow_list_middleware_tcp(&cdb);
+        assert!(result.is_none(), "{:?}", result);
+    }
+
+    #[test]
+    fn test_mixed_ips() {
+        let cdb = CoreDB {
+            metadata: ObjectMeta::default(),
+            spec: CoreDBSpec {
+                ip_allow_list: Some(vec![
+                    "10.0.0.1".to_string(),
+                    "192.168.1.0/24".to_string(),
+                    "10.0.0.255".to_string(),
+                ]),
+                ..CoreDBSpec::default()
+            },
+            status: None,
+        };
+        let result = generate_ip_allow_list_middleware_tcp(&cdb).unwrap();
+        // Add assertions to ensure that the middleware contains the correct IPs and not the invalid one
+        let source_range = result.spec.ip_white_list.clone().unwrap().source_range.unwrap();
+        assert!(
+            source_range.contains(&"10.0.0.1".to_string()),
+            "{:?}",
+            source_range
+        );
+        assert!(
+            source_range.contains(&"192.168.1.0/24".to_string()),
+            "{:?}",
+            source_range
+        );
+        assert!(
+            source_range.contains(&"10.0.0.255".to_string()),
+            "{:?}",
+            source_range
+        );
+    }
 }
