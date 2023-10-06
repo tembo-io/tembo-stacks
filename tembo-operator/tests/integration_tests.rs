@@ -1429,6 +1429,10 @@ mod test {
         let matcher = ing_route_tcp.spec.routes[0].r#match.clone();
         assert_eq!(matcher, "HostSNI(`new-domain.com`)");
 
+        // Check that a middleware was applied
+        let middlewares = ing_route_tcp.spec.routes[0].middlewares.clone().unwrap();
+        assert_eq!(middlewares.len(), 1);
+
         let coredb_json = serde_json::json!({
             "apiVersion": API_VERSION,
             "kind": kind,
