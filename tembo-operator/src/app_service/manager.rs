@@ -18,6 +18,7 @@ use kube::{
     Client, Resource,
 };
 use std::{collections::BTreeMap, sync::Arc, time::Duration};
+use k8s_openapi::api::core::v1::Capabilities;
 
 use tracing::{debug, error, warn};
 
@@ -182,9 +183,21 @@ fn generate_deployment(
         None => None,
     };
 
+    // https://tembo.io/docs/tembo-cloud/security/#tenant-isolation
+    // These configs are the same as CNPG configs
     let security_context = SecurityContext {
         run_as_user: Some(65534),
         allow_privilege_escalation: Some(false),
+        capabilities: Some(Capabilities {
+            drop: Some(vec!["ALL".to_string()]),
+            ..Capabilities::default()
+        }),
+        privileged: Some(false),
+        run_as_non_root: Some(true),
+        // This part maybe we disable if we need
+        // or we can mount ephemeral or persistent
+        // volumes if we need to write somewhere
+        read_only_root_filesystem: Some(true),
         ..SecurityContext::default()
     };
 
