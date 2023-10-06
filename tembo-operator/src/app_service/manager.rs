@@ -3,8 +3,8 @@ use k8s_openapi::{
     api::{
         apps::v1::{Deployment, DeploymentSpec},
         core::v1::{
-            Container, ContainerPort, EnvVar, EnvVarSource, HTTPGetAction, PodSpec, PodTemplateSpec, Probe,
-            SecretKeySelector, SecurityContext, Service, ServicePort, ServiceSpec,
+            Capabilities, Container, ContainerPort, EnvVar, EnvVarSource, HTTPGetAction, PodSpec,
+            PodTemplateSpec, Probe, SecretKeySelector, SecurityContext, Service, ServicePort, ServiceSpec,
         },
     },
     apimachinery::pkg::{
@@ -18,7 +18,6 @@ use kube::{
     Client, Resource,
 };
 use std::{collections::BTreeMap, sync::Arc, time::Duration};
-use k8s_openapi::api::core::v1::Capabilities;
 
 use tracing::{debug, error, warn};
 
