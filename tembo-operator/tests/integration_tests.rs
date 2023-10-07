@@ -429,7 +429,7 @@ mod test {
     {
         let api: Api<R> = Api::namespaced(client, namespace);
         let lp = ListParams::default().labels(format!("coredb.io/name={}", cdb_name).as_str());
-        let retry = 10;
+        let retry = 15;
         let mut passed_retry = false;
         let mut resource_list: Vec<R> = Vec::new();
         for _ in 0..retry {
