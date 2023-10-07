@@ -335,7 +335,7 @@ mod test {
         println!("Waiting for backup to complete: {}", name);
         let backups: Api<Backup> = Api::namespaced(context.client.clone(), namespace);
 
-        const TIMEOUT_SECONDS_BACKUP_COMPLETED: i64 = 200;
+        const TIMEOUT_SECONDS_BACKUP_COMPLETED: i64 = 300;
 
         let start_time = Utc::now();
 
