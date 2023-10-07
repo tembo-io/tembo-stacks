@@ -3820,7 +3820,7 @@ mod test {
             },
             "spec": {
                 "replicas": replicas,
-                "connPooler": {
+                "connectionPooler": {
                     "enabled": true,
                 },
             }
@@ -3868,7 +3868,7 @@ mod test {
             },
             "spec": {
                 "replicas": replicas,
-                "connPooler": {
+                "connectionPooler": {
                     "enabled": false,
                 },
             }

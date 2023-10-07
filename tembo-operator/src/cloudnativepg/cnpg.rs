@@ -939,7 +939,7 @@ async fn reconcile_pooler(cdb: &CoreDB, ctx: Arc<Context>) -> Result<(), Action>
     let owner_reference = cdb.controller_owner_ref(&()).unwrap();
 
     // If pooler is enabled, create or update
-    if cdb.spec.connPooler.enabled {
+    if cdb.spec.connectionPooler.enabled {
         let pooler = Pooler {
             metadata: ObjectMeta {
                 name: Some(name.clone()),
@@ -955,10 +955,10 @@ async fn reconcile_pooler(cdb: &CoreDB, ctx: Arc<Context>) -> Result<(), Action>
                 pgbouncer: PoolerPgbouncer {
                     auth_query: None,
                     auth_query_secret: None,
-                    parameters: cdb.spec.connPooler.pooler.parameters.clone(),
+                    parameters: cdb.spec.connectionPooler.pooler.parameters.clone(),
                     paused: None,
                     pg_hba: None,
-                    pool_mode: cdb.spec.connPooler.pooler.poolMode.clone(),
+                    pool_mode: cdb.spec.connectionPooler.pooler.poolMode.clone(),
                 },
                 template: None,
                 r#type: PoolerType::Rw,

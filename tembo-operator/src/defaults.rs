@@ -2,7 +2,7 @@ use k8s_openapi::{api::core::v1::ResourceRequirements, apimachinery::pkg::api::r
 use std::collections::BTreeMap;
 
 use crate::{
-    apis::coredb_types::{Backup, ConnPooler, PgBouncer, S3Credentials, ServiceAccountTemplate},
+    apis::coredb_types::{Backup, ConnectionPooler, PgBouncer, S3Credentials, ServiceAccountTemplate},
     cloudnativepg::poolers::PoolerPgbouncerPoolMode,
     extensions::types::{Extension, TrunkInstall},
 };
@@ -122,8 +122,8 @@ pub fn default_backup_schedule() -> Option<String> {
     Some("0 0 * * *".to_owned())
 }
 
-pub fn default_conn_pooler() -> ConnPooler {
-    ConnPooler {
+pub fn default_conn_pooler() -> ConnectionPooler {
+    ConnectionPooler {
         enabled: default_conn_pooler_enabled(),
         pooler: default_pgbouncer(),
     }

@@ -243,7 +243,7 @@ spec:
                     nullable: true
                     type: string
                 type: object
-              connPooler:
+              connectionPooler:
                 default:
                   enabled: false
                   pooler:

@@ -105,7 +105,7 @@ pub struct Restore {
 
 #[derive(Deserialize, Serialize, Clone, Debug, JsonSchema, Default)]
 #[allow(non_snake_case)]
-pub struct ConnPooler {
+pub struct ConnectionPooler {
     #[serde(default = "defaults::default_conn_pooler_enabled")]
     pub enabled: bool,
     #[serde(default = "defaults::default_pgbouncer")]
@@ -190,7 +190,7 @@ pub struct CoreDBSpec {
     pub override_configs: Option<Vec<PgConfig>>,
     // Connection pooler configuration
     #[serde(default = "defaults::default_conn_pooler")]
-    pub connPooler: ConnPooler,
+    pub connectionPooler: ConnectionPooler,
     #[serde(rename = "appServices")]
     pub app_services: Option<Vec<AppService>>,
 
