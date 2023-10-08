@@ -920,9 +920,6 @@ pub async fn reconcile_cnpg(cdb: &CoreDB, ctx: Arc<Context>) -> Result<(), Actio
         return Err(Action::requeue(Duration::from_secs(10)));
     }
 
-    debug!("Applied");
-    // If restart is required, then we should trigger the restart above
-
     // Reconcile Pooler resource
     reconcile_pooler(cdb, ctx.clone()).await?;
 
