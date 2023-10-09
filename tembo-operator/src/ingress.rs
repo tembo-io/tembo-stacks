@@ -36,7 +36,12 @@ fn postgres_ingress_route_tcp(
     for middleware_name in middleware_names {
         middlewares.push(IngressRouteTCPRoutesMiddlewares {
             name: middleware_name.clone(),
-            namespace: Some(namespace.clone()),
+            // Warning: 'namespace' field does not mean kubernetes namespace,
+            // it means Traefik 'provider' namespace.
+            // The IngressRouteTCP will by default look in the same Kubernetes namespace,
+            // so this should be set to None.
+            // https://doc.traefik.io/traefik/providers/overview/#provider-namespace
+            namespace: None,
         });
     }
     let middlewares = Some(middlewares);
