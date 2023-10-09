@@ -3860,7 +3860,7 @@ mod test {
         println!("Found pooler secret: {}", pooler_name);
 
         // Update coredb to disable pooler
-        let coredb_json = serde_json::json!({
+        let _coredb_json = serde_json::json!({
             "apiVersion": API_VERSION,
             "kind": kind,
             "metadata": {

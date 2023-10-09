@@ -1,6 +1,8 @@
 use crate::ingress_route_tcp_crd_old::{
-    IngressRouteTCP, IngressRouteTCPRoutes, IngressRouteTCPRoutesMiddlewares, IngressRouteTCPRoutesServices,
-    IngressRouteTCPSpec, IngressRouteTCPTls,
+    IngressRouteTCP as IngressRouteTCPOld, IngressRouteTCPRoutes as IngressRouteTCPRoutesOld,
+    IngressRouteTCPRoutesMiddlewares as IngressRouteTCPRoutesMiddlewaresOld,
+    IngressRouteTCPRoutesServices as IngressRouteTCPRoutesServicesOld,
+    IngressRouteTCPSpec as IngressRouteTCPSpecOld, IngressRouteTCPTls as IngressRouteTCPTlsOld,
 };
 use k8s_openapi::apimachinery::pkg::{
     apis::meta::v1::{ObjectMeta, OwnerReference},
@@ -31,10 +33,10 @@ fn postgres_ingress_route_tcp(
     service_name: String,
     middleware_names: Vec<String>,
     port: IntOrString,
-) -> IngressRouteTCP {
+) -> IngressRouteTCPOld {
     let mut middlewares = vec![];
     for middleware_name in middleware_names {
-        middlewares.push(IngressRouteTCPRoutesMiddlewares {
+        middlewares.push(IngressRouteTCPRoutesMiddlewaresOld {
             name: middleware_name.clone(),
             // Warning: 'namespace' field does not mean kubernetes namespace,
             // it means Traefik 'provider' namespace.
@@ -46,18 +48,18 @@ fn postgres_ingress_route_tcp(
     }
     let middlewares = Some(middlewares);
 
-    IngressRouteTCP {
+    IngressRouteTCPOld {
         metadata: ObjectMeta {
             name: Some(name),
             namespace: Some(namespace),
             owner_references: Some(vec![owner_reference]),
             ..ObjectMeta::default()
         },
-        spec: IngressRouteTCPSpec {
+        spec: IngressRouteTCPSpecOld {
             entry_points: Some(vec!["postgresql".to_string()]),
-            routes: vec![IngressRouteTCPRoutes {
+            routes: vec![IngressRouteTCPRoutesOld {
                 r#match: matcher,
-                services: Some(vec![IngressRouteTCPRoutesServices {
+                services: Some(vec![IngressRouteTCPRoutesServicesOld {
                     name: service_name,
                     port,
                     namespace: None,
@@ -68,7 +70,7 @@ fn postgres_ingress_route_tcp(
                 middlewares,
                 priority: None,
             }],
-            tls: Some(IngressRouteTCPTls {
+            tls: Some(IngressRouteTCPTlsOld {
                 passthrough: Some(true),
                 cert_resolver: None,
                 domains: None,
@@ -110,7 +112,7 @@ pub async fn reconcile_extra_postgres_ing_route_tcp(
         middleware_names,
         port,
     );
-    let ingress_route_tcp_api: Api<IngressRouteTCP> = Api::namespaced(ctx.client.clone(), namespace);
+    let ingress_route_tcp_api: Api<IngressRouteTCPOld> = Api::namespaced(ctx.client.clone(), namespace);
     if !extra_domain_names.is_empty() {
         apply_ingress_route_tcp(
             ingress_route_tcp_api,
@@ -166,12 +168,12 @@ pub async fn reconcile_ip_allowlist_middleware(
 }
 
 async fn apply_ingress_route_tcp(
-    ingress_route_tcp_api: Api<IngressRouteTCP>,
+    ingress_route_tcp_api: Api<IngressRouteTCPOld>,
     namespace: &str,
     ingress_route_tcp_name: &String,
-    ingress_route_tcp_to_apply: &IngressRouteTCP,
+    ingress_route_tcp_to_apply: &IngressRouteTCPOld,
 ) -> Result<(), OperatorError> {
-    let patch: Patch<&&IngressRouteTCP> = Patch::Apply(&ingress_route_tcp_to_apply);
+    let patch: Patch<&&IngressRouteTCPOld> = Patch::Apply(&ingress_route_tcp_to_apply);
     let patch_parameters = PatchParams::apply("cntrlr").force();
     match ingress_route_tcp_api
         .patch(&ingress_route_tcp_name.clone(), &patch_parameters, &patch)
@@ -196,7 +198,7 @@ async fn apply_ingress_route_tcp(
 }
 
 async fn delete_ingress_route_tcp(
-    ingress_route_tcp_api: Api<IngressRouteTCP>,
+    ingress_route_tcp_api: Api<IngressRouteTCPOld>,
     namespace: &str,
     ingress_route_tcp_name: &String,
 ) -> Result<(), OperatorError> {
@@ -260,7 +262,7 @@ pub async fn reconcile_postgres_ing_route_tcp(
 ) -> Result<(), OperatorError> {
     let client = ctx.client.clone();
     // Initialize kube api for ingress route tcp
-    let ingress_route_tcp_api: Api<IngressRouteTCP> = Api::namespaced(client, namespace);
+    let ingress_route_tcp_api: Api<IngressRouteTCPOld> = Api::namespaced(client, namespace);
     let owner_reference = cdb.controller_owner_ref(&()).unwrap();
 
     // get all IngressRouteTCPs in the namespace
