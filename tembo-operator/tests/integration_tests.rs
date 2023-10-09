@@ -22,7 +22,7 @@ mod test {
         cloudnativepg::{backups::Backup, clusters::Cluster},
         defaults::{default_resources, default_storage},
         ingress_route_crd::IngressRoute,
-        ingress_route_tcp_crd::IngressRouteTCP,
+        ingress_route_tcp_crd_old::IngressRouteTCP,
         is_pod_ready,
         psql::PsqlOutput,
         Context, State,
