@@ -13,7 +13,7 @@ use k8s_openapi::{
     apimachinery::pkg::{api::resource::Quantity, apis::meta::v1::ObjectMeta},
 };
 
-use crate::cloudnativepg::poolers::PoolerPgbouncerPoolMode;
+use crate::cloudnativepg::poolers::{PoolerPgbouncerPoolMode, PoolerTemplateSpecContainersResources};
 use chrono::{DateTime, Utc};
 use kube::CustomResource;
 use schemars::JsonSchema;
@@ -118,7 +118,7 @@ pub struct PgBouncer {
     pub poolMode: PoolerPgbouncerPoolMode,
     // Valid parameter values can be found at https://www.pgbouncer.org/config.html
     pub parameters: Option<BTreeMap<String, String>>,
-    pub resources: Option<ResourceRequirements>,
+    pub resources: Option<PoolerTemplateSpecContainersResources>,
 }
 
 /// Generate the Kubernetes wrapper struct `CoreDB` from our Spec and Status struct
