@@ -16,7 +16,7 @@ use std::sync::Arc;
 use crate::{
     apis::coredb_types::CoreDB,
     errors::OperatorError,
-    traefik::middleware_tcp_crd::{MiddlewareTCP, MiddlewareTCPIpWhiteList, MiddlewareTCPSpec},
+    traefik::middleware_tcp_crd::{MiddlewareTCP, MiddlewareTCPIpAllowList, MiddlewareTCPSpec},
     Context,
 };
 use tracing::{debug, error, info, warn};
@@ -444,7 +444,7 @@ fn generate_ip_allow_list_middleware_tcp(cdb: &CoreDB) -> MiddlewareTCP {
             ..Default::default()
         },
         spec: MiddlewareTCPSpec {
-            ip_white_list: Some(MiddlewareTCPIpWhiteList {
+            ip_allow_list: Some(MiddlewareTCPIpAllowList {
                 source_range: Some(valid_ips),
             }),
             ..Default::default()
@@ -472,7 +472,7 @@ mod tests {
             status: None,
         };
         let result = generate_ip_allow_list_middleware_tcp(&cdb);
-        let source_range = result.spec.ip_white_list.clone().unwrap().source_range.unwrap();
+        let source_range = result.spec.ip_allow_list.clone().unwrap().source_range.unwrap();
         assert_eq!(source_range.len(), 1);
         assert!(
             source_range.contains(&"0.0.0.0/0".to_string()),
@@ -492,7 +492,7 @@ mod tests {
             status: None,
         };
         let result = generate_ip_allow_list_middleware_tcp(&cdb);
-        let source_range = result.spec.ip_white_list.clone().unwrap().source_range.unwrap();
+        let source_range = result.spec.ip_allow_list.clone().unwrap().source_range.unwrap();
         assert_eq!(source_range.len(), 1);
         assert!(
             source_range.contains(&"0.0.0.0/0".to_string()),
@@ -517,7 +517,7 @@ mod tests {
         };
         let result = generate_ip_allow_list_middleware_tcp(&cdb);
         // Add assertions to ensure that the middleware contains the correct IPs and not the invalid one
-        let source_range = result.spec.ip_white_list.clone().unwrap().source_range.unwrap();
+        let source_range = result.spec.ip_allow_list.clone().unwrap().source_range.unwrap();
         assert_eq!(source_range.len(), 3);
         assert!(
             source_range.contains(&"10.0.0.1".to_string()),
