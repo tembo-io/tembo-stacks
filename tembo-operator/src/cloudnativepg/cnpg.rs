@@ -964,6 +964,7 @@ async fn reconcile_pooler(cdb: &CoreDB, ctx: Arc<Context>) -> Result<(), Action>
                     metadata: None,
                     spec: Some(PoolerTemplateSpec {
                         containers: vec![PoolerTemplateSpecContainers {
+                            name: "pgbouncer".to_string(),
                             resources: cdb.spec.connectionPooler.pooler.resources.clone(),
                             ..Default::default()
                         }],
