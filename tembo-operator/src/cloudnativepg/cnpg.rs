@@ -30,7 +30,7 @@ use crate::{
         },
         poolers::{
             Pooler, PoolerCluster, PoolerPgbouncer, PoolerSpec, PoolerTemplate, PoolerTemplateSpec,
-            PoolerTemplateSpecContainers, PoolerTemplateSpecContainersResources, PoolerType,
+            PoolerTemplateSpecContainers, PoolerType,
         },
         scheduledbackups::{
             ScheduledBackup, ScheduledBackupBackupOwnerReference, ScheduledBackupCluster, ScheduledBackupSpec,

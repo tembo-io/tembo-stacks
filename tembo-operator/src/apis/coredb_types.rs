@@ -115,6 +115,7 @@ pub struct ConnectionPooler {
 #[derive(Deserialize, Serialize, Clone, Debug, JsonSchema, Default)]
 #[allow(non_snake_case)]
 pub struct PgBouncer {
+    #[serde(default = "defaults::default_pool_mode")]
     pub poolMode: PoolerPgbouncerPoolMode,
     // Valid parameter values can be found at https://www.pgbouncer.org/config.html
     pub parameters: Option<BTreeMap<String, String>>,

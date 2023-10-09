@@ -30,4 +30,10 @@ spec:
       parameters:
         default_pool_size: "50"
         max_client_conn: "5000"
-      resources: ~
+      resources:
+        limits:
+          cpu: 200m
+          memory: 256Mi
+        requests:
+          cpu: 100m
+          memory: 128Mi

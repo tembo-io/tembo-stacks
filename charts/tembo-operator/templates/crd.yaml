@@ -266,6 +266,7 @@ spec:
                         nullable: true
                         type: object
                       poolMode:
+                        default: transaction
                         enum:
                         - session
                         - transaction
@@ -298,8 +299,6 @@ spec:
                             nullable: true
                             type: object
                         type: object
-                    required:
-                    - poolMode
                     type: object
                 type: object
               extensions:
