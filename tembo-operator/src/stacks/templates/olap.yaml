@@ -27,8 +27,6 @@ postgres_config:
     value: /controller/run
   - name: pg_stat_statements.track
     value: top
-  - name: random_page_cost
-    value: 1.5
   - name: shared_preload_libraries
     value: pg_stat_statements,pg_cron
   - name: track_io_timing
