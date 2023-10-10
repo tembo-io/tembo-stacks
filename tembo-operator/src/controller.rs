@@ -49,6 +49,7 @@ use serde_json::json;
 use std::sync::Arc;
 use tokio::{sync::RwLock, time::Duration};
 use tracing::*;
+use crate::ingress::reconcile_pgbouncer_ing_route_tcp;
 
 pub static COREDB_FINALIZER: &str = "coredbs.coredb.io";
 pub static COREDB_ANNOTATION: &str = "coredbs.coredb.io/watch";
@@ -166,6 +167,28 @@ impl CoreDB {
                     // IngressRouteTCP does not have expected errors during reconciliation.
                     Action::requeue(Duration::from_secs(300))
                 })?;
+                // If pgbouncer is enabled, reconcile ingress route tcp for pgbouncer
+                if self.spec.connectionPooler.enabled {
+                    let service_name_pgbouncer = format!("{}-pgbouncer", self.name_any().as_str());
+                    let pgbouncer_subdomain = format!("{}-pgbouncer", self.name_any().as_str());
+                    reconcile_pgbouncer_ing_route_tcp(
+                        self,
+                        ctx.clone(),
+                        pgbouncer_subdomain.as_str(),
+                        basedomain.as_str(),
+                        ns.as_str(),
+                        service_name_pgbouncer.as_str(),
+                        IntOrString::Int(5432),
+                    )
+                    .await
+                    .map_err(|e| {
+                        error!("Error reconciling pgbouncer ingress route: {:?}", e);
+                        // For unexpected errors, we should requeue for several minutes at least,
+                        // for expected, "waiting" type of requeuing, those should be shorter, just a few seconds.
+                        // IngressRouteTCP does not have expected errors during reconciliation.
+                        Action::requeue(Duration::from_secs(300))
+                    })?;
+                }
             }
             Err(_e) => {
                 warn!("DATA_PLANE_BASEDOMAIN is not set, skipping reconciliation of IngressRouteTCP");
