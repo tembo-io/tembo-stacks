@@ -20,19 +20,8 @@ install-traefik:
 	# Performing upgrade process to replicate CRD changes we need
 	# This includes the old version of the CRDs
 	helm upgrade --install --namespace=traefik --version=20.8.0 --values=./testdata/traefik-values.yaml traefik traefik/traefik
-	# Manually apply the new CRDs, the version used in pre-release Traefik 3
-	#
-	# traefik.io/v1alpha1 in Traefik version 2 and version 3 are different, so it's important
-	# to apply from the correct branch, not just use what's in the helm chart, since those APIs
-	# are applicable only to Traefik version 2, despite the API version being the same.
-	#
-	# Please see these comments for more information:
-	# - https://github.com/traefik/traefik/pull/9600#issuecomment-1753313008
-	# - https://github.com/traefik/traefik-helm-chart/issues/911#issuecomment-1683521825
-	kubectl apply -f https://raw.githubusercontent.com/traefik/traefik/v3.0.0-beta3/docs/content/reference/dynamic-configuration/kubernetes-crd-definition-v1.yml
-	# This should not install new CRDs, because Helm 3 does not handle CRDs on an upgrade,
-	# but this version includes two sets of CRDs, including the new traefik.io/v1alpha1
-	helm upgrade --install --namespace=traefik --version=24.0.0 --values=./testdata/traefik-values.yaml traefik traefik/traefik
+	# https://github.com/traefik/traefik-helm-chart/issues/757#issuecomment-1753995542
+	kubectl apply -f https://raw.githubusercontent.com/traefik/traefik/v3.0.0-beta2/docs/content/reference/dynamic-configuration/kubernetes-crd-definition-v1.yml
 
 install-kube-prometheus-stack:
 	kubectl create namespace monitoring || true
@@ -85,7 +74,7 @@ enable-cnpg-default-namespace:
 connect-test-db:
 	echo "Please include a line in your /etc/hosts file: "
 	echo "127.0.0.1 test-coredb.localhost"
-	psql "postgres://postgres:$(kubectl get secrets -o json test-coredb-connection | jq -r '.data.password' | base64 --decode)@test-coredb.localhost:5432"
+	psql "postgres://postgres:$(kubectl get secrets -o json test-coredb-connection | jq -r '.data.password' | base64 --decode)@test-coredb.localhost:5432?sslmode=require"
 
 
 update-helm-repos:
