@@ -21,8 +21,6 @@ mod test {
         apis::coredb_types::CoreDB,
         cloudnativepg::{backups::Backup, clusters::Cluster},
         defaults::{default_resources, default_storage},
-        ingress_route_crd::IngressRoute,
-        ingress_route_tcp_crd_old::IngressRouteTCP,
         is_pod_ready,
         psql::PsqlOutput,
         Context, State,
@@ -407,6 +405,8 @@ mod test {
     };
     use k8s_openapi::NamespaceResourceScope;
     use serde::{de::DeserializeOwned, Deserialize};
+    use controller::ingress_route_crd::IngressRoute;
+    use controller::traefik::ingress_route_tcp_crd::IngressRouteTCP;
 
     // helper function retrieve all instances of a resource in namespace
     // used repeatedly in appService tests

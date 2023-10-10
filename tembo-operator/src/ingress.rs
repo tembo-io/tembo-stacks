@@ -1,7 +1,5 @@
 use crate::traefik::ingress_route_tcp_crd::{
-    IngressRouteTCP, IngressRouteTCPRoutes,
-    IngressRouteTCPRoutesMiddlewares,
-    IngressRouteTCPRoutesServices,
+    IngressRouteTCP, IngressRouteTCPRoutes, IngressRouteTCPRoutesMiddlewares, IngressRouteTCPRoutesServices,
     IngressRouteTCPSpec, IngressRouteTCPTls,
 };
 use k8s_openapi::apimachinery::pkg::{
