@@ -147,9 +147,11 @@ pub async fn reconcile_ip_allowlist_middleware(
             debug!("Updated MiddlewareTCP {}.{}", middleware_name.clone(), &namespace);
         }
         Err(e) => {
+            // serialize then log json of middlewaretcp
+            let serialized = serde_json::to_string(&ip_allow_list_middleware).unwrap_or_default();
             error!(
-                "Failed to update MiddlewareTCP {}.{}: {}",
-                middleware_name, namespace, e
+                "Failed to update MiddlewareTCP {}.{}: {} \n {}",
+                middleware_name, namespace, e, serialized
             );
             return Err(OperatorError::IngressRouteTcpError);
         }
