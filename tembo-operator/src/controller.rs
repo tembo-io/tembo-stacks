@@ -169,7 +169,7 @@ impl CoreDB {
                     ns.as_str(),
                     service_name_read_write.as_str(),
                     IntOrString::Int(5432),
-                    vec![middleware_name],
+                    vec![middleware_name.clone()],
                 )
                 .await
                 .map_err(|e| {
@@ -192,6 +192,7 @@ impl CoreDB {
                         prefix_pooler.as_str(),
                         name_pooler.as_str(),
                         IntOrString::Int(5432),
+                        vec![middleware_name.clone()],
                     )
                     .await
                     .map_err(|e| {
