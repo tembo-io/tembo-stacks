@@ -424,7 +424,7 @@ mod tests {
         assert_eq!(configs[3].name, "max_parallel_workers");
         assert_eq!(configs[3].value.to_string(), "8");
         assert_eq!(configs[4].name, "max_parallel_workers_per_gather");
-        assert_eq!(configs[4].value.to_string(), "2");
+        assert_eq!(configs[4].value.to_string(), "8");
         assert_eq!(configs[5].name, "max_wal_size");
         assert_eq!(configs[5].value.to_string(), "2GB");
         assert_eq!(configs[6].name, "shared_buffers");
