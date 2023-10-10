@@ -430,7 +430,8 @@ pub async fn reconcile_postgres_ing_route_tcp(
         if needs_middleware_update {
             info!(
                 "Adding middleware to existing IngressRouteTCP {} for db {}",
-                &ingress_route_tcp_name, cdb.metadata.name.clone().unwrap()
+                &ingress_route_tcp_name,
+                cdb.metadata.name.clone().unwrap()
             );
             // We need to add the middleware to this ingress route tcp
             let mut ingress_route_tcp_to_apply = ingress_route_tcp.clone();
