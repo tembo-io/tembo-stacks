@@ -267,7 +267,7 @@ pub async fn reconcile_postgres_ing_route_tcp(
 
     // Check for all existing IngressRouteTCPs in this namespace
     // Filter out any that are not for this DB or do not have the correct prefix
-    for ingress_route_tcp in ingress_route_tcps {
+    for ingress_route_tcp in &ingress_route_tcps {
         let ingress_route_tcp_name = match ingress_route_tcp.metadata.name.clone() {
             Some(ingress_route_tcp_name) => {
                 if !(ingress_route_tcp_name.starts_with(ingress_name_prefix)
@@ -376,12 +376,12 @@ pub async fn reconcile_postgres_ing_route_tcp(
             owner_reference.clone(),
             newest_matcher.clone(),
             service_name.to_string(),
-            middleware_names,
+            middleware_names.clone(),
             port.clone(),
         );
         // Apply this ingress route tcp
         apply_ingress_route_tcp(
-            ingress_route_tcp_api,
+            ingress_route_tcp_api.clone(),
             namespace,
             &ingress_route_tcp_name_new,
             &ingress_route_tcp_to_apply,
@@ -393,6 +393,62 @@ pub async fn reconcile_postgres_ing_route_tcp(
             newest_matcher
         );
     }
+
+    // Check that all the existing IngressRouteTCPs include the middleware(s),
+    // and add them if they don't.
+    let mut middlewares_to_add = Vec::new();
+    for middleware_name in middleware_names.iter() {
+        middlewares_to_add.push(IngressRouteTCPRoutesMiddlewares {
+            name: middleware_name.clone(),
+            // Warning: 'namespace' field does not mean kubernetes namespace,
+            // it means Traefik 'provider' namespace.
+            // The IngressRouteTCP will by default look in the same Kubernetes namespace,
+            // so this should be set to None.
+            // https://doc.traefik.io/traefik/providers/overview/#provider-namespace
+            namespace: None,
+        });
+    }
+    let middlewares_to_add = match middlewares_to_add.len() {
+        0 => None,
+        _ => Some(middlewares_to_add),
+    };
+
+    for ingress_route_tcp in ingress_route_tcps {
+        let ingress_route_tcp_name = ingress_route_tcp.metadata.name.clone().unwrap();
+        if present_ing_route_tcp_names_list.contains(&ingress_route_tcp_name) {
+            // Skip any ingress route tcp that is not matched for this database
+            continue;
+        }
+        // Check if the middleware is already included
+        let mut needs_middleware_update = false;
+        for route in &ingress_route_tcp.spec.routes {
+            if route.middlewares != middlewares_to_add {
+                needs_middleware_update = true;
+                break;
+            }
+        }
+        if needs_middleware_update {
+            info!(
+                "Adding middleware to existing IngressRouteTCP {} for db {}",
+                &ingress_route_tcp_name, cdb.metadata.name.clone().unwrap()
+            );
+            // We need to add the middleware to this ingress route tcp
+            let mut ingress_route_tcp_to_apply = ingress_route_tcp.clone();
+            for route in &mut ingress_route_tcp_to_apply.spec.routes {
+                route.middlewares = middlewares_to_add.clone();
+            }
+
+            // Apply this ingress route tcp
+            apply_ingress_route_tcp(
+                ingress_route_tcp_api.clone(),
+                namespace,
+                &ingress_route_tcp_name,
+                &ingress_route_tcp_to_apply,
+            )
+            .await?;
+        }
+    }
+
 
     Ok(())
 }
