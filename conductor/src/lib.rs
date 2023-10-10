@@ -11,7 +11,7 @@ use controller::apis::coredb_types::{CoreDB, CoreDBSpec};
 use errors::ConductorError;
 
 use k8s_openapi::api::core::v1::{Namespace, Secret};
-use k8s_openapi::api::networking::v1::NetworkPolicy;
+
 use kube::api::{DeleteParams, ListParams, Patch, PatchParams};
 
 use chrono::{DateTime, SecondsFormat, Utc};
@@ -23,7 +23,6 @@ use serde_json::{from_str, to_string, Value};
 pub type Result<T, E = ConductorError> = std::result::Result<T, E>;
 
 pub async fn generate_spec(
-    workspace_id: &str,
     org_id: &str,
     entity_name: &str,
     instance_id: &str,
@@ -39,7 +38,6 @@ pub async fn generate_spec(
             "annotations": {
                 "tembo.io/org_id": org_id,
                 "tembo.io/instance_id": instance_id,
-                "tembo.io/workspace_id": workspace_id,
                 "tembo.io/entity_name": entity_name,
                 "tembo.io/data_plane_id": data_plane_id,
             }
@@ -47,6 +45,7 @@ pub async fn generate_spec(
         "spec": spec,
     })
 }
+
 pub fn get_data_plane_id_from_coredb(coredb: &CoreDB) -> Result<String, Box<ConductorError>> {
     let annotations = match coredb.metadata.annotations.as_ref() {
         None => {
@@ -63,7 +62,7 @@ pub fn get_data_plane_id_from_coredb(coredb: &CoreDB) -> Result<String, Box<Cond
     Ok(data_plane_id)
 }
 
-pub fn get_event_id_from_coredb(coredb: &CoreDB) -> Result<String, Box<ConductorError>> {
+pub fn get_org_inst_id(coredb: &CoreDB) -> Result<types::OrgInstId, Box<ConductorError>> {
     let annotations = match coredb.metadata.annotations.as_ref() {
         None => {
             return Err(Box::new(ConductorError::EventIDFormat));
@@ -82,38 +81,10 @@ pub fn get_event_id_from_coredb(coredb: &CoreDB) -> Result<String, Box<Conductor
             return Err(Box::new(ConductorError::EventIDFormat));
         }
     };
-    let workspace_id = match annotations.get("tembo.io/workspace_id") {
-        Some(workspace_id) => workspace_id.to_string(),
-        None => {
-            return Err(Box::new(ConductorError::EventIDFormat));
-        }
-    };
-    let entity_name = match annotations.get("tembo.io/entity_name") {
-        Some(entity_name) => entity_name.to_string(),
-        None => {
-            return Err(Box::new(ConductorError::EventIDFormat));
-        }
-    };
-    let event_id = [workspace_id, org_id, entity_name, instance_id].join(".");
-    Ok(event_id)
-}
-
-pub fn parse_event_id(
-    event_id: &str,
-) -> Result<(String, String, String, String), Box<ConductorError>> {
-    let event_id_split = event_id.split('.').collect::<Vec<&str>>();
-
-    if event_id_split.len() < 4 {
-        return Err(Box::new(ConductorError::EventIDParsing(
-            event_id.to_string(),
-        )));
-    }
-    // "<workspace>.<organization>.<entity>.<instance>"
-    let workspace_id = event_id_split[0].to_string();
-    let org_id = event_id_split[1].to_string();
-    let entity_name = event_id_split[2].to_string();
-    let instance_id = event_id_split[3].to_string();
-    Ok((workspace_id, org_id, entity_name, instance_id))
+    Ok(types::OrgInstId {
+        org_id,
+        inst_id: instance_id,
+    })
 }
 
 pub async fn get_all(client: Client, namespace: &str) -> Vec<CoreDB> {
@@ -207,79 +178,6 @@ pub async fn create_namespace(
         .patch(name, &params, &Patch::Apply(&ns))
         .await
         .map_err(ConductorError::KubeError)?;
-    Ok(())
-}
-
-pub async fn create_networkpolicy(client: Client, name: &str) -> Result<(), ConductorError> {
-    let np_api: Api<NetworkPolicy> = Api::namespaced(client, name);
-    let params: PatchParams = PatchParams::apply("conductor").force();
-    let np = serde_json::json!({
-        "apiVersion": "networking.k8s.io/v1",
-        "kind": "NetworkPolicy",
-        "metadata": {
-            "name": format!("{name}"),
-            "namespace": format!("{name}"),
-        },
-        "spec": {
-            "podSelector": {
-                "matchLabels": {
-                    "app": "coredb",
-                    "coredb.io/name": format!("{name}"),
-                    "statefulset": format!("{name}")
-                }
-            },
-            "policyTypes": [
-                    "Egress"
-            ],
-            "egress": [
-                {
-                    "to": [
-                        {
-                            "namespaceSelector": {
-                                "matchLabels": {
-                                    "kubernetes.io/metadata.name": "kube-system"
-                                }
-                            }
-                        },
-                        {
-                            "podSelector": {
-                                "matchLabels": {
-                                    "k8s-app": "kube-dns"
-                                }
-                            }
-                        }
-                    ],
-                    "ports": [
-                        {
-                            "protocol": "UDP",
-                            "port": 53
-                        }
-                    ]
-                },
-                {
-                    "to": [
-                        {
-                            "ipBlock": {
-                                "cidr": "0.0.0.0/0",
-                                "except": [
-                                    "10.0.0.0/8",
-                                    "172.16.0.0/12",
-                                    "192.168.0.0/16"
-                                ]
-                            }
-                        },
-                    ]
-                }
-            ]
-        }
-    });
-
-    info!("\nCreating Network Policy {} if it does not exist", name);
-    let _o: NetworkPolicy = np_api
-        .patch(name, &params, &Patch::Apply(&np))
-        .await
-        .map_err(ConductorError::KubeError)?;
-
     Ok(())
 }
 

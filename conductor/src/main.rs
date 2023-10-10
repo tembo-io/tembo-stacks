@@ -4,10 +4,9 @@ use conductor::errors::ConductorError;
 use conductor::extensions::extensions_still_processing;
 use conductor::monitoring::CustomMetrics;
 use conductor::{
-    create_cloudformation, create_namespace, create_networkpolicy, create_or_update, delete,
-    delete_cloudformation, delete_namespace, generate_rand_schedule, generate_spec,
-    get_coredb_error_without_status, get_one, get_pg_conn, lookup_role_arn, parse_event_id,
-    restart_coredb, types,
+    create_cloudformation, create_namespace, create_or_update, delete, delete_cloudformation,
+    delete_namespace, generate_rand_schedule, generate_spec, get_coredb_error_without_status,
+    get_one, get_pg_conn, lookup_role_arn, restart_coredb, types,
 };
 use controller::apis::coredb_types::{Backup, CoreDBSpec, S3Credentials, ServiceAccountTemplate};
 use k8s_openapi::apimachinery::pkg::apis::meta::v1::ObjectMeta;
@@ -17,8 +16,8 @@ use opentelemetry::sdk::export::metrics::aggregation;
 use opentelemetry::sdk::metrics::{controllers, processors, selectors};
 use opentelemetry::{global, KeyValue};
 use pgmq::{Message, PGMQueueExt};
+use sqlx::error::Error;
 use std::env;
-use std::error::Error;
 use std::sync::{Arc, Mutex};
 use std::{thread, time};
 
@@ -36,7 +35,7 @@ const REQUEUE_VT_SEC_SHORT: i32 = 5;
 // that we would want to try again after awhile.
 const REQUEUE_VT_SEC_LONG: i32 = 300;
 
-async fn run(metrics: CustomMetrics) -> Result<(), Box<dyn std::error::Error>> {
+async fn run(metrics: CustomMetrics) -> Result<(), ConductorError> {
     // Read connection info from environment variable
     let pg_conn_url =
         env::var("POSTGRES_QUEUE_CONNECTION").expect("POSTGRES_QUEUE_CONNECTION must be set");
@@ -88,8 +87,8 @@ async fn run(metrics: CustomMetrics) -> Result<(), Box<dyn std::error::Error>> {
             }
         };
 
-        let (workspace_id, org_id, entity_name, instance_id) =
-            parse_event_id(read_msg.message.event_id.as_str())?;
+        let org_id = read_msg.message.org_id.clone();
+        let instance_id = read_msg.message.inst_id.clone();
 
         metrics
             .conductor_total
@@ -111,7 +110,8 @@ async fn run(metrics: CustomMetrics) -> Result<(), Box<dyn std::error::Error>> {
             // this is what we'll send back to control-plane
             let error_event = types::StateToControlPlane {
                 data_plane_id: read_msg.message.data_plane_id,
-                event_id: read_msg.message.event_id,
+                org_id: read_msg.message.org_id,
+                inst_id: read_msg.message.inst_id,
                 event_type: Event::Error,
                 spec: None,
                 status: None,
@@ -265,16 +265,15 @@ async fn run(metrics: CustomMetrics) -> Result<(), Box<dyn std::error::Error>> {
                 // create Namespace
                 create_namespace(client.clone(), &namespace, &org_id, &instance_id).await?;
 
-                info!("{}: Creating network policy", read_msg.msg_id);
-                // create NetworkPolicy to allow internet access only
-                create_networkpolicy(client.clone(), &namespace).await?;
-
                 info!("{}: Generating spec", read_msg.msg_id);
+                let stack_type = match coredb_spec.stack.as_ref() {
+                    Some(stack) => stack.name.clone(),
+                    None => String::from("NA"),
+                };
 
                 let spec = generate_spec(
-                    &workspace_id,
                     &org_id,
-                    &entity_name,
+                    &stack_type,
                     &instance_id,
                     &read_msg.message.data_plane_id,
                     &namespace,
@@ -379,7 +378,8 @@ async fn run(metrics: CustomMetrics) -> Result<(), Box<dyn std::error::Error>> {
                 };
                 types::StateToControlPlane {
                     data_plane_id: read_msg.message.data_plane_id,
-                    event_id: read_msg.message.event_id,
+                    org_id: read_msg.message.org_id,
+                    inst_id: read_msg.message.inst_id,
                     event_type: report_event,
                     spec: Some(current_spec.spec),
                     status: current_spec.status,
@@ -406,7 +406,8 @@ async fn run(metrics: CustomMetrics) -> Result<(), Box<dyn std::error::Error>> {
                 // report state
                 types::StateToControlPlane {
                     data_plane_id: read_msg.message.data_plane_id,
-                    event_id: read_msg.message.event_id,
+                    org_id: read_msg.message.org_id,
+                    inst_id: read_msg.message.inst_id,
                     event_type: Event::Deleted,
                     spec: None,
                     status: None,
@@ -465,7 +466,8 @@ async fn run(metrics: CustomMetrics) -> Result<(), Box<dyn std::error::Error>> {
 
                 types::StateToControlPlane {
                     data_plane_id: read_msg.message.data_plane_id,
-                    event_id: read_msg.message.event_id,
+                    org_id: read_msg.message.org_id,
+                    inst_id: read_msg.message.inst_id,
                     event_type: Event::Restarted,
                     spec: Some(current_resource.spec),
                     status: current_resource.status,
@@ -503,10 +505,10 @@ async fn run(metrics: CustomMetrics) -> Result<(), Box<dyn std::error::Error>> {
 
 async fn requeue_short(
     metrics: &CustomMetrics,
-    control_plane_events_queue: &String,
+    control_plane_events_queue: &str,
     queue: &PGMQueueExt,
     read_msg: &Message<CRUDevent>,
-) -> Result<(), Box<dyn Error>> {
+) -> Result<(), ConductorError> {
     let _ = queue
         .set_vt::<CRUDevent>(
             control_plane_events_queue,
@@ -552,10 +554,21 @@ async fn main() -> std::io::Result<()> {
     info!("Starting conductor");
     background_threads_locked.push(tokio::spawn({
         let custom_metrics_copy = custom_metrics.clone();
+
         async move {
             loop {
                 match run(custom_metrics_copy.clone()).await {
                     Ok(_) => {}
+                    Err(ConductorError::PgmqError(pgmq::errors::PgmqError::DatabaseError(
+                        Error::PoolTimedOut,
+                    ))) => {
+                        custom_metrics_copy.clone().conductor_errors.add(
+                            &opentelemetry::Context::current(),
+                            1,
+                            &[],
+                        );
+                        panic!("sqlx PoolTimedOut error -- forcing pod restart, error")
+                    }
                     Err(err) => {
                         custom_metrics_copy.clone().conductor_errors.add(
                             &opentelemetry::Context::current(),

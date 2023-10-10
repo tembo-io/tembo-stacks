@@ -243,6 +243,64 @@ spec:
                     nullable: true
                     type: string
                 type: object
+              connectionPooler:
+                default:
+                  enabled: false
+                  pooler:
+                    poolMode: transaction
+                    parameters: null
+                    resources: null
+                properties:
+                  enabled:
+                    default: false
+                    type: boolean
+                  pooler:
+                    default:
+                      poolMode: transaction
+                      parameters: null
+                      resources: null
+                    properties:
+                      parameters:
+                        additionalProperties:
+                          type: string
+                        nullable: true
+                        type: object
+                      poolMode:
+                        default: transaction
+                        enum:
+                        - session
+                        - transaction
+                        type: string
+                      resources:
+                        nullable: true
+                        properties:
+                          claims:
+                            items:
+                              properties:
+                                name:
+                                  type: string
+                              required:
+                              - name
+                              type: object
+                            nullable: true
+                            type: array
+                          limits:
+                            additionalProperties:
+                              description: IntOrString is a type that can hold an int32 or a string.  When used in JSON or YAML marshalling and unmarshalling, it produces or consumes the inner type.  This allows you to have, for example, a JSON field that can accept a name or number.
+                              format: int-or-string
+                              type: string
+                            nullable: true
+                            type: object
+                          requests:
+                            additionalProperties:
+                              description: IntOrString is a type that can hold an int32 or a string.  When used in JSON or YAML marshalling and unmarshalling, it produces or consumes the inner type.  This allows you to have, for example, a JSON field that can accept a name or number.
+                              format: int-or-string
+                              type: string
+                            nullable: true
+                            type: object
+                        type: object
+                    type: object
+                type: object
               extensions:
                 default: []
                 items:

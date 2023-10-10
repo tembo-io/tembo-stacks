@@ -156,10 +156,8 @@ mod test {
         let msg = types::CRUDevent {
             organization_name: org_name.clone(),
             data_plane_id: "org_02s3owPQskuGXHE8vYsGSY".to_owned(),
-            event_id: format!(
-                "{name}.org_02s3owPQskuGXHE8vYsGSY.CoreDB.inst_02s4UKVbRy34SAYVSwZq2H",
-                name = dbname
-            ),
+            org_id: "org_02s3owPQskuGXHE8vYsGSY".to_owned(),
+            inst_id: "inst_02s4UKVbRy34SAYVSwZq2H".to_owned(),
             event_type: types::Event::Create,
             dbname: dbname.clone(),
             spec: Some(spec),
@@ -262,10 +260,8 @@ mod test {
         let msg = types::CRUDevent {
             organization_name: org_name.clone(),
             data_plane_id: "org_02s3owPQskuGXHE8vYsGSY".to_owned(),
-            event_id: format!(
-                "{name}.org_02s3owPQskuGXHE8vYsGSY.CoreDB.inst_02s4UKVbRy34SAYVSwZq2H",
-                name = dbname
-            ),
+            org_id: "org_02s3owPQskuGXHE8vYsGSY".to_owned(),
+            inst_id: "inst_02s4UKVbRy34SAYVSwZq2H".to_owned(),
             event_type: types::Event::Update,
             dbname: dbname.clone(),
             spec: Some(spec),
@@ -373,10 +369,8 @@ mod test {
         let msg = types::CRUDevent {
             organization_name: org_name.clone(),
             data_plane_id: "org_02s3owPQskuGXHE8vYsGSY".to_owned(),
-            event_id: format!(
-                "{name}.org_02s3owPQskuGXHE8vYsGSY.CoreDB.inst_02s4UKVbRy34SAYVSwZq2H",
-                name = dbname
-            ),
+            org_id: "org_02s3owPQskuGXHE8vYsGSY".to_owned(),
+            inst_id: "inst_02s4UKVbRy34SAYVSwZq2H".to_owned(),
             event_type: types::Event::Delete,
             dbname: dbname.clone(),
             spec: None,
@@ -478,7 +472,7 @@ mod test {
         name: &str,
         resource_type: &str,
     ) -> bool {
-        for _ in 0..10 {
+        for _ in 0..60 {
             let result: Result<(), kube::Error> = match resource_type {
                 "Namespace" => {
                     let api: Api<Namespace> = Api::all(client.clone());
@@ -507,7 +501,7 @@ mod test {
                 "Waiting for resource {} of type {} to be deleted...",
                 name, resource_type
             );
-            thread::sleep(time::Duration::from_secs(20));
+            thread::sleep(time::Duration::from_secs(5));
         }
         false
     }

@@ -40,7 +40,7 @@ mod test {
         apimachinery::pkg::{api::resource::Quantity, apis::meta::v1::ObjectMeta, util::intstr::IntOrString},
     };
     use kube::{
-        api::{AttachParams, DeleteParams, ListParams, Patch, PatchParams, PostParams, WatchParams},
+        api::{AttachParams, DeleteParams, ListParams, Patch, PatchParams, PostParams},
         runtime::wait::{await_condition, conditions, Condition},
         Api, Client, Config, Error,
     };
@@ -65,7 +65,6 @@ mod test {
     const TIMEOUT_SECONDS_NS_DELETED: u64 = 300;
     const TIMEOUT_SECONDS_POD_DELETED: u64 = 300;
     const TIMEOUT_SECONDS_COREDB_DELETED: u64 = 300;
-    const TIMEOUT_SECONDS_BACKUP_COMPLETED: u64 = 600;
 
     async fn kube_client() -> Client {
         // Get the name of the currently selected namespace
@@ -225,7 +224,6 @@ mod test {
             }
         };
 
-
         let httpclient = reqwest::Client::builder()
             .danger_accept_invalid_certs(true)
             .default_headers(headers_map)
@@ -257,7 +255,6 @@ mod test {
             url
         )))
     }
-
 
     async fn wait_until_psql_contains(
         context: Arc<Context>,
@@ -332,41 +329,29 @@ mod test {
         println!("Found pod ready: {}", pod_name);
     }
 
-    async fn has_backup_completed(context: Arc<Context>, namespace: &str, name: &str) {
+    async fn wait_backup_completed(context: Arc<Context>, namespace: &str, name: &str) {
         println!("Waiting for backup to complete: {}", name);
         let backups: Api<Backup> = Api::namespaced(context.client.clone(), namespace);
 
-        let wp = WatchParams::default().labels(&format!("cnpg.io/cluster={}", name));
-        let stream_result = backups.watch(&wp, "0").await;
+        const TIMEOUT_SECONDS_BACKUP_COMPLETED: i64 = 300;
 
-        let mut stream = match stream_result {
-            Ok(s) => Box::pin(s),
-            Err(e) => panic!("Failed to watch backups: {}", e),
-        };
+        let start_time = Utc::now();
 
-        let watch_result =
-            tokio::time::timeout(Duration::from_secs(TIMEOUT_SECONDS_BACKUP_COMPLETED), async {
-                while let Some(event) = stream.next().await {
-                    match event {
-                        Ok(kube::api::WatchEvent::Modified(backup)) => {
-                            if let Some(status) = &backup.status {
-                                if status.phase.as_deref() == Some("completed") {
-                                    return;
-                                }
-                            }
-                        }
-                        Ok(_) => {} // For other events we do nothing
-                        Err(e) => panic!("Error watching Backup: {}", e),
-                    }
+        while Utc::now() - start_time < chrono::Duration::seconds(TIMEOUT_SECONDS_BACKUP_COMPLETED) {
+            let list_params = ListParams::default().labels(&format!("cnpg.io/cluster={}", name));
+            let backups = backups.list(&list_params).await.unwrap();
+            let backup = backups.items[0].clone();
+            if let Some(status) = &backup.status {
+                if status.phase.as_deref() == Some("completed") {
+                    return;
                 }
-                panic!("Watch stream ended prematurely");
-            })
-            .await;
-
-        if watch_result.is_err() {
-            panic!("Timed out waiting for Backup to complete");
+            }
+            thread::sleep(Duration::from_secs(1));
         }
-        println!("Found backup completed: {}", name);
+        panic!(
+            "Did not find the backup {} to be completed after waiting {} seconds",
+            name, TIMEOUT_SECONDS_BACKUP_COMPLETED
+        );
     }
 
     // Create namespace for the test to run in
@@ -416,6 +401,7 @@ mod test {
 
     use controller::{
         apis::postgres_parameters::{ConfigValue, PgConfig},
+        cloudnativepg::poolers::Pooler,
         errors,
     };
     use k8s_openapi::NamespaceResourceScope;
@@ -441,7 +427,7 @@ mod test {
     {
         let api: Api<R> = Api::namespaced(client, namespace);
         let lp = ListParams::default().labels(format!("coredb.io/name={}", cdb_name).as_str());
-        let retry = 10;
+        let retry = 15;
         let mut passed_retry = false;
         let mut resource_list: Vec<R> = Vec::new();
         for _ in 0..retry {
@@ -3006,7 +2992,6 @@ mod test {
         // One appService Services
         assert!(service_items.len() == 1);
 
-
         // send a request to postgres
         #[derive(Debug, Deserialize)]
         struct ApiResponse {
@@ -3092,7 +3077,6 @@ mod test {
             .unwrap();
         let body: ApiResponse = response.json().await.unwrap();
         assert_eq!(body.info.title, "PostgREST API");
-
 
         // Delete all of them
         let coredb_json = serde_json::json!({
@@ -3593,7 +3577,7 @@ mod test {
         assert!(result.stdout.clone().unwrap().contains("plpgsql"));
 
         // Check to make sure the initial backup has run and its completed
-        has_backup_completed(context.clone(), &namespace, name).await;
+        wait_backup_completed(context.clone(), &namespace, name).await;
 
         // Create a table and insert some data
         let result = psql_with_retry(
@@ -3641,7 +3625,7 @@ mod test {
         assert!(result.stdout.clone().unwrap().contains("plpgsql"));
 
         // Wait for backup to complete
-        has_backup_completed(context.clone(), &namespace, &backup_name).await;
+        wait_backup_completed(context.clone(), &namespace, &backup_name).await;
 
         // If the backup is complete, we can now restore to a new instance in a new namespace
         let suffix = rng.gen_range(0..100000);
@@ -3784,5 +3768,174 @@ mod test {
 
         // Delete namespace
         let _ = delete_namespace(client.clone(), &restore_namespace).await;
+    }
+
+    #[tokio::test]
+    #[ignore]
+    async fn functional_test_pooler() {
+        async fn runtime_cfg(coredbs: &Api<CoreDB>, name: &str) -> Option<Vec<PgConfig>> {
+            let spec = coredbs.get(name).await.expect("spec not found");
+            spec.status.expect("Expected status to be present").runtime_config
+        }
+
+        // Initialize the Kubernetes client
+        let client = kube_client().await;
+        let state = State::default();
+        let _context = state.create_context(client.clone());
+
+        // Configurations
+        let mut rng = rand::thread_rng();
+        let suffix = rng.gen_range(0..100000);
+        let name = &format!("test-coredb-{}", suffix);
+        let namespace = match create_namespace(client.clone(), name).await {
+            Ok(namespace) => namespace,
+            Err(e) => {
+                eprintln!("Error creating namespace: {}", e);
+                std::process::exit(1);
+            }
+        };
+
+        let kind = "CoreDB";
+        let replicas = 1;
+        let resources = serde_json::json!({
+            "limits": {
+                "cpu": "200m",
+                "memory": "256Mi"
+            },
+            "requests": {
+                "cpu": "100m",
+                "memory": "128Mi"
+            }
+        });
+
+        // Create a pod we can use to run commands in the cluster
+        let pods: Api<Pod> = Api::namespaced(client.clone(), &namespace);
+
+        // Apply a basic configuration of CoreDB
+        println!("Creating CoreDB resource {}", name);
+        let coredbs: Api<CoreDB> = Api::namespaced(client.clone(), &namespace);
+        // Generate basic CoreDB resource to start with
+        let coredb_json = serde_json::json!({
+            "apiVersion": API_VERSION,
+            "kind": kind,
+            "metadata": {
+                "name": name
+            },
+            "spec": {
+                "replicas": replicas,
+                "connectionPooler": {
+                    "enabled": true,
+                    "pooler": {
+                        "resources": resources,
+                    },
+                },
+            }
+        });
+        let params = PatchParams::apply("tembo-integration-test");
+        let patch = Patch::Apply(&coredb_json);
+        let _coredb_resource = coredbs.patch(name, &params, &patch).await.unwrap();
+
+        // Wait for CNPG Pod to be created
+        let pod_name = format!("{}-1", name);
+
+        pod_ready_and_running(pods.clone(), pod_name.clone()).await;
+
+        let pods: Api<Pod> = Api::namespaced(client.clone(), &namespace);
+        let lp =
+            ListParams::default().labels(format!("app=postgres-exporter,coredb.io/name={}", name).as_str());
+        let exporter_pods = pods.list(&lp).await.expect("could not get pods");
+        let exporter_pod_name = exporter_pods.items[0].metadata.name.as_ref().unwrap();
+        println!("Exporter pod name: {}", &exporter_pod_name);
+
+        pod_ready_and_running(pods.clone(), exporter_pod_name.clone()).await;
+
+        // Check for pooler
+        let pooler_name = format!("{}-pooler", name);
+        let poolers: Api<Pooler> = Api::namespaced(client.clone(), &namespace);
+        let _pooler = poolers.get(&pooler_name).await.unwrap();
+        println!("Found pooler: {}", pooler_name);
+
+        // Check for pooler service
+        let pooler_services: Api<Service> = Api::namespaced(client.clone(), &namespace);
+        let _pooler_service = pooler_services.get(&pooler_name).await.unwrap();
+        println!("Found pooler service: {}", pooler_name);
+
+        // Check for pooler secret
+        let pooler_secrets: Api<Secret> = Api::namespaced(client.clone(), &namespace);
+        let _pooler_secret = pooler_secrets.get(&pooler_name).await.unwrap();
+        println!("Found pooler secret: {}", pooler_name);
+
+        // Check for pooler deployment
+        let pooler_deployments: Api<Deployment> = Api::namespaced(client.clone(), &namespace);
+        let pooler_deployment = pooler_deployments.get(&pooler_name).await.unwrap();
+        println!("Found pooler deployment: {}", pooler_name);
+
+        // Check pooler_deployment for correct resources
+        let pooler_deployment_resources_json = serde_json::to_value(
+            pooler_deployment.spec.unwrap().template.spec.unwrap().containers[0]
+                .resources
+                .as_ref()
+                .unwrap(),
+        )
+        .unwrap();
+        assert_eq!(pooler_deployment_resources_json, resources);
+
+        // Check for pooler IngressRouteTCP
+        let pooler_ingressroutetcps: Api<IngressRouteTCP> = Api::namespaced(client.clone(), &namespace);
+        let pooler_ingressroutetcp = pooler_ingressroutetcps
+            .get(format!("{pooler_name}-0").as_str())
+            .await
+            .unwrap();
+        println!("Found pooler IngressRouteTCP: {pooler_name}-0");
+
+        // Update coredb to disable pooler
+        let coredb_json = serde_json::json!({
+            "apiVersion": API_VERSION,
+            "kind": kind,
+            "metadata": {
+                "name": name
+            },
+            "spec": {
+                "replicas": replicas,
+                "connectionPooler": {
+                    "enabled": false,
+                },
+            }
+        });
+
+        let _coredb_resource = coredbs.patch(name, &params, &patch).await.unwrap();
+
+        // Wait for pooler to be deleted
+        let _assert_pooler_deleted = tokio::time::timeout(
+            Duration::from_secs(30),
+            await_condition(poolers.clone(), &pooler_name, conditions::is_deleted("")),
+        );
+        println!("Pooler deleted: {}", pooler_name);
+
+        // Wait for pooler service to be deleted
+        let _assert_pooler_service_deleted = tokio::time::timeout(
+            Duration::from_secs(30),
+            await_condition(pooler_services.clone(), &pooler_name, conditions::is_deleted("")),
+        );
+        println!("Pooler service deleted: {}", pooler_name);
+
+        // Cleanup CoreDB
+        coredbs.delete(name, &Default::default()).await.unwrap();
+        println!("Waiting for CoreDB to be deleted: {}", &name);
+        let _assert_coredb_deleted = tokio::time::timeout(
+            Duration::from_secs(TIMEOUT_SECONDS_COREDB_DELETED),
+            await_condition(coredbs.clone(), name, conditions::is_deleted("")),
+        )
+        .await
+        .unwrap_or_else(|_| {
+            panic!(
+                "CoreDB {} was not deleted after waiting {} seconds",
+                name, TIMEOUT_SECONDS_COREDB_DELETED
+            )
+        });
+        println!("CoreDB resource deleted {}", name);
+
+        // Delete namespace
+        let _ = delete_namespace(client.clone(), &namespace).await;
     }
 }
