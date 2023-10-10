@@ -184,7 +184,7 @@ impl CoreDB {
                     )
                     .await
                     .map_err(|e| {
-                        error!("Error reconciling pgbouncer ingress route: {:?}", e);
+                        error!("Error reconciling pooler ingress route: {:?}", e);
                         // For unexpected errors, we should requeue for several minutes at least,
                         // for expected, "waiting" type of requeuing, those should be shorter, just a few seconds.
                         // IngressRouteTCP does not have expected errors during reconciliation.
