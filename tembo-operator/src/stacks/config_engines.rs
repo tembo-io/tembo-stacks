@@ -427,9 +427,11 @@ mod tests {
         assert_eq!(configs[4].value.to_string(), "8");
         assert_eq!(configs[5].name, "max_wal_size");
         assert_eq!(configs[5].value.to_string(), "2GB");
-        assert_eq!(configs[6].name, "shared_buffers");
-        assert_eq!(configs[6].value.to_string(), "4096MB");
-        assert_eq!(configs[7].name, "work_mem");
-        assert_eq!(configs[7].value.to_string(), "245MB");
+        assert_eq!(configs[6].name, "max_worker_processes");
+        assert_eq!(configs[6].value.to_string(), "4");
+        assert_eq!(configs[7].name, "shared_buffers");
+        assert_eq!(configs[7].value.to_string(), "4096MB");
+        assert_eq!(configs[8].name, "work_mem");
+        assert_eq!(configs[8].value.to_string(), "90MB");
     }
 }
