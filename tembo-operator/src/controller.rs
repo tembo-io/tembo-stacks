@@ -38,7 +38,7 @@ use kube::{
 use crate::{
     apis::postgres_parameters::PgConfig,
     extensions::{database_queries::list_config_params, reconcile_extensions},
-    ingress::{reconcile_extra_postgres_ing_route_tcp, reconcile_pgbouncer_ing_route_tcp},
+    ingress::reconcile_extra_postgres_ing_route_tcp,
     network_policies::reconcile_network_policies,
     postgres_exporter::reconcile_prom_configmap,
     trunk::{extensions_that_require_load, reconcile_trunk_configmap},
@@ -134,12 +134,14 @@ impl CoreDB {
                     basedomain
                 );
                 let service_name_read_write = format!("{}-rw", self.name_any().as_str());
+                let prefix_read_write = format!("{}-rw-", self.name_any().as_str());
                 reconcile_postgres_ing_route_tcp(
                     self,
                     ctx.clone(),
                     self.name_any().as_str(),
                     basedomain.as_str(),
                     ns.as_str(),
+                    prefix_read_write.as_str(),
                     service_name_read_write.as_str(),
                     IntOrString::Int(5432),
                 )
@@ -166,17 +168,18 @@ impl CoreDB {
                     // IngressRouteTCP does not have expected errors during reconciliation.
                     Action::requeue(Duration::from_secs(300))
                 })?;
-                // If pgbouncer is enabled, reconcile ingress route tcp for pgbouncer
+                // If pooler is enabled, reconcile ingress route tcp for pooler
                 if self.spec.connectionPooler.enabled {
-                    let service_name_pgbouncer = format!("{}-pgbouncer", self.name_any().as_str());
-                    let pgbouncer_subdomain = format!("{}-pgbouncer", self.name_any().as_str());
-                    reconcile_pgbouncer_ing_route_tcp(
+                    let name_pooler = format!("{}-pooler", self.name_any().as_str());
+                    let prefix_pooler = format!("{}-pooler-", self.name_any().as_str());
+                    reconcile_postgres_ing_route_tcp(
                         self,
                         ctx.clone(),
-                        pgbouncer_subdomain.as_str(),
+                        name_pooler.as_str(),
                         basedomain.as_str(),
                         ns.as_str(),
-                        service_name_pgbouncer.as_str(),
+                        prefix_pooler.as_str(),
+                        name_pooler.as_str(),
                         IntOrString::Int(5432),
                     )
                     .await
