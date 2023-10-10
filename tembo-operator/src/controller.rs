@@ -38,7 +38,7 @@ use kube::{
 use crate::{
     apis::postgres_parameters::PgConfig,
     extensions::{database_queries::list_config_params, reconcile_extensions},
-    ingress::reconcile_extra_postgres_ing_route_tcp,
+    ingress::{reconcile_extra_postgres_ing_route_tcp, reconcile_pgbouncer_ing_route_tcp},
     network_policies::reconcile_network_policies,
     postgres_exporter::reconcile_prom_configmap,
     trunk::{extensions_that_require_load, reconcile_trunk_configmap},
@@ -133,18 +133,14 @@ impl CoreDB {
                     "DATA_PLANE_BASEDOMAIN is set to {}, reconciling ingress route tcp",
                     basedomain
                 );
-                let mut service_name = format!("{}-rw", self.name_any().as_str());
-                // If connection pooler is enabled, we need to use the pooler service name
-                if self.spec.connectionPooler.enabled {
-                    service_name = format!("{}-pooler", self.name_any().as_str());
-                }
+                let service_name_read_write = format!("{}-rw", self.name_any().as_str());
                 reconcile_postgres_ing_route_tcp(
                     self,
                     ctx.clone(),
                     self.name_any().as_str(),
                     basedomain.as_str(),
                     ns.as_str(),
-                    service_name.as_str(),
+                    service_name_read_write.as_str(),
                     IntOrString::Int(5432),
                 )
                 .await
@@ -159,7 +155,7 @@ impl CoreDB {
                     self,
                     ctx.clone(),
                     ns.as_str(),
-                    service_name.as_str(),
+                    service_name_read_write.as_str(),
                     IntOrString::Int(5432),
                 )
                 .await
@@ -170,6 +166,28 @@ impl CoreDB {
                     // IngressRouteTCP does not have expected errors during reconciliation.
                     Action::requeue(Duration::from_secs(300))
                 })?;
+                // If pgbouncer is enabled, reconcile ingress route tcp for pgbouncer
+                if self.spec.connectionPooler.enabled {
+                    let service_name_pgbouncer = format!("{}-pgbouncer", self.name_any().as_str());
+                    let pgbouncer_subdomain = format!("{}-pgbouncer", self.name_any().as_str());
+                    reconcile_pgbouncer_ing_route_tcp(
+                        self,
+                        ctx.clone(),
+                        pgbouncer_subdomain.as_str(),
+                        basedomain.as_str(),
+                        ns.as_str(),
+                        service_name_pgbouncer.as_str(),
+                        IntOrString::Int(5432),
+                    )
+                    .await
+                    .map_err(|e| {
+                        error!("Error reconciling pgbouncer ingress route: {:?}", e);
+                        // For unexpected errors, we should requeue for several minutes at least,
+                        // for expected, "waiting" type of requeuing, those should be shorter, just a few seconds.
+                        // IngressRouteTCP does not have expected errors during reconciliation.
+                        Action::requeue(Duration::from_secs(300))
+                    })?;
+                }
             }
             Err(_e) => {
                 warn!("DATA_PLANE_BASEDOMAIN is not set, skipping reconciliation of IngressRouteTCP");

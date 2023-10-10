@@ -337,3 +337,159 @@ pub async fn reconcile_postgres_ing_route_tcp(
 
     Ok(())
 }
+
+pub async fn reconcile_pgbouncer_ing_route_tcp(
+    cdb: &CoreDB,
+    ctx: Arc<Context>,
+    subdomain: &str,
+    basedomain: &str,
+    namespace: &str,
+    service_name_pgbouncer: &str,
+    port: IntOrString,
+) -> Result<(), OperatorError> {
+    let client = ctx.client.clone();
+    // Initialize kube api for ingress route tcp
+    let ingress_route_tcp_api: Api<IngressRouteTCP> = Api::namespaced(client, namespace);
+    let owner_reference = cdb.controller_owner_ref(&()).unwrap();
+
+    // get all IngressRouteTCPs in the namespace
+    // After CNPG migration is done, this can look for only ingress route tcp with the correct owner reference
+    let ingress_route_tcps = ingress_route_tcp_api.list(&Default::default()).await?;
+
+    // Prefix by resource name allows multiple per namespace
+    let ingress_route_tcp_name_prefix_pgbouncer = format!("{}-pgbouncer-", cdb.name_any());
+    let ingress_route_tcp_name_prefix_pgbouncer = ingress_route_tcp_name_prefix_pgbouncer.as_str();
+
+    // We will save information about the existing ingress route tcp(s) in these vectors
+    let mut present_matchers_list: Vec<String> = vec![];
+    let mut present_ing_route_tcp_names_list: Vec<String> = vec![];
+
+    // Check for all existing IngressRouteTCPs in this namespace
+    // Filter out any that are not for this DB or are not read-write
+    for ingress_route_tcp in ingress_route_tcps {
+        let ingress_route_tcp_name = match ingress_route_tcp.metadata.name.clone() {
+            Some(ingress_route_tcp_name) => {
+                if !(ingress_route_tcp_name.starts_with(ingress_route_tcp_name_prefix_pgbouncer)
+                    || ingress_route_tcp_name == cdb.name_any())
+                {
+                    debug!(
+                        "Skipping non pgbouncer ingress route tcp: {}",
+                        ingress_route_tcp_name
+                    );
+                    continue;
+                }
+                ingress_route_tcp_name
+            }
+            None => {
+                error!(
+                    "IngressRouteTCP {}.{}, does not have a name.",
+                    subdomain, basedomain
+                );
+                return Err(OperatorError::IngressRouteTCPName);
+            }
+        };
+        debug!(
+            "Detected ingress route tcp pgbouncer endpoint {}.{}",
+            ingress_route_tcp_name, namespace
+        );
+        // Save list of names so we can pick a name that doesn't exist,
+        // if we need to create a new ingress route tcp.
+        present_ing_route_tcp_names_list.push(ingress_route_tcp_name.clone());
+
+        // Get the settings of our ingress route tcp, so we can update to a new
+        // endpoint, if needed.
+
+        let service_name_actual = ingress_route_tcp.spec.routes[0]
+            .services
+            .as_ref()
+            .expect("Ingress route has no services")[0]
+            .name
+            .clone();
+        let service_port_actual = ingress_route_tcp.spec.routes[0]
+            .services
+            .as_ref()
+            .expect("Ingress route has no services")[0]
+            .port
+            .clone();
+
+        // Keep the existing matcher (domain name) when updating an existing IngressRouteTCP,
+        // so that we do not break connection strings with domain name updates.
+        let matcher_actual = ingress_route_tcp.spec.routes[0].r#match.clone();
+
+        // Save the matchers to know if we need to create a new ingress route tcp or not.
+        present_matchers_list.push(matcher_actual.clone());
+
+        // Check if either the service name or port are mismatched
+        if !(service_name_actual == service_name_pgbouncer && service_port_actual == port) {
+            // This situation should only occur when the service name or port is changed, for example during cut-over from
+            // CoreDB operator managing the service to CNPG managing the service.
+            warn!(
+                "PgBouncer IngressRouteTCP {}.{}, does not match the service name or port. Updating service or port and leaving the match rule the same.",
+                ingress_route_tcp_name, namespace
+            );
+
+            // We will keep the matcher and the name the same, but update the service name and port.
+            // Also, we will set ownership.
+            let ingress_route_tcp_to_apply = postgres_ingress_route_tcp(
+                ingress_route_tcp_name.clone(),
+                namespace.to_string(),
+                owner_reference.clone(),
+                matcher_actual,
+                service_name_pgbouncer.to_string(),
+                port.clone(),
+            );
+            // Apply this ingress route tcp
+            apply_ingress_route_tcp(
+                ingress_route_tcp_api.clone(),
+                namespace,
+                &ingress_route_tcp_name,
+                &ingress_route_tcp_to_apply,
+            )
+            .await?;
+        }
+    }
+
+    // At this point in the code, all applicable IngressRouteTCPs are pointing to the right
+    // service and port. Now, we just need to create a new IngressRouteTCP if we do not already
+    // have one for the specified domain name.
+
+    // Build the expected IngressRouteTCP matcher we expect to find
+    let newest_matcher = format!("HostSNI(`{subdomain}.{basedomain}`)");
+
+    if !present_matchers_list.contains(&newest_matcher) {
+        // In this block, we are creating a new IngressRouteTCP
+
+        // Pick a name for a new ingress route tcp that doesn't already exist
+        let mut index = 0;
+        let mut ingress_route_tcp_name_new = format!("{}{}", ingress_route_tcp_name_prefix_pgbouncer, index);
+        while present_ing_route_tcp_names_list.contains(&ingress_route_tcp_name_new) {
+            index += 1;
+            ingress_route_tcp_name_new = format!("{}{}", ingress_route_tcp_name_prefix_pgbouncer, index);
+        }
+        let ingress_route_tcp_name_new = ingress_route_tcp_name_new;
+
+        let ingress_route_tcp_to_apply = postgres_ingress_route_tcp(
+            ingress_route_tcp_name_new.clone(),
+            namespace.to_string(),
+            owner_reference.clone(),
+            newest_matcher.clone(),
+            service_name_pgbouncer.to_string(),
+            port.clone(),
+        );
+        // Apply this ingress route tcp
+        apply_ingress_route_tcp(
+            ingress_route_tcp_api,
+            namespace,
+            &ingress_route_tcp_name_new,
+            &ingress_route_tcp_to_apply,
+        )
+        .await?;
+    } else {
+        debug!(
+            "There is already an IngressRouteTCP for this matcher, so we don't need to create a new one: {}",
+            newest_matcher
+        );
+    }
+
+    Ok(())
+}
