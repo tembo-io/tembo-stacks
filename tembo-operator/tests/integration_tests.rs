@@ -402,11 +402,11 @@ mod test {
         apis::postgres_parameters::{ConfigValue, PgConfig},
         cloudnativepg::poolers::Pooler,
         errors,
+        ingress_route_crd::IngressRoute,
+        traefik::ingress_route_tcp_crd::IngressRouteTCP,
     };
     use k8s_openapi::NamespaceResourceScope;
     use serde::{de::DeserializeOwned, Deserialize};
-    use controller::ingress_route_crd::IngressRoute;
-    use controller::traefik::ingress_route_tcp_crd::IngressRouteTCP;
 
     // helper function retrieve all instances of a resource in namespace
     // used repeatedly in appService tests
@@ -3889,7 +3889,7 @@ mod test {
 
         // Check for pooler IngressRouteTCP
         let pooler_ingressroutetcps: Api<IngressRouteTCP> = Api::namespaced(client.clone(), &namespace);
-        let pooler_ingressroutetcp = pooler_ingressroutetcps
+        let _pooler_ingressroutetcp = pooler_ingressroutetcps
             .get(format!("{pooler_name}-0").as_str())
             .await
             .unwrap();
