@@ -213,7 +213,10 @@ pub async fn reconcile_postgres_ing_route_tcp(
                 if !(ingress_route_tcp_name.starts_with(ingress_name_prefix)
                     || ingress_route_tcp_name == cdb.name_any())
                 {
-                    debug!("Skipping ingress route tcp without prefix {}: {}", ingress_name_prefix, ingress_route_tcp_name);
+                    debug!(
+                        "Skipping ingress route tcp without prefix {}: {}",
+                        ingress_name_prefix, ingress_route_tcp_name
+                    );
                     continue;
                 }
                 ingress_route_tcp_name

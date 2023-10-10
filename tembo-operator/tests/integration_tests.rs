@@ -3886,7 +3886,10 @@ mod test {
 
         // Check for pooler IngressRouteTCP
         let pooler_ingressroutetcps: Api<IngressRouteTCP> = Api::namespaced(client.clone(), &namespace);
-        let pooler_ingressroutetcp = pooler_ingressroutetcps.get(format!("{pooler_name}-0").as_str()).await.unwrap();
+        let pooler_ingressroutetcp = pooler_ingressroutetcps
+            .get(format!("{pooler_name}-0").as_str())
+            .await
+            .unwrap();
         println!("Found pooler IngressRouteTCP: {pooler_name}-0");
 
         // Update coredb to disable pooler
