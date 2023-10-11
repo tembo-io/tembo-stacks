@@ -79,7 +79,7 @@ fmt:
 	cargo clippy --fix
 	cargo +nightly fmt
 
-run-local:
+watch:
 	POSTGRES_QUEUE_CONNECTION=postgresql://postgres:postgres@0.0.0.0:5431/postgres \
 	RUST_BACKTRACE=1 \
 	RUST_LOG={{RUST_LOG}} \

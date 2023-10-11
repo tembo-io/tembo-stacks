@@ -608,6 +608,8 @@ async fn main() -> std::io::Result<()> {
 
     std::mem::drop(background_threads_locked);
 
+    let server_port = env::var("PORT").unwrap_or_else(|_| String::from("8080")).parse::<u16>().unwrap_or(8080);
+
     HttpServer::new(move || {
         App::new()
             .app_data(web::Data::new(custom_metrics.clone()))
@@ -620,7 +622,7 @@ async fn main() -> std::io::Result<()> {
             .service(web::scope("/health").service(background_threads_running))
     })
     .workers(1)
-    .bind(("0.0.0.0", 8080))?
+    .bind(("0.0.0.0", server_port))?
     .run()
     .await
 }
