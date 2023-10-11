@@ -826,7 +826,7 @@ dependencies = [
 
 [[package]]
 name = "controller"
-version = "0.10.8"
+version = "0.10.9"
 dependencies = [
  "actix-web",
  "anyhow",
