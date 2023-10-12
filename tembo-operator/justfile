@@ -110,7 +110,7 @@ start-kind:
 	just install-crd
 	just install-cnpg
 	just install-tembo-pod-init
-	just annotate
+	just annotate {{STORAGE_CLASS_NAME}}
 	kubectl wait pods --for=condition=Ready --timeout=300s --all --all-namespaces
 
 # install dependencies on a cluster
