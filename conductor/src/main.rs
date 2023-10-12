@@ -54,7 +54,7 @@ async fn run(metrics: CustomMetrics) -> Result<(), ConductorError> {
         .parse()
         .expect("error parsing MAX_READ_CT");
     let is_cloud_formation: bool = env::var("IS_CLOUD_FORMATION")
-    .unwrap_or_else(|_| "false".to_owned()).parse().expect("error parsing IS_CLOUD_FORMATION");
+    .unwrap_or_else(|_| "true".to_owned()).parse().expect("error parsing IS_CLOUD_FORMATION");
 
     // Connect to pgmq
     let queue = PGMQueueExt::new(pg_conn_url, 5).await?;
