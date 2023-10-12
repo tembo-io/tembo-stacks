@@ -3303,6 +3303,7 @@ mod test {
 
                 if coredb.status.as_ref().map_or(false, |s| s.running) {
                     println!("CoreDB {} is running", name);
+                    return true;
                 } else {
                     println!(
                         "Attempt {}/{}: CoreDB {} is not running yet",
@@ -3311,10 +3312,11 @@ mod test {
                 }
                 tokio::time::sleep(wait_duration).await;
             }
-            panic!(
+            println!(
                 "CoreDB {} did not become running after {} attempts",
                 name, max_retries
             );
+            false
         }
 
         // Initialize tracing
