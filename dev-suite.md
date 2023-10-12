@@ -8,6 +8,7 @@
 - [Just](https://github.com/casey/just)
 - [Kind](https://kind.sigs.k8s.io/docs/user/quick-start/#installation)
 - [Kubectl](https://kubernetes.io/docs/tasks/tools/install-kubectl/)
+- [cargo-watch](`cargo install cargo-watch`)
 
 ## Running the platform
 
