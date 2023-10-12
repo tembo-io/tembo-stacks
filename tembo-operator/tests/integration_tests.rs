@@ -326,66 +326,91 @@ mod test {
         println!("Found pod ready: {}", pod_name);
     }
 
-    pub fn is_backup_completed() -> impl Condition<Backup> + 'static {
-        move |obj: Option<&Backup>| {
-            if let Some(backup) = &obj {
-                if let Some(status) = &backup.status {
-                    if status.phase.as_deref() == Some("completed") {
-                        return true;
-                    }
-                }
-            }
-            false
-        }
-    }
-
-    async fn has_backup_completed(context: Arc<Context>, namespace: &str, name: &str) {
+    async fn wait_backup_completed(context: Arc<Context>, namespace: &str, name: &str) {
         println!("Waiting for backup to complete: {}", name);
         let backups: Api<Backup> = Api::namespaced(context.client.clone(), namespace);
-        let lp = ListParams::default().labels(&format!("cnpg.io/cluster={}", name));
 
-        let start_time = std::time::Instant::now();
+        const TIMEOUT_SECONDS_BACKUP_COMPLETED: i64 = 300;
 
-        loop {
-            let backup_result = backups.list(&lp).await;
-            let mut backup_completed = false;
-            if let Ok(backup_list) = backup_result {
-                for backup in backup_list.items {
-                    if let Some(backup_name) = &backup.metadata.name {
-                        println!("Found backup: {}", backup_name);
-                        if await_condition(backups.clone(), backup_name, is_backup_completed())
-                            .await
-                            .is_ok()
-                        {
-                            backup_completed = true;
-                            break;
-                        }
-                    } else {
-                        println!("Found backup with no name");
-                    }
+        let start_time = Utc::now();
+
+        while Utc::now() - start_time < chrono::Duration::seconds(TIMEOUT_SECONDS_BACKUP_COMPLETED) {
+            let list_params = ListParams::default().labels(&format!("cnpg.io/cluster={}", name));
+            let backups = backups.list(&list_params).await.unwrap();
+            let backup = backups.items[0].clone();
+            if let Some(status) = &backup.status {
+                if status.phase.as_deref() == Some("completed") {
+                    return;
                 }
-            } else {
-                println!("Backup {} not found, retrying...", name);
             }
-
-            if backup_completed {
-                println!("Backup is complete: {}", name);
-                break;
-            }
-
-            // Check the elapsed time and break the loop if it's more than your overall timeout
-            if start_time.elapsed() > Duration::from_secs(TIMEOUT_SECONDS_BACKUP_COMPLETED) {
-                println!(
-                    "Failed to find completed backup {} after waiting {} seconds",
-                    name, TIMEOUT_SECONDS_BACKUP_COMPLETED
-                );
-                break;
-            }
-
-            // Sleep for a short duration before retrying
-            tokio::time::sleep(Duration::from_secs(5)).await;
+            thread::sleep(Duration::from_secs(1));
         }
+        panic!(
+            "Did not find the backup {} to be completed after waiting {} seconds",
+            name, TIMEOUT_SECONDS_BACKUP_COMPLETED
+        );
     }
+
+    // pub fn is_backup_completed() -> impl Condition<Backup> + 'static {
+    //     move |obj: Option<&Backup>| {
+    //         if let Some(backup) = &obj {
+    //             if let Some(status) = &backup.status {
+    //                 if status.phase.as_deref() == Some("completed") {
+    //                     return true;
+    //                 }
+    //             }
+    //         }
+    //         false
+    //     }
+    // }
+    //
+    // async fn has_backup_completed(context: Arc<Context>, namespace: &str, name: &str) {
+    //     println!("Waiting for backup to complete: {}", name);
+    //     let backups: Api<Backup> = Api::namespaced(context.client.clone(), namespace);
+    //     let lp = ListParams::default().labels(&format!("cnpg.io/cluster={}", name));
+    //
+    //     let start_time = std::time::Instant::now();
+    //
+    //     loop {
+    //         let backup_result = backups.list(&lp).await;
+    //         let mut backup_completed = false;
+    //         if let Ok(backup_list) = backup_result {
+    //             for backup in backup_list.items {
+    //                 if let Some(backup_name) = &backup.metadata.name {
+    //                     println!("Found backup: {}", backup_name);
+    //                     if await_condition(backups.clone(), backup_name, is_backup_completed())
+    //                         .await
+    //                         .is_ok()
+    //                     {
+    //                         backup_completed = true;
+    //                         break;
+    //                     }
+    //                 } else {
+    //                     println!("Found backup with no name");
+    //                 }
+    //             }
+    //         } else {
+    //             println!("Backup {} not found, retrying...", name);
+    //         }
+    //
+    //         if backup_completed {
+    //             println!("Backup is complete: {}", name);
+    //             break;
+    //         }
+    //
+    //         // Check the elapsed time and break the loop if it's more than your overall timeout
+    //         if start_time.elapsed() > Duration::from_secs(TIMEOUT_SECONDS_BACKUP_COMPLETED) {
+    //             println!(
+    //                 "Failed to find completed backup {} after waiting {} seconds",
+    //                 name, TIMEOUT_SECONDS_BACKUP_COMPLETED
+    //             );
+    //             break;
+    //         }
+    //
+    //         // Sleep for a short duration before retrying
+    //         tokio::time::sleep(Duration::from_secs(5)).await;
+    //     }
+    // }
 
     // Create namespace for the test to run in
     async fn create_namespace(client: Client, name: &str) -> Result<String, Error> {
