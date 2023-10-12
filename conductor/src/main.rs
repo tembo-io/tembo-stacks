@@ -53,6 +53,10 @@ async fn run(metrics: CustomMetrics) -> Result<(), ConductorError> {
         .unwrap_or_else(|_| "100".to_owned())
         .parse()
         .expect("error parsing MAX_READ_CT");
+    let is_cloud_formation: bool = env::var("IS_CLOUD_FORMATION")
+    .unwrap_or_else(|_| "100".to_owned())
+    .parse()
+    .expect("error parsing MAX_READ_CT");
 
     // Connect to pgmq
     let queue = PGMQueueExt::new(pg_conn_url, 5).await?;
@@ -159,23 +163,11 @@ async fn run(metrics: CustomMetrics) -> Result<(), ConductorError> {
                 let msg_spec = read_msg.message.spec.clone().expect("message spec");
 
                 info!("{}: Creating cloudformation template", read_msg.msg_id);
-                create_cloudformation(
-                    String::from("us-east-1"),
-                    backup_archive_bucket.clone(),
-                    &read_msg.message.organization_name,
-                    &read_msg.message.dbname,
-                    &cf_template_bucket,
-                )
-                .await?;
 
-                // Lookup the CloudFormation stack's role ARN
-                let role_arn = match lookup_role_arn(
-                    String::from("us-east-1"),
-                    &read_msg.message.organization_name,
-                    &read_msg.message.dbname,
-                )
-                .await
-                {
+                // Merge backup and service_account_template into spec
+                let mut coredb_spec = msg_spec;
+
+                match init_cloud_perms(backup_archive_bucket.clone(), cf_template_bucket.clone(), &read_msg, &mut coredb_spec, is_cloud_formation).await {
                     Ok(arn) => {
                         info!(
                             "{}: CloudFormation stack outputs ready, got outputs.",
@@ -220,45 +212,7 @@ async fn run(metrics: CustomMetrics) -> Result<(), ConductorError> {
                             );
                             continue;
                         }
-                    },
-                };
-
-                info!("{}: Adding backup configuration to spec", read_msg.msg_id);
-                // Format ServiceAccountTemplate spec in CoreDBSpec
-                use std::collections::BTreeMap;
-                let mut annotations: BTreeMap<String, String> = BTreeMap::new();
-                annotations.insert("eks.amazonaws.com/role-arn".to_string(), role_arn.clone());
-                let service_account_template = ServiceAccountTemplate {
-                    metadata: Some(ObjectMeta {
-                        annotations: Some(annotations),
-                        ..ObjectMeta::default()
-                    }),
-                };
-
-                // Format Backup spec in CoreDBSpec
-                let backup = Backup {
-                    destinationPath: Some(format!(
-                        "s3://{}/coredb/{}/org-{}-inst-{}",
-                        backup_archive_bucket,
-                        &read_msg.message.organization_name,
-                        &read_msg.message.organization_name,
-                        &read_msg.message.dbname
-                    )),
-                    encryption: Some(String::from("AES256")),
-                    retentionPolicy: Some(String::from("30")),
-                    schedule: Some(generate_rand_schedule().await),
-                    s3_credentials: Some(S3Credentials {
-                        inherit_from_iam_role: Some(true),
-                        ..Default::default()
-                    }),
-                    ..Default::default()
-                };
-
-                // Merge backup and service_account_template into spec
-                let coredb_spec = CoreDBSpec {
-                    serviceAccountTemplate: service_account_template,
-                    backup,
-                    ..msg_spec.clone()
+                    }
                 };
 
                 info!("{}: Creating namespace", read_msg.msg_id);
@@ -625,4 +579,63 @@ async fn main() -> std::io::Result<()> {
     .bind(("0.0.0.0", server_port))?
     .run()
     .await
+}
+
+
+async fn init_cloud_perms(backup_archive_bucket: String, cf_template_bucket: String, read_msg: &Message<CRUDevent>, coredb_spec: &mut CoreDBSpec, is_cloud_formation: bool) -> Result<(), ConductorError> {
+    if !is_cloud_formation {
+        return Ok(());
+    }
+
+    create_cloudformation(
+        String::from("us-east-1"),
+        backup_archive_bucket.clone(),
+        &read_msg.message.organization_name,
+        &read_msg.message.dbname,
+        &cf_template_bucket,
+    )
+    .await?;
+
+    // Lookup the CloudFormation stack's role ARN
+    let role_arn = lookup_role_arn(
+        String::from("us-east-1"),
+        &read_msg.message.organization_name,
+        &read_msg.message.dbname)
+    .await?;
+
+    info!("{}: Adding backup configuration to spec", read_msg.msg_id);
+    // Format ServiceAccountTemplate spec in CoreDBSpec
+    use std::collections::BTreeMap;
+    let mut annotations: BTreeMap<String, String> = BTreeMap::new();
+    annotations.insert("eks.amazonaws.com/role-arn".to_string(), role_arn.clone());
+    let service_account_template = ServiceAccountTemplate {
+        metadata: Some(ObjectMeta {
+            annotations: Some(annotations),
+            ..ObjectMeta::default()
+        }),
+    };
+
+    // Format Backup spec in CoreDBSpec
+    let backup = Backup {
+        destinationPath: Some(format!(
+            "s3://{}/coredb/{}/org-{}-inst-{}",
+            backup_archive_bucket,
+            &read_msg.message.organization_name,
+            &read_msg.message.organization_name,
+            &read_msg.message.dbname
+        )),
+        encryption: Some(String::from("AES256")),
+        retentionPolicy: Some(String::from("30")),
+        schedule: Some(generate_rand_schedule().await),
+        s3_credentials: Some(S3Credentials {
+            inherit_from_iam_role: Some(true),
+            ..Default::default()
+        }),
+        ..Default::default()
+    };
+
+    coredb_spec.backup = backup;
+    coredb_spec.serviceAccountTemplate =service_account_template;
+
+    Ok(())
 }
