@@ -29,7 +29,10 @@ async fn app_main() -> anyhow::Result<()> {
     let state = State::default();
     let controller = controller::run(state.clone());
 
-    let server_port = std::env::var("PORT").unwrap_or_else(|_| String::from("8080")).parse::<u16>().unwrap_or(8080);
+    let server_port = std::env::var("PORT")
+        .unwrap_or_else(|_| String::from("8080"))
+        .parse::<u16>()
+        .unwrap_or(8080);
 
     // Start web server
     let server = HttpServer::new(move || {

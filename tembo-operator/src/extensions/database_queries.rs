@@ -504,22 +504,34 @@ mod tests {
          archive_mode          | off     |      |          |            |            | sighup  | enum    |        |         |         | on,off   | off      | off       |            |            | f";
         let config = parse_config_params(config_psql);
         assert_eq!(config.len(), 4);
-        assert_eq!(config[0], PgConfig {
-            name: "allow_system_table_mods".to_owned(),
-            value: "off".parse().unwrap(),
-        });
-        assert_eq!(config[1], PgConfig {
-            name: "application_name".to_owned(),
-            value: "".parse().unwrap(),
-        });
-        assert_eq!(config[2], PgConfig {
-            name: "archive_command".to_owned(),
-            value: "".parse().unwrap(),
-        });
-        assert_eq!(config[3], PgConfig {
-            name: "archive_mode".to_owned(),
-            value: "off".parse().unwrap(),
-        });
+        assert_eq!(
+            config[0],
+            PgConfig {
+                name: "allow_system_table_mods".to_owned(),
+                value: "off".parse().unwrap(),
+            }
+        );
+        assert_eq!(
+            config[1],
+            PgConfig {
+                name: "application_name".to_owned(),
+                value: "".parse().unwrap(),
+            }
+        );
+        assert_eq!(
+            config[2],
+            PgConfig {
+                name: "archive_command".to_owned(),
+                value: "".parse().unwrap(),
+            }
+        );
+        assert_eq!(
+            config[3],
+            PgConfig {
+                name: "archive_mode".to_owned(),
+                value: "off".parse().unwrap(),
+            }
+        );
     }
 
     #[test]
