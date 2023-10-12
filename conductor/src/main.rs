@@ -109,6 +109,7 @@ async fn run(metrics: CustomMetrics) -> Result<(), ConductorError> {
             metrics
                 .conductor_errors
                 .add(&opentelemetry::Context::current(), 1, &[]);
+
             // this is what we'll send back to control-plane
             let error_event = types::StateToControlPlane {
                 data_plane_id: read_msg.message.data_plane_id,
