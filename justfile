@@ -1,6 +1,7 @@
 POSTGRES_PASSWORD := 'postgres'
 DATABASE_URL := 'postgres://postgres:postgres@cp-pgmq-pg:5432'
 CONDUCTOR_DATABASE_URL := 'postgresql://postgres:postgres@0.0.0.0:5431/postgres'
+CLERK_SECRET_KEY := 'clerk-tembo-dev-secret-key'
 RUST_LOG := 'info'
 
 watch-operator:
@@ -26,8 +27,8 @@ watch-conductor:
     cargo watch --workdir ./conductor -x run
 
 run-control-plane:
-    docker run -d -p 8080:8080 --network temboDevSuite --env POSTGRES_CONNECTION='{{DATABASE_URL}}' --env POSTGRES_QUEUE_CONNECTION='{{DATABASE_URL}}' --env CLERK_SECRET_KEY='<clerk-dev-secret-key>' -it --entrypoint /usr/local/bin/cp-webserver --rm quay.io/coredb/cp-service
-    docker run -d -p 8081:8081 --network temboDevSuite --env POSTGRES_CONNECTION='{{DATABASE_URL}}' --env POSTGRES_QUEUE_CONNECTION='{{DATABASE_URL}}' --env CLERK_SECRET_KEY='<clerk-dev-secret-key>' -it --entrypoint /usr/local/bin/cp-service --rm quay.io/coredb/cp-service
+    docker run -d -p 8080:8080 --network temboDevSuite --env POSTGRES_CONNECTION='{{DATABASE_URL}}' --env POSTGRES_QUEUE_CONNECTION='{{DATABASE_URL}}' --env CLERK_SECRET_KEY='{{CLERK_SECRET_KEY}}' -it --entrypoint /usr/local/bin/cp-webserver --rm quay.io/coredb/cp-service
+    docker run -d -p 8081:8081 --network temboDevSuite --env POSTGRES_CONNECTION='{{DATABASE_URL}}' --env POSTGRES_QUEUE_CONNECTION='{{DATABASE_URL}}' --env CLERK_SECRET_KEY='{{CLERK_SECRET_KEY}}' -it --entrypoint /usr/local/bin/cp-service --rm quay.io/coredb/cp-service
 
 run-dbs:
     docker network create temboDevSuite || true
