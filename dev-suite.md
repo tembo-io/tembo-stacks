@@ -14,7 +14,7 @@
 ### Setup
 
 - Before doing anything, go to https://dashboard.clerk.com/apps/app_2NxxGlmiAzGOwDTIzbObk4cxIOA/instances/ins_2NxxGsVFc3ddBxfVeJ4R55w1lTG/api-keys, copy the CLERK_SECRET_KEY, and add it into the justfile in the root.
-- If ur on mac, you may need to stop any running postgres instances on port `5432` with `brew services stop postgresql`
+- If ur on mac, you may need to stop any running postgres instances on port `5432` with `brew services stop postgresql`g
 - Make sure you have your docker daemon running
 - Confirm that ports `8080`, `6000`, and `8081` are free and nothing is running on them
 
@@ -50,7 +50,7 @@ just watch-control-plane
 
 ### Deploy an instance for testing
 
-Grab a authorization token from dev using the `cloud.cdb-dev.com/generate-jwt` route in mahout and also an organization id from the Clerk development environment on https://dashboard.clerk.com. Then run the following curl command to hit the control-plane webserver on http://localhost:8080 to create a new db instance:
+Grab a authorization token from dev using the `cloud.cdb-dev.com/generate-jwt` route in mahout and also an organization id from the Clerk development environment on https://dashboard.clerk.com. Then run the following `curl` command to hit the control-plane webserver on http://localhost:8080 to create a new db instance:
 
 ```bash
 curl -X POST \
