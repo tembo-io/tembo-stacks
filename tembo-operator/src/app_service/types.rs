@@ -123,8 +123,8 @@ mod tests {
             },
         },
         {
-            "replacePath": {
-                "name": "strip-my-path",
+            "stripPrefix": {
+                "name": "strip-my-prefix",
                 "config": [
                     "/removeMe"
                 ]
@@ -141,7 +141,7 @@ mod tests {
                     assert_eq!(mw.config["Authorization"], "");
                 }
                 Middleware::StripPrefix(mw) => {
-                    assert_eq!(mw.name, "strip-my-path");
+                    assert_eq!(mw.name, "strip-my-prefix");
                     assert_eq!(mw.config[0], "/removeMe");
                 }
             }
