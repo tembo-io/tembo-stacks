@@ -60,9 +60,14 @@ curl -X POST \
   -d '{
     "cpu": 1,
     "environment": "dev",
-    "instance_name": "test-create7",
+    "instance_name": "test-db",
     "memory": "4Gi",
     "stack_type": "Standard",
     "storage": "10Gi"
 }'
 ```
+
+### Accessing your test db
+
+- Check your kind cluster to see if the db pod is running with `kubectl get pods --all-namespaces` or `kubectl get pods` when ur in the correct namespace (it should be named something like `org-your-org-name-inst-test-db`)
+- You can then `psql` into your new instance with `psql "postgres://postgres:$(kubectl get secrets -o json org-your-org-name-inst-test-db-connection | jq -r '.data.password' | base64 --decode)@org-your-org-name-inst-test-db.local.tembo-development.com:5432?sslmode=require`
