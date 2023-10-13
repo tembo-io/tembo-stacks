@@ -21,10 +21,12 @@ mod test {
         apis::coredb_types::CoreDB,
         cloudnativepg::{backups::Backup, clusters::Cluster},
         defaults::{default_resources, default_storage},
+        errors::ValueError,
         is_pod_ready,
         psql::PsqlOutput,
         Context, State,
     };
+    use futures_util::StreamExt;
     use k8s_openapi::{
         api::{
             apps::v1::Deployment,
@@ -37,7 +39,9 @@ mod test {
         apimachinery::pkg::{api::resource::Quantity, apis::meta::v1::ObjectMeta, util::intstr::IntOrString},
     };
     use kube::{
-        api::{AttachParams, DeleteParams, ListParams, Patch, PatchParams, PostParams},
+        api::{
+            AttachParams, DeleteParams, ListParams, Patch, PatchParams, PostParams, WatchEvent, WatchParams,
+        },
         runtime::wait::{await_condition, conditions, Condition},
         Api, Client, Config, Error,
     };
@@ -53,6 +57,7 @@ mod test {
     };
 
     use tokio::io::AsyncReadExt;
+    use tokio::time::timeout;
 
     const API_VERSION: &str = "coredb.io/v1alpha1";
     // Timeout settings while waiting for an event
@@ -432,6 +437,46 @@ mod test {
         let _o = ns_api.delete(name, &params).await?;
 
         Ok(())
+    }
+
+    async fn wait_until_status_not_running(coredbs: &Api<CoreDB>, name: &str) -> Result<(), kube::Error> {
+        const TIMEOUT_SECONDS_STATUS_RUNNING: u32 = 294;
+        let wp = WatchParams {
+            timeout: Some(TIMEOUT_SECONDS_STATUS_RUNNING),
+            field_selector: Some(format!("metadata.name={}", name)),
+            ..Default::default()
+        };
+        let mut stream = coredbs.watch(&wp, "0").await?.boxed();
+
+        let result = timeout(Duration::from_secs(300), async {
+            while let Some(status) = stream.next().await {
+                match status {
+                    Ok(WatchEvent::Modified(cdb)) => {
+                        let running_status = cdb.status.as_ref().map_or(false, |s| s.running);
+                        if !running_status {
+                            println!("status.running is now false!");
+                            return Ok(());
+                        } else {
+                            println!("status.running is still true. Continuing to watch...");
+                        }
+                    }
+                    Ok(_) => {} // You might want to handle other events such as Error or Deleted
+                    Err(e) => {
+                        println!("Watch error: {:?}", e);
+                    }
+                }
+            }
+            Err(ValueError::Invalid("Stream terminated prematurely".to_string()))
+        })
+        .await;
+
+        match result {
+            Ok(_ok) => Ok(()),
+            Err(_) => Err(kube::Error::ReadEvents(std::io::Error::new(
+                std::io::ErrorKind::Other,
+                "Timed out waiting for status.running to become false",
+            ))),
+        }
     }
 
     use controller::{
@@ -3366,26 +3411,32 @@ mod test {
         // Ensure that eventually `status.running` becomes false to reflect
         // that Postgres is down
         {
-            let started = Utc::now();
-            let max_wait_time = chrono::Duration::seconds(300);
-            let mut running_became_false = false;
-            while Utc::now().signed_duration_since(started) < max_wait_time {
-                if status_running(&coredbs, &name).await {
-                    println!("status.running is still true. Retrying in 5 sec.");
-                    tokio::time::sleep(Duration::from_secs(1)).await;
-                } else {
-                    println!("status.running is now false!");
-
-                    running_became_false = true;
-                    break;
-                }
+            match wait_until_status_not_running(&coredbs, &name).await {
+                Ok(_) => println!("status.running is now false!"),
+                Err(e) => panic!("status.running should've become false after restart: {}", e),
             }
-
-            assert!(
-                running_became_false,
-                "status.running should've become false after restart"
-            );
         }
+        // {
+        //     let started = Utc::now();
+        //     let max_wait_time = chrono::Duration::seconds(300);
+        //     let mut running_became_false = false;
+        //     while Utc::now().signed_duration_since(started) < max_wait_time {
+        //         if status_running(&coredbs, &name).await {
+        //             println!("status.running is still true. Retrying in 5 sec.");
+        //             tokio::time::sleep(Duration::from_secs(1)).await;
+        //         } else {
+        //             println!("status.running is now false!");
+        //
+        //             running_became_false = true;
+        //             break;
+        //         }
+        //     }
+        //
+        //     assert!(
+        //         running_became_false,
+        //         "status.running should've become false after restart"
+        //     );
+        // }
 
         // Wait for Postgres to restart
         {
