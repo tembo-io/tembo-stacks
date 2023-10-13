@@ -432,7 +432,11 @@ impl CoreDB {
     }
 
     #[instrument(skip(self, client))]
-    pub async fn pods_by_cluster(&self, client: Client) -> Result<Vec<Pod>, Action> {
+    async fn pods_by_cluster_conditional_readiness(
+        &self,
+        client: Client,
+        wait_for_ready: bool,
+    ) -> Result<Vec<Pod>, Action> {
         let requires_load =
             extensions_that_require_load(client.clone(), &self.metadata.namespace.clone().unwrap()).await?;
         let cluster = cnpg_cluster_from_cdb(self, None, requires_load);
@@ -489,16 +493,23 @@ impl CoreDB {
             })
             .collect();
 
-        // Check if the instance is a restore instance
-        let is_restore = self.spec.restore.is_some();
-
         // If the instance has a pod that is not ready and is not a restore instance, requeue
-        if ready_pods.is_empty() && !is_restore {
+        if wait_for_ready && ready_pods.is_empty() {
             warn!("Failed to find ready CNPG pods of {}", &self.name_any());
             return Err(Action::requeue(Duration::from_secs(30)));
         }
 
         Ok(ready_pods)
+    }
+
+    #[instrument(skip(self, client))]
+    pub async fn pods_by_cluster(&self, client: Client) -> Result<Vec<Pod>, Action> {
+        self.pods_by_cluster_conditional_readiness(client, true).await
+    }
+
+    #[instrument(skip(self, client))]
+    pub async fn pods_by_cluster_ready_or_not(&self, client: Client) -> Result<Vec<Pod>, Action> {
+        self.pods_by_cluster_conditional_readiness(client, false).await
     }
 
     #[instrument(skip(self, client))]

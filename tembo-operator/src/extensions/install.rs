@@ -57,7 +57,7 @@ async fn all_fenced_and_non_fenced_pods(cdb: &CoreDB, ctx: Arc<Context>) -> Resu
     let pods_fenced = get_fenced_pods(cdb, ctx.clone()).await?;
 
     // Get all non-fenced pods
-    let non_fenced_pods = cdb.pods_by_cluster(ctx.client.clone()).await?;
+    let non_fenced_pods = cdb.pods_by_cluster_ready_or_not(ctx.client.clone()).await?;
 
     // Merge and deduplicate pod names
     let all_pods = merge_and_deduplicate_pods(non_fenced_pods, pods_fenced);
