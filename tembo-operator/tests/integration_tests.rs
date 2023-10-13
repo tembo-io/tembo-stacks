@@ -3394,8 +3394,8 @@ mod test {
             let mut running_became_false = false;
             while Utc::now().signed_duration_since(started) < max_wait_time {
                 if status_running(&coredbs, &name).await {
-                    println!("status.running is still true. Retrying in 1 sec.");
-                    tokio::time::sleep(Duration::from_secs(1)).await;
+                    println!("status.running is still true. Retrying in 5 sec.");
+                    tokio::time::sleep(Duration::from_secs(5)).await;
                 } else {
                     println!("status.running is now false!");
 
