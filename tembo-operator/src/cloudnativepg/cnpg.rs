@@ -858,7 +858,7 @@ pub async fn reconcile_cnpg(cdb: &CoreDB, ctx: Arc<Context>) -> Result<(), Actio
                     if current_shared_preload_libraries != new_libs {
                         let mut libs_that_are_installed: Vec<String> = vec![];
                         // If we can't find the existing primary pod, returns a requeue
-                        let primary_pod_cnpg = cdb.primary_pod_cnpg(ctx.client.clone()).await?;
+                        let primary_pod_cnpg = cdb.primary_pod_cnpg_ready_or_not(ctx.client.clone()).await?;
                         // Check if the file is already installed
                         let command = vec![
                             "/bin/sh".to_string(),
@@ -1249,7 +1249,10 @@ pub async fn get_fenced_pods(cdb: &CoreDB, ctx: Arc<Context>) -> Result<Option<V
             fenced_instances, instance_name
         );
 
-        let primary_pod_name = cdb.primary_pod_cnpg(ctx.client.clone()).await?.name_any();
+        let primary_pod_name = cdb
+            .primary_pod_cnpg_ready_or_not(ctx.client.clone())
+            .await?
+            .name_any();
 
         // Check if primary pod is initialized
         let is_primary_initialized = fenced_pods_initialized(cdb, ctx.clone(), &primary_pod_name).await?;

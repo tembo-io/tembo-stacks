@@ -6,10 +6,7 @@ use crate::{
     app_service::manager::reconcile_app_services,
     cloudnativepg::{
         backups::Backup,
-        cnpg::{
-            cnpg_cluster_from_cdb, get_fenced_instances_from_annotations, reconcile_cnpg,
-            reconcile_cnpg_scheduled_backup,
-        },
+        cnpg::{cnpg_cluster_from_cdb, reconcile_cnpg, reconcile_cnpg_scheduled_backup},
     },
     config::Config,
     deployment_postgres_exporter::reconcile_prometheus_exporter_deployment,
@@ -378,7 +375,11 @@ impl CoreDB {
     }
 
     #[instrument(skip(self, client))]
-    pub async fn primary_pod_cnpg(&self, client: Client) -> Result<Pod, Action> {
+    async fn primary_pod_cnpg_conditional_readiness(
+        &self,
+        client: Client,
+        wait_for_ready: bool,
+    ) -> Result<Pod, Action> {
         let requires_load =
             extensions_that_require_load(client.clone(), &self.metadata.namespace.clone().unwrap()).await?;
         let cluster = cnpg_cluster_from_cdb(self, None, requires_load);
@@ -386,17 +387,13 @@ impl CoreDB {
             .metadata
             .name
             .expect("CNPG Cluster should always have a name");
-        let namespace = self
-            .metadata
-            .namespace
-            .clone()
-            .expect("Operator should always be namespaced");
-        let cluster_selector = format!("cnpg.io/cluster={cluster_name}");
-        let role_selector = "role=primary".to_string();
+        let namespace = self.metadata.namespace.as_deref().unwrap_or_default();
+        let cluster_selector = format!("cnpg.io/cluster={}", cluster_name);
+        let role_selector = "role=primary";
         let list_params = ListParams::default()
             .labels(&cluster_selector)
-            .labels(&role_selector);
-        let pods: Api<Pod> = Api::namespaced(client, &namespace);
+            .labels(role_selector);
+        let pods: Api<Pod> = Api::namespaced(client, namespace);
         let pods = pods.list(&list_params);
         // Return an error if the query fails
         let pod_list = pods.await.map_err(|_e| {
@@ -412,24 +409,7 @@ impl CoreDB {
         }
         let primary = pod_list.items[0].clone();
 
-        // Check for restore config
-        let is_restore = self.spec.restore.is_some();
-
-        // Retrieve the fenced instances from the primary pod's annotations
-        // and convert Option<Option<Vec<String>>> to Option<Vec<String>>
-        let fenced_instances = primary
-            .metadata
-            .annotations
-            .as_ref()
-            .and_then(|ann| get_fenced_instances_from_annotations(ann).ok())
-            .flatten();
-
-        // Check if the primary pod is one of the fenced instances
-        let primary_is_fenced = fenced_instances
-            .and_then(|fp| primary.metadata.name.as_ref().map(|name| fp.contains(name)))
-            .unwrap_or(false);
-
-        if !is_postgres_ready().matches_object(Some(&primary)) && !is_restore && !primary_is_fenced {
+        if wait_for_ready && !is_postgres_ready().matches_object(Some(&primary)) {
             // It's expected to sometimes be empty, we should retry after a short duration
             warn!(
                 "Found CNPG primary pod of {}, but it is not ready",
@@ -437,7 +417,18 @@ impl CoreDB {
             );
             return Err(Action::requeue(Duration::from_secs(5)));
         }
+
         Ok(primary)
+    }
+
+    #[instrument(skip(self, client))]
+    pub async fn primary_pod_cnpg(&self, client: Client) -> Result<Pod, Action> {
+        self.primary_pod_cnpg_conditional_readiness(client, true).await
+    }
+
+    #[instrument(skip(self, client))]
+    pub async fn primary_pod_cnpg_ready_or_not(&self, client: Client) -> Result<Pod, Action> {
+        self.primary_pod_cnpg_conditional_readiness(client, false).await
     }
 
     #[instrument(skip(self, client))]
@@ -498,7 +489,11 @@ impl CoreDB {
             })
             .collect();
 
-        if ready_pods.is_empty() && self.spec.restore.is_none() {
+        // Check if the instance is a restore instance
+        let is_restore = self.spec.restore.is_some();
+
+        // If the instance has a pod that is not ready and is not a restore instance, requeue
+        if ready_pods.is_empty() && !is_restore {
             warn!("Failed to find ready CNPG pods of {}", &self.name_any());
             return Err(Action::requeue(Duration::from_secs(30)));
         }
@@ -580,10 +575,8 @@ impl CoreDB {
         database: String,
         context: Arc<Context>,
     ) -> Result<PsqlOutput, Action> {
-        let client = context.client.clone();
-
         let pod_name_cnpg = self
-            .primary_pod_cnpg(client.clone())
+            .primary_pod_cnpg(context.client.clone())
             .await?
             .metadata
             .name
@@ -594,7 +587,7 @@ impl CoreDB {
             self.metadata.namespace.clone().unwrap(),
             command,
             database,
-            context,
+            context.clone(),
         );
         debug!("Running exec command in {}", pod_name_cnpg);
         cnpg_psql_command.execute().await
