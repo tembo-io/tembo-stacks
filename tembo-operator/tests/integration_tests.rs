@@ -56,8 +56,7 @@ mod test {
         time::Duration,
     };
 
-    use tokio::io::AsyncReadExt;
-    use tokio::time::timeout;
+    use tokio::{io::AsyncReadExt, time::timeout};
 
     const API_VERSION: &str = "coredb.io/v1alpha1";
     // Timeout settings while waiting for an event
