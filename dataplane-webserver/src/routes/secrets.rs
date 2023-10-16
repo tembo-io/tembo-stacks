@@ -29,7 +29,7 @@ lazy_static! {
         secrets_allow_list.push(
             AvailableSecret {
                 name: "superuser-role".to_string(),
-                possible_keys: vec!["username".to_string(), "password".to_string()],
+                possible_keys: vec!["username".to_string(), "password".to_string(), "pooler_uri".to_string()],
                 formatter: Box::new(|instance_name| format!("{}-connection", instance_name)),
             }
         );
