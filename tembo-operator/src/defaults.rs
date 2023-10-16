@@ -137,10 +137,22 @@ pub fn default_pool_mode() -> PoolerPgbouncerPoolMode {
     PoolerPgbouncerPoolMode::Transaction
 }
 
+pub fn default_pooler_parameters() -> BTreeMap<String, String> {
+    BTreeMap::from([(
+        "default_pool_size".to_string(),
+        "50".to_string(),
+    ),
+    (
+        "max_client_conn".to_string(),
+        "5000".to_string(),
+    )
+    ])
+}
+
 pub fn default_pgbouncer() -> PgBouncer {
     PgBouncer {
         poolMode: default_pool_mode(),
-        parameters: None,
+        parameters: Some(default_pooler_parameters()),
         // TODO(ianstanton): Add some sensible defaults for pgbouncer resources
         resources: None,
     }
