@@ -54,6 +54,7 @@ pub struct OrgInstId {
 #[derive(Debug, Serialize, Deserialize)]
 pub struct ConnectionInfo {
     pub host: String,
+    pub pooler_host: String,
     pub port: u16,
     pub user: String,
     pub password: String,

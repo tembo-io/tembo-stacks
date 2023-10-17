@@ -277,11 +277,13 @@ pub async fn get_pg_conn(
     let (app_user, app_pw) = get_field_value_from_secret(app_data)?;
 
     let host = format!("{name}.{basedomain}");
+    let pooler_host = format!("{name}-pooler.{basedomain}");
 
     // Create ConnectionInfo for the postgres user
     // The user and password are base64 encoded when passed back to the control-plane
     let postgres_conn = types::ConnectionInfo {
         host: host.clone(),
+        pooler_host: pooler_host.clone(),
         port: 5432,
         user: postgres_user,
         password: postgres_pw,
