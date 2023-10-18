@@ -20,17 +20,20 @@ spec:
         - port: 3000
           ingressPath: /rest/v1
           middlewares:
-            - my-strip-prefix
+            - my-headers
         - port: 3000
           ingressPath: /graphql/v1
           middlewares:
             - map-gql
+            - my-headers
       middlewares:
         - customRequestHeaders:
             name: my-headers
             config:
               # removes auth header from request
               Authorization: ""
+              Content-Profile: graphql
+              Accept-Profile: graphql
         - stripPrefix:
             name: my-strip-prefix
             config:
@@ -40,12 +43,12 @@ spec:
             name: map-gql
             config:
               regex: \/graphql\/v1\/?
-              replacement: /rpc/graphql
+              replacement: /rpc/resolve
       env:
         - name: PGRST_DB_URI
           valueFromPlatform: ReadWriteConnection
         - name: PGRST_DB_SCHEMA
-          value: "public"
+          value: "public, graphql"
         - name: PGRST_DB_ANON_ROLE
           value: postgres
         - name: PGRST_LOG_LEVEL
