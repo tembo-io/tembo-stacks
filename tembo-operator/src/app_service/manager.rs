@@ -66,9 +66,6 @@ fn generate_resource(
 }
 
 // templates the Kubernetes Service for an AppService
-// there should be one Kube service per AppService
-// but can be multiple port mappings.
-// there can also be multiple routes per port
 fn generate_service(
     appsvc: &AppService,
     coredb_name: &str,
@@ -87,7 +84,7 @@ fn generate_service(
 
     let ports = match appsvc.routing.as_ref() {
         Some(routing) => {
-            // de-dupe any ports. we can have multiple appService routing configs for the same port
+            // de-dupe any ports because we can have multiple appService routing configs for the same port
             // but we only need one ServicePort per port
             let distinct_ports = routing
                 .iter()
@@ -105,7 +102,6 @@ fn generate_service(
                     ..ServicePort::default()
                 })
                 .collect();
-            // dedupe
             Some(ports)
         }
         None => None,
@@ -474,15 +470,6 @@ pub async fn reconcile_app_services(cdb: &CoreDB, ctx: Arc<Context>) -> Result<(
         Some(appsvcs) => {
             let mut desired_svc: Vec<String> = Vec::new();
             for appsvc in appsvcs.iter() {
-                // match appsvc.routing.as_ref() {
-                //     Some(routing) => {
-                //         for r in routing.iter() {
-                //             let svc_name = format!("{}-{}", coredb_name, appsvc.name);
-                //             desired_svc.push(svc_name.clone());
-                //         }
-                //     }
-                //     None => {}
-                // }
                 if appsvc.routing.as_ref().is_some() {
                     let svc_name = format!("{}-{}", coredb_name, appsvc.name);
                     desired_svc.push(svc_name.clone());
