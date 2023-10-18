@@ -3270,7 +3270,7 @@ mod test {
             .unwrap();
         let body: ApiResponse = response.json().await.unwrap();
         assert_eq!(body.info.title, "PostgREST API");
-        
+
         let trigger = "
         CREATE OR REPLACE FUNCTION pgrst_watch() RETURNS event_trigger
   LANGUAGE plpgsql
@@ -3284,17 +3284,12 @@ CREATE EVENT TRIGGER pgrst_watch
   ON ddl_command_end
   EXECUTE PROCEDURE pgrst_watch();
 ";
-        //  
+        //
         let state = State::default();
         let context = state.create_context(client.clone());
         // hard sleep to give operator time to apply change
         // tokio::time::sleep(Duration::from_secs(5)).await;
-        let result = psql_with_retry(
-            context.clone(),
-            cdb.clone(),
-            trigger.to_string(),
-        )
-        .await;
+        let result = psql_with_retry(context.clone(), cdb.clone(), trigger.to_string()).await;
         println!("result: {:#?}", result);
         assert!(result.success);
         // create a table for gql to inflect
