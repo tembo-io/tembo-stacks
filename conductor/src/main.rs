@@ -139,7 +139,7 @@ async fn run(metrics: CustomMetrics) -> Result<(), ConductorError> {
         // Based on message_type in message, create, update, delete CoreDB
         let event_msg: types::StateToControlPlane = match read_msg.message.event_type {
             // every event is for a single namespace
-            Event::Create | Event::Update => {
+            Event::Create | Event::Update | Event::Restore => {
                 info!("{}: Got create or update event", read_msg.msg_id);
 
                 // (todo: nhudson) in thr future move this to be more specific
@@ -255,6 +255,7 @@ async fn run(metrics: CustomMetrics) -> Result<(), ConductorError> {
                     client.clone(),
                     &namespace,
                     &data_plane_basedomain,
+                    &coredb_spec,
                 )
                 .await
                 {
@@ -313,7 +314,10 @@ async fn run(metrics: CustomMetrics) -> Result<(), ConductorError> {
                     Err(_) => true,
                 };
 
-                if extension_still_processing && read_msg.message.event_type == Event::Create {
+                if extension_still_processing
+                    && (read_msg.message.event_type == Event::Create
+                        || read_msg.message.event_type == Event::Restore)
+                {
                     let _ = queue
                         .set_vt::<CRUDevent>(
                             &control_plane_events_queue,
@@ -337,6 +341,7 @@ async fn run(metrics: CustomMetrics) -> Result<(), ConductorError> {
                 let report_event = match read_msg.message.event_type {
                     Event::Create => Event::Created,
                     Event::Update => Event::Updated,
+                    Event::Restore => Event::Restored,
                     _ => unreachable!(),
                 };
                 types::StateToControlPlane {
@@ -424,8 +429,13 @@ async fn run(metrics: CustomMetrics) -> Result<(), ConductorError> {
                     }
                 };
 
-                let conn_info =
-                    get_pg_conn(client.clone(), &namespace, &data_plane_basedomain).await;
+                let conn_info = get_pg_conn(
+                    client.clone(),
+                    &namespace,
+                    &data_plane_basedomain,
+                    &current_resource.spec,
+                )
+                .await;
 
                 types::StateToControlPlane {
                     data_plane_id: read_msg.message.data_plane_id,
