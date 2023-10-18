@@ -144,8 +144,8 @@ mod tests {
             },
         },
         {
-            "replacePathPrefix": {
-                "name": "replace-my-prefix",
+            "replacePathRegex": {
+                "name": "replace-my-regex",
                 "config":
                     {
                         "regex": "/replace/me",
@@ -168,7 +168,7 @@ mod tests {
                     assert_eq!(mw.config[0], "/removeMe");
                 }
                 Middleware::ReplacePathRegex(mw) => {
-                    assert_eq!(mw.name, "replace-my-prefix");
+                    assert_eq!(mw.name, "replace-my-regex");
                     assert_eq!(mw.config.regex, "/replace/me");
                     assert_eq!(mw.config.replacement, "/with/me");
                 }
