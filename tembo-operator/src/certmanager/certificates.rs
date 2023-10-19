@@ -75,11 +75,13 @@ pub struct CertificateAdditionalOutputFormats {
     pub r#type: CertificateAdditionalOutputFormatsType,
 }
 
-#[derive(Serialize, Deserialize, Clone, Debug)]
+#[derive(Serialize, Deserialize, Clone, Debug, Default)]
 pub enum CertificateAdditionalOutputFormatsType {
     #[serde(rename = "DER")]
     Der,
+    // https://cert-manager.io/docs/reference/api-docs/#cert-manager.io/v1.CertificateOutputFormatType
     #[serde(rename = "CombinedPEM")]
+    #[default]
     CombinedPem,
 }
 
@@ -195,7 +197,7 @@ pub struct CertificateSubject {
     pub street_addresses: Option<Vec<String>>,
 }
 
-#[derive(Serialize, Deserialize, Clone, Debug, Default)]
+#[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct CertificateStatus {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub conditions: Option<Vec<CertificateStatusConditions>>,
@@ -223,7 +225,7 @@ pub struct CertificateStatus {
     pub revision: Option<i64>,
 }
 
-#[derive(Serialize, Deserialize, Clone, Debug, Default)]
+#[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct CertificateStatusConditions {
     #[serde(
         default,
