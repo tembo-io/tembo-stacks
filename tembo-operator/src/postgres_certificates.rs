@@ -51,7 +51,7 @@ pub async fn reconcile_certificates(
     };
 
     // Create a new secret in the target namespace with the fetched value
-    let secret_name = format!("{}-ca1", namespace);
+    let secret_name = format!("{}-ca1", coredb_name);
     let new_secret = json!({
         "apiVersion": "v1",
         "kind": "Secret",
