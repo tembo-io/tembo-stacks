@@ -171,8 +171,11 @@ async fn apply_certificate(
     debug!("\nApplying Certificate {} in namespace {}", name, namespace);
     let _o: Certificate = match cert_api.patch(&name, &params, &Patch::Apply(&certificate)).await {
         Ok(cert) => cert,
-        Err(_) => {
-            error!("Failed to create Certificate {} in namespace {}", name, namespace);
+        Err(e) => {
+            error!(
+                "Failed to create Certificate {} in namespace {}. {:?}",
+                name, namespace, e
+            );
             return Err(Action::requeue(Duration::from_secs(300)));
         }
     };
