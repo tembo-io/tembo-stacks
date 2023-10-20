@@ -90,7 +90,6 @@ pub async fn reconcile_certificates(
         format!("{}-ro", coredb_name),
         format!("{}-ro.{}", coredb_name, namespace),
         format!("{}-ro.{}.svc", coredb_name, namespace),
-        format!("{}-rw", coredb_name),
     ];
     match std::env::var("DATA_PLANE_BASEDOMAIN") {
         Ok(basedomain) => {
