@@ -27,6 +27,7 @@ pub mod traefik;
 pub use traefik::ingress_route_crd;
 mod certmanager;
 mod network_policies;
+mod postgres_certificates;
 pub mod psql;
 mod rbac;
 mod secret;
