@@ -21,10 +21,17 @@ pub async fn reconcile_certificates(
     coredb_name: &str,
     namespace: &str,
 ) -> Result<(), Action> {
+    match std::env::var("USE_SHARED_CA") {
+        Ok(_) => {}
+        Err(_) => {
+            debug!("USE_SHARED_CA not set, skipping certificate reconciliation");
+            return Ok(());
+        }
+    }
+
     let secrets_api_cert_manager_namespace: Api<Secret> = Api::namespaced(client.clone(), "cert-manager");
     let secrets_api: Api<Secret> = Api::namespaced(client.clone(), namespace);
     let certificates_api: Api<Certificate> = Api::namespaced(client, namespace);
-
 
     let decoded_ca_cert = match fetch_decoded_data_key_from_secret(
         secrets_api_cert_manager_namespace,
@@ -72,6 +79,28 @@ pub async fn reconcile_certificates(
         }
     };
 
+    let mut dns_names = vec![
+        format!("{}-rw", coredb_name),
+        format!("{}-rw.{}", coredb_name, namespace),
+        format!("{}-rw.{}.svc", coredb_name, namespace),
+        format!("{}-r", coredb_name),
+        format!("{}-r.{}", coredb_name, namespace),
+        format!("{}-r.{}.svc", coredb_name, namespace),
+        format!("{}-ro", coredb_name),
+        format!("{}-ro.{}", coredb_name, namespace),
+        format!("{}-ro.{}.svc", coredb_name, namespace),
+        format!("{}-rw", coredb_name),
+    ];
+    match std::env::var("DATA_PLANE_BASEDOMAIN") {
+        Ok(basedomain) => {
+            let extra_domain_name = format!("{}.{}", coredb_name, basedomain);
+            dns_names.push(extra_domain_name);
+        }
+        Err(_) => {
+            debug!("DATA_PLANE_BASEDOMAIN not set, not adding custom DNS name");
+        }
+    };
+
     // Create the first Certificate
     let server_certificate = json!({
         "apiVersion": "cert-manager.io/v1",
@@ -83,18 +112,7 @@ pub async fn reconcile_certificates(
         "spec": {
             "secretName": format!("{}-server1", coredb_name),
             "usages": ["server auth"],
-            "dnsNames": [
-                format!("{}-rw", coredb_name),
-                format!("{}-rw.{}", coredb_name, namespace),
-                format!("{}-rw.{}.svc", coredb_name, namespace),
-                format!("{}-r", coredb_name),
-                format!("{}-r.{}", coredb_name, namespace),
-                format!("{}-r.{}.svc", coredb_name, namespace),
-                format!("{}-ro", coredb_name),
-                format!("{}-ro.{}", coredb_name, namespace),
-                format!("{}-ro.{}.svc", coredb_name, namespace),
-                format!("{}-rw", coredb_name),
-            ],
+            "dnsNames": dns_names,
             "issuerRef": {
                 "name": POSTGRES_CERTIFICATE_ISSUER_NAME,
                 "kind": "ClusterIssuer",

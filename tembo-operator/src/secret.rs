@@ -4,7 +4,7 @@ use base64::{engine::general_purpose, Engine as _};
 use k8s_openapi::{api::core::v1::Secret, apimachinery::pkg::apis::meta::v1::ObjectMeta, ByteString};
 use kube::{
     api::{ListParams, Patch, PatchParams},
-    Api, Client, Resource, ResourceExt,
+    Api, Resource, ResourceExt,
 };
 use passwords::PasswordGenerator;
 use std::{collections::BTreeMap, sync::Arc};
