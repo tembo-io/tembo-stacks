@@ -39,6 +39,10 @@ use crate::{
     config::Config,
     defaults::{default_image, default_llm_image},
     errors::ValueError,
+    extensions::database_queries::{
+        POOLER_CREATE_FUNCTION, POOLER_CREATE_ROLE, POOLER_GRANT_ON_FUNCTION, POOLER_GRANT_TO_APP,
+        POOLER_GRANT_TO_POSTGRES, POOLER_REVOKE_ON_FUNCTION,
+    },
     patch_cdb_status_merge,
     trunk::extensions_that_require_load,
     Context, RESTARTED_AT,
@@ -991,6 +995,14 @@ async fn reconcile_pooler(cdb: &CoreDB, ctx: Arc<Context>) -> Result<(), Action>
 
     let owner_reference = cdb.controller_owner_ref(&()).unwrap();
 
+    match setup_pooler_on_instance(cdb, ctx.clone()).await {
+        Ok(_) => {}
+        Err(e) => {
+            warn!("Pooler instance setup failed: {:?}", e);
+            return Err(Action::requeue(Duration::from_secs(30)));
+        }
+    }
+
     // If pooler is enabled, create or update
     if cdb.spec.connectionPooler.enabled {
         let pooler = Pooler {
@@ -1053,6 +1065,29 @@ async fn reconcile_pooler(cdb: &CoreDB, ctx: Arc<Context>) -> Result<(), Action>
             })?;
         }
     }
+
+    Ok(())
+}
+
+/// setup_pooler_on_instance creates the pooler role and function on the instance
+async fn setup_pooler_on_instance(coredb: &CoreDB, ctx: Arc<Context>) -> Result<(), Action> {
+    // List of queries to be executed
+    let queries = vec![
+        POOLER_CREATE_ROLE,
+        POOLER_GRANT_TO_POSTGRES,
+        POOLER_GRANT_TO_APP,
+        POOLER_CREATE_FUNCTION,
+        POOLER_REVOKE_ON_FUNCTION,
+        POOLER_GRANT_ON_FUNCTION,
+    ];
+
+    // Execute each query
+    for query in &queries {
+        coredb
+            .psql(query.to_string(), "postgres".to_owned(), ctx.clone())
+            .await?;
+    }
+
     Ok(())
 }
 

@@ -127,7 +127,7 @@ impl CoreDB {
         // Fetch any metadata we need from Trunk
         reconcile_trunk_configmap(ctx.client.clone(), &ns).await?;
 
-        reconcile_certificates(ctx.client.clone(), &self.metadata.name.clone().unwrap(), &ns).await?;
+        reconcile_certificates(ctx.client.clone(), self, &ns).await?;
 
         // Ingress
         match std::env::var("DATA_PLANE_BASEDOMAIN") {
