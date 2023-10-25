@@ -95,17 +95,6 @@ name asc,
 enabled desc
 "#;
 
-pub const POOLER_CREATE_ROLE: &str = r#"CREATE ROLE cnpg_pooler_pgbouncer WITH LOGIN;"#;
-pub const POOLER_GRANT_TO_POSTGRES: &str = r#"GRANT CONNECT ON DATABASE postgres TO cnpg_pooler_pgbouncer;"#;
-pub const POOLER_GRANT_TO_APP: &str = r#"GRANT CONNECT ON DATABASE app TO cnpg_pooler_pgbouncer;"#;
-pub const POOLER_CREATE_FUNCTION: &str = r#"CREATE OR REPLACE FUNCTION user_search(uname TEXT)
-  RETURNS TABLE (usename name, passwd text)
-  LANGUAGE sql SECURITY DEFINER AS
-  'SELECT usename, passwd FROM pg_shadow WHERE usename=$1;';"#;
-pub const POOLER_REVOKE_ON_FUNCTION: &str = r#"REVOKE ALL ON FUNCTION user_search(text) FROM public;"#;
-pub const POOLER_GRANT_ON_FUNCTION: &str =
-    r#"GRANT EXECUTE ON FUNCTION user_search(text) TO cnpg_pooler_pgbouncer;"#;
-
 #[derive(Debug)]
 pub struct ExtRow {
     pub name: String,
@@ -353,7 +342,8 @@ pub async fn get_all_extensions(cdb: &CoreDB, ctx: Arc<Context>) -> Result<Vec<E
             };
             ext_hashmap
                 .entry((ext.name, ext.description))
-                .or_insert_with(Vec::new)
+                // .or_insert_with(Vec::new)
+                .or_default()
                 .push(extlocation);
         }
     }
@@ -527,34 +517,22 @@ mod tests {
          archive_mode          | off     |      |          |            |            | sighup  | enum    |        |         |         | on,off   | off      | off       |            |            | f";
         let config = parse_config_params(config_psql);
         assert_eq!(config.len(), 4);
-        assert_eq!(
-            config[0],
-            PgConfig {
-                name: "allow_system_table_mods".to_owned(),
-                value: "off".parse().unwrap(),
-            }
-        );
-        assert_eq!(
-            config[1],
-            PgConfig {
-                name: "application_name".to_owned(),
-                value: "".parse().unwrap(),
-            }
-        );
-        assert_eq!(
-            config[2],
-            PgConfig {
-                name: "archive_command".to_owned(),
-                value: "".parse().unwrap(),
-            }
-        );
-        assert_eq!(
-            config[3],
-            PgConfig {
-                name: "archive_mode".to_owned(),
-                value: "off".parse().unwrap(),
-            }
-        );
+        assert_eq!(config[0], PgConfig {
+            name: "allow_system_table_mods".to_owned(),
+            value: "off".parse().unwrap(),
+        });
+        assert_eq!(config[1], PgConfig {
+            name: "application_name".to_owned(),
+            value: "".parse().unwrap(),
+        });
+        assert_eq!(config[2], PgConfig {
+            name: "archive_command".to_owned(),
+            value: "".parse().unwrap(),
+        });
+        assert_eq!(config[3], PgConfig {
+            name: "archive_mode".to_owned(),
+            value: "off".parse().unwrap(),
+        });
     }
 
     #[test]

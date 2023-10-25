@@ -6,7 +6,7 @@ use crate::{
     app_service::manager::reconcile_app_services,
     cloudnativepg::{
         backups::Backup,
-        cnpg::{cnpg_cluster_from_cdb, reconcile_cnpg, reconcile_cnpg_scheduled_backup},
+        cnpg::{cnpg_cluster_from_cdb, reconcile_cnpg, reconcile_cnpg_scheduled_backup, reconcile_pooler},
     },
     config::Config,
     deployment_postgres_exporter::reconcile_prometheus_exporter_deployment,
@@ -285,6 +285,12 @@ impl CoreDB {
                 error!("Error reconciling service: {:?}", e);
                 Action::requeue(Duration::from_secs(300))
             })?;
+
+        if self.spec.connectionPooler.enabled {
+            debug!("Configuraing pooler instance for {}", name);
+            // Reconcile Pooler resource
+            reconcile_pooler(self, ctx.clone()).await?;
+        }
 
         // Check if Postgres is already running
         is_not_restarting(self, ctx.clone(), "postgres").await?;
