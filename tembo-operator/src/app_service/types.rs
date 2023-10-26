@@ -25,12 +25,12 @@ pub struct AppService {
 
 pub fn default_resources() -> ResourceRequirements {
     let limits: BTreeMap<String, Quantity> = BTreeMap::from([
-        ("cpu".to_owned(), Quantity("2".to_string())),
-        ("memory".to_owned(), Quantity("2Gi".to_string())),
+        ("cpu".to_owned(), Quantity("400m".to_string())),
+        ("memory".to_owned(), Quantity("256Mi".to_string())),
     ]);
     let requests: BTreeMap<String, Quantity> = BTreeMap::from([
-        ("cpu".to_owned(), Quantity("500m".to_string())),
-        ("memory".to_owned(), Quantity("512Mi".to_string())),
+        ("cpu".to_owned(), Quantity("100m".to_string())),
+        ("memory".to_owned(), Quantity("256Mi".to_string())),
     ]);
     ResourceRequirements {
         limits: Some(limits),
