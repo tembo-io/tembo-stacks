@@ -17,7 +17,7 @@ lazy_static! {
     pub static ref OLTP: Stack =
         serde_yaml::from_str(include_str!("templates/oltp.yaml")).expect("oltp.yaml not found");
     pub static ref VECTOR_DB: Stack =
-        serde_yaml::from_str(include_str!("templates/oltp.yaml")).expect("oltp.yaml not found");
+        serde_yaml::from_str(include_str!("templates/vectordb.yaml")).expect("vectordb.yaml not found");
 }
 
 pub fn get_stack(entity: StackType) -> types::Stack {
@@ -27,6 +27,6 @@ pub fn get_stack(entity: StackType) -> types::Stack {
         StackType::MachineLearning => ML.clone(),
         StackType::OLAP => OLAP.clone(),
         StackType::OLTP => OLTP.clone(),
-        StackTye::VectorDB => VECTOR_DB.clone(),
+        StackType::VectorDB => VECTOR_DB.clone(),
     }
 }
