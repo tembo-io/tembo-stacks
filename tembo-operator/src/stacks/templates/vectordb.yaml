@@ -9,6 +9,8 @@ trunk_installs:
     version: 0.3.0
   - name: pgvector
     version: 0.5.1
+  - name: pg_stat_statements
+    version: 1.10.0
 extensions:
   - name: vector
     locations:
@@ -30,6 +32,11 @@ extensions:
     - database: postgres
       enabled: true
       version: 0.3.0
+  - name: pg_stat_statements
+    locations:
+      - database: postgres
+        enabled: true
+        version: 1.10.0
 compute_templates:
   - cpu: 1
     memory: 4Gi
