@@ -2,63 +2,34 @@ name: VectorDB
 description: A Tembo Postgres Stack configured to support vector data types, storage, and operations.
 image: "quay.io/tembo/standard-cnpg:15.3.0-1-1096aeb"
 stack_version: 0.1.0
-appServices:
-  - image: postgrest/postgrest:v10.0.0
-    name: postgrest
-    resources:
-      requests:
-        cpu: 100m
-        memory: 256Mi
-      limits:
-        cpu: 400m
-        memory: 256Mi
-    routing:
-      - port: 3000
-        ingressPath: /rest/v1
-        middlewares:
-        - rest-headers
-        - strip-path-prefix
-      - port: 3000
-        ingressPath: /graphql/v1
-        middlewares:
-          - gql-headers
-          - map-gql
-    middlewares:
-      - !customRequestHeaders
-          name: rest-headers
-          config:
-            Authorization: ""
-      - !customRequestHeaders
-          name: gql-headers
-          config:
-            Authorization: ""
-            Content-Profile: graphql
-            Accept-Profile: graphql
-      - !stripPrefix
-          name: strip-path-prefix
-          config:
-            - /rest/v1
-      - !replacePathRegex
-          name: map-gql
-          config:
-            regex: '\/graphql\/v1\/?'
-            replacement: /rpc/resolve
-    env:
-      - name: PGRST_DB_URI
-        valueFromPlatform: ReadWriteConnection
-      - name: PGRST_DB_SCHEMA
-        value: "public, graphql"
-      - name: PGRST_DB_ANON_ROLE
-        value: postgres
 trunk_installs:
-  - name: pg_graphql
-    version: 1.4.1
+  - name: pgmq
+    version: 0.32.3
+  - name: vectorize
+    version: 0.3.0
+  - name: pgvector
+    version: 0.5.1
 extensions:
-  - name: pg_graphql
+  - name: vector
     locations:
       - database: postgres
         enabled: true
-        version: 1.4.1
+        version: 0.5.1
+  - name: pg_cron
+    locations:
+    - database: postgres
+      enabled: true
+      version: 1.5.2
+  - name: pgmq
+    locations:
+    - database: postgres
+      enabled: true
+      version: 0.32.3
+  - name: vectorize
+    locations:
+    - database: postgres
+      enabled: true
+      version: 0.3.0
 compute_templates:
   - cpu: 1
     memory: 4Gi
@@ -96,28 +67,3 @@ postgres_config:
     value: all
   - name: shared_preload_libraries
     value: vectorize,pg_stat_statements,pg_cron
-trunk_installs:
-  - name: pgvector
-    version: 0.5.1
-  - name: pgml
-    version: 2.7.1
-  - name: pg_cron
-    version: 1.5.2
-  - name: vectorize
-    version: 0.2.0
-extensions:
-  - name: vector
-    locations:
-      - database: postgres
-        enabled: true
-        version: 0.5.1
-  - name: pg_cron
-    locations:
-    - database: postgres
-      enabled: true
-      version: 1.5.2
-  - name: vectorize
-    locations:
-    - database: postgres
-      enabled: true
-      version: 0.2.0
