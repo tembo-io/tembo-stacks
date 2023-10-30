@@ -52,7 +52,7 @@ postgres_config_engine: standard
 postgres_config:
   - name: cron.host
     value: /controller/run
-  - name: cron.host
+  - name: vectorize.host
     value: postgresql:///postgres?host=/controller/run
   - name: autovacuum_vacuum_cost_limit
     value: -1
