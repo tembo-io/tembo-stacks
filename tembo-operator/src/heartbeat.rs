@@ -37,11 +37,14 @@ BEGIN
         );';
     END IF;
 
+    -- Create index on latest_heartbeat column
+    EXECUTE 'CREATE INDEX idx_heartbeat ON tembo.heartbeat_table (latest_heartbeat);';
+
     -- Insert current UTC timestamp into heartbeat_table
     EXECUTE 'INSERT INTO tembo.heartbeat_table (latest_heartbeat)
         VALUES (CURRENT_TIMESTAMP AT TIME ZONE ''UTC'');';
 
-    -- Delete entries older than 30 days
+    -- Delete entries older than 7 days
     EXECUTE 'DELETE FROM tembo.heartbeat_table
         WHERE latest_heartbeat < (CURRENT_TIMESTAMP AT TIME ZONE ''UTC'' - INTERVAL ''7 days'');';
 
