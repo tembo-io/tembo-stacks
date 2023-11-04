@@ -277,10 +277,7 @@ pub async fn is_not_restarting(cdb: &CoreDB, ctx: Arc<Context>, database: &str) 
 }
 
 fn get_pod_not_ready_duration(pod: Pod) -> Result<Option<Duration>, Box<dyn std::error::Error>> {
-    // Fetch the specific pod
     let status = pod.status.ok_or("Pod has no status information")?;
-
-    // Find the 'Ready' condition
     if let Some(conditions) = status.conditions {
         for condition in conditions {
             if condition.type_ == "Ready" {
@@ -292,23 +289,20 @@ fn get_pod_not_ready_duration(pod: Pod) -> Result<Option<Duration>, Box<dyn std:
                     let last_not_ready_time = last_transition.0;
                     let duration_since_not_ready = Utc::now() - last_not_ready_time;
 
-                    // Here we assume that `to_std` method exists for chrono::Duration
                     let std_duration = match duration_since_not_ready.to_std() {
                         Ok(duration) => duration,
                         Err(_) => {
                             error!("Failed to convert duration to std::time::Duration");
-                            return Ok(None); // If conversion fails, we return None
+                            return Ok(None);
                         }
                     };
 
-                    return Ok(Some(std_duration)); // Return the std::time::Duration
+                    return Ok(Some(std_duration));
                 }
                 break;
             }
         }
     }
-
-    // Pod is ready or does not have a Ready condition
     Ok(None)
 }
 
