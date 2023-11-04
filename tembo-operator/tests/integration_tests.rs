@@ -3478,7 +3478,7 @@ CREATE EVENT TRIGGER pgrst_watch
         let initial_start_time = get_pg_start_time(&coredbs, &name, context.clone()).await;
 
         // Initialize uninterruptible query
-        psql_with_retry(
+        let _ = psql_with_retry(
             context.clone(),
             coredb_resource.clone(),
             "\
@@ -3495,8 +3495,10 @@ CREATE EVENT TRIGGER pgrst_watch
                 $$ LANGUAGE plpython3u;
             "
             .to_string(),
-        );
-        let stuck_query = coredb_resource.psql(
+        )
+        .await;
+
+        let _stuck_query = coredb_resource.psql(
             "SELECT slow_fibonacci(100);".to_string(),
             "postgres".to_string(),
             context.clone(),
@@ -3559,7 +3561,6 @@ CREATE EVENT TRIGGER pgrst_watch
                 "start time should've changed"
             );
         }
-        let _ = stuck_query.await;
 
         // Perform cleanup
         {
