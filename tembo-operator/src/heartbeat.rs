@@ -30,15 +30,13 @@ BEGIN
         WHERE table_schema = 'tembo' AND table_name = 'heartbeat_table'
     ) INTO table_exists;
 
-    -- Create table if it doesn't exist
+    -- Create table and index if they don't exist
     IF NOT table_exists THEN
         EXECUTE 'CREATE TABLE tembo.heartbeat_table (
             latest_heartbeat TIMESTAMP NOT NULL
         );';
+        EXECUTE 'CREATE INDEX idx_heartbeat ON tembo.heartbeat_table (latest_heartbeat);';
     END IF;
-
-    -- Create index on latest_heartbeat column
-    EXECUTE 'CREATE INDEX idx_heartbeat ON tembo.heartbeat_table (latest_heartbeat);';
 
     -- Insert current UTC timestamp into heartbeat_table
     EXECUTE 'INSERT INTO tembo.heartbeat_table (latest_heartbeat)
