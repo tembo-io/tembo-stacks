@@ -171,6 +171,6 @@ mod tests {
             runtime_configs.into_iter().map(|c| (c.name.clone(), c)).collect();
         let shared_buffers = hm.get("shared_buffers").unwrap();
         assert_eq!(shared_buffers.name, "shared_buffers");
-        assert_eq!(shared_buffers.value.to_string(), "512GB");
+        assert_eq!(shared_buffers.value.to_string(), "512MB");
     }
 }
