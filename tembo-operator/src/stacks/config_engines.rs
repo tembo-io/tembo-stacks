@@ -387,6 +387,27 @@ mod tests {
     }
 
     #[test]
+    fn test_mq_config_engine_deterministic() {
+        let mut stack = Stack {
+            name: "test".to_owned(),
+            postgres_config_engine: Some(ConfigEngine::MQ),
+            ..Stack::default()
+        };
+        let infra = Infrastructure {
+            cpu: "1".to_string(),
+            memory: "16Gi".to_string(),
+            storage: "10Gi".to_string(),
+        };
+        let configs1 = mq_config_engine(&stack);
+        // loop 100 times
+        for _ in 0..100 {
+            stack.infrastructure = Some(infra.clone());
+            let configs2 = mq_config_engine(&stack);
+            assert_eq!(configs1, configs2);
+        }
+    }
+
+    #[test]
     fn test_standard_shared_buffers() {
         let shared_buff = standard_shared_buffers(1024.0);
         assert_eq!(shared_buff, 256);
