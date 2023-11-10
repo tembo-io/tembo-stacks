@@ -199,9 +199,8 @@ pub async fn is_not_restarting(
             .as_ref() // Convert String to &str for parse_psql_output
             .and_then(|stdout| parse_psql_output(stdout))
             .and_then(|pg_postmaster_start_time_str| {
-                // Convert &str to String for parse_from_rfc3339
                 let pg_postmaster_start_time = pg_postmaster_start_time_str.to_string();
-                DateTime::parse_from_rfc3339(&pg_postmaster_start_time)
+                DateTime::parse_from_str(&pg_postmaster_start_time, PG_TIMESTAMP_DECL)
                     .ok()
                     .map(|dt_with_offset| dt_with_offset.with_timezone(&Utc))
             });
