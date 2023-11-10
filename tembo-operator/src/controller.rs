@@ -346,7 +346,7 @@ impl CoreDB {
         let current_time = Utc::now();
         new_status.last_fully_reconciled_at = {
             let current_fully_reconciled_at =
-                self.status.clone().unwrap_or_default().last_fully_reconciled_at;
+                self.status.as_ref().unwrap_or_default().last_fully_reconciled_at;
             // Update the timestamp if it's been more than 10 seconds since the last update
             if current_fully_reconciled_at.map_or(true, |last_reconciled| {
                 current_time > last_reconciled + Duration::from_secs(10)
