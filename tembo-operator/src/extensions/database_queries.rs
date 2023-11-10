@@ -181,9 +181,31 @@ pub async fn is_not_restarting(
     }
 
     let cdb_name = cdb.name_any();
+
+    let pg_postmaster_result = cdb
+        .psql(
+            "select pg_postmaster_start_time();".to_owned(),
+            database.to_owned(),
+            ctx.clone(),
+        )
+        .await;
+
     let Some(restarted_at) = cdb.annotations().get(RESTARTED_AT) else {
-        // No restartedAt annotation, so we're not restarting
-        return Ok(None);
+        // We don't have the annotation, so we are not restarting
+        // return pg_postmaster_start_time if we have it.
+        let result = pg_postmaster_result
+            .ok()
+            .and_then(|result| result.stdout)
+            .as_ref() // Convert String to &str for parse_psql_output
+            .and_then(|stdout| parse_psql_output(stdout))
+            .and_then(|pg_postmaster_start_time_str| {
+                // Convert &str to String for parse_from_rfc3339
+                let pg_postmaster_start_time = pg_postmaster_start_time_str.to_string();
+                DateTime::parse_from_rfc3339(&pg_postmaster_start_time)
+                    .ok()
+                    .map(|dt_with_offset| dt_with_offset.with_timezone(&Utc))
+            });
+        return Ok(result);
     };
 
     let restarted_requested_at: DateTime<Utc> = DateTime::parse_from_rfc3339(restarted_at)
@@ -194,13 +216,6 @@ pub async fn is_not_restarting(
         })?
         .into();
 
-    let pg_postmaster_result = cdb
-        .psql(
-            "select pg_postmaster_start_time();".to_owned(),
-            database.to_owned(),
-            ctx.clone(),
-        )
-        .await;
 
     let pg_postmaster = match pg_postmaster_result {
         Ok(result) => result.stdout.ok_or_else(|| {
