@@ -137,7 +137,7 @@ pub fn mq_config_engine(stack: &Stack) -> Vec<PgConfig> {
     // overwrite existing shared_buffer value with the new one
     hm.insert(shared_buffers.name.clone(), shared_buffers);
     // convert to vec and return
-    hm.into_iter().map(|(_, v)| v).collect()
+    hm.into_values().collect()
 }
 
 

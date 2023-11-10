@@ -168,7 +168,11 @@ pub async fn list_config_params(cdb: &CoreDB, ctx: Arc<Context>) -> Result<Vec<P
 
 /// Returns Ok if the given database is running (i.e. not restarting)
 #[instrument(skip(cdb, ctx), fields(cdb_name = %cdb.name_any()))]
-pub async fn is_not_restarting(cdb: &CoreDB, ctx: Arc<Context>, database: &str) -> Result<(), Action> {
+pub async fn is_not_restarting(
+    cdb: &CoreDB,
+    ctx: Arc<Context>,
+    database: &str,
+) -> Result<Option<DateTime<Utc>>, Action> {
     // chrono strftime declaration to parse Postgres timestamps
     const PG_TIMESTAMP_DECL: &str = "%Y-%m-%d %H:%M:%S.%f%#z";
 
@@ -179,7 +183,7 @@ pub async fn is_not_restarting(cdb: &CoreDB, ctx: Arc<Context>, database: &str) 
     let cdb_name = cdb.name_any();
     let Some(restarted_at) = cdb.annotations().get(RESTARTED_AT) else {
         // No restartedAt annotation, so we're not restarting
-        return Ok(());
+        return Ok(None);
     };
 
     let restarted_requested_at: DateTime<Utc> = DateTime::parse_from_rfc3339(restarted_at)
@@ -263,11 +267,15 @@ pub async fn is_not_restarting(cdb: &CoreDB, ctx: Arc<Context>, database: &str) 
         })?
         .into();
 
+    let result = DateTime::parse_from_rfc3339(pg_postmaster_start_time)
+        .ok()
+        .map(|dt_with_offset| dt_with_offset.with_timezone(&Utc));
+
     if server_started_at >= restarted_requested_at {
         // Server started after the moment we requested it to restart,
         // meaning the restart is done
         debug!("Restart is complete for {}", cdb_name);
-        Ok(())
+        Ok(result)
     } else {
         // Server hasn't even started restarting yet
         error!("Restart is not complete for {}, requeuing", cdb_name);

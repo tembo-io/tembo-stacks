@@ -294,15 +294,16 @@ impl CoreDB {
         }
 
         // Check if Postgres is already running
-        is_not_restarting(self, ctx.clone(), "postgres").await?;
+        let pg_postmaster_start_time = is_not_restarting(self, ctx.clone(), "postgres").await?;
 
-        let new_status = match self.spec.stop {
+        let mut new_status = match self.spec.stop {
             false => {
                 let patch_status = json!({
                     "apiVersion": "coredb.io/v1alpha1",
                     "kind": "CoreDB",
                     "status": {
-                        "running": true
+                        "running": true,
+                        "pg_postmaster_start_time": pg_postmaster_start_time,
                     }
                 });
                 patch_cdb_status_merge(&coredbs, &name, patch_status).await?;
@@ -321,6 +322,8 @@ impl CoreDB {
                     resources: Some(self.spec.resources.clone()),
                     runtime_config: Some(current_config_values),
                     first_recoverability_time: recovery_time,
+                    pg_postmaster_start_time,
+                    last_fully_reconciled_at: None,
                 }
             }
             true => {
@@ -334,9 +337,14 @@ impl CoreDB {
                     resources: Some(self.spec.resources.clone()),
                     runtime_config: Some(current_config_values),
                     first_recoverability_time: self.status.as_ref().and_then(|f| f.first_recoverability_time),
+                    pg_postmaster_start_time: None,
+                    last_fully_reconciled_at: None,
                 }
             }
         };
+
+        // Get current time as Option<DateTime<Utc>>
+        new_status.last_fully_reconciled_at = Some(Utc::now());
 
         debug!("Updating CoreDB status to {:?} for {name}", new_status);
 
