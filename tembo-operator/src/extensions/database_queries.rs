@@ -281,15 +281,11 @@ pub async fn is_not_restarting(
         })?
         .into();
 
-    let result = DateTime::parse_from_rfc3339(pg_postmaster_start_time)
-        .ok()
-        .map(|dt_with_offset| dt_with_offset.with_timezone(&Utc));
-
     if server_started_at >= restarted_requested_at {
         // Server started after the moment we requested it to restart,
         // meaning the restart is done
         debug!("Restart is complete for {}", cdb_name);
-        Ok(result)
+        Ok(Some(server_started_at))
     } else {
         // Server hasn't even started restarting yet
         error!("Restart is not complete for {}, requeuing", cdb_name);
