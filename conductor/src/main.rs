@@ -524,11 +524,8 @@ async fn main() -> std::io::Result<()> {
         .lock()
         .expect("Failed to remember our background threads");
 
-    let conductor_enabled =
-        from_env_default("CONDUCTOR_ENABLED", "true");
-    let watcher_enabled =
-        from_env_default("WATCHER_ENABLED", "true");
-
+    let conductor_enabled = from_env_default("CONDUCTOR_ENABLED", "true");
+    let watcher_enabled = from_env_default("WATCHER_ENABLED", "true");
 
     if conductor_enabled != "false" {
         info!("Starting conductor");
@@ -540,8 +537,8 @@ async fn main() -> std::io::Result<()> {
                     match run(custom_metrics_copy.clone()).await {
                         Ok(_) => {}
                         Err(ConductorError::PgmqError(pgmq::errors::PgmqError::DatabaseError(
-                                                          Error::PoolTimedOut,
-                                                      ))) => {
+                            Error::PoolTimedOut,
+                        ))) => {
                             custom_metrics_copy.clone().conductor_errors.add(
                                 &opentelemetry::Context::current(),
                                 1,
