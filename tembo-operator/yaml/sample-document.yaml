@@ -16,3 +16,17 @@ spec:
       env:
         - name: FERRETDB_POSTGRESQL_URL
           valueFromPlatform: ReadWriteConnection
+      storage:
+        volumes:
+          - name: ferretdb-data
+            ephemeral:
+              volumeClaimTemplate:
+                spec:
+                  accessModes:
+                    - ReadWriteOnce
+                  resources:
+                    requests:
+                      storage: 1Gi
+        volumeMounts:
+            - name: ferretdb-data
+              mountPath: /state

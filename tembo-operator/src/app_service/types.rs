@@ -1,6 +1,7 @@
 use std::collections::BTreeMap;
 
 use k8s_openapi::{api::core::v1::ResourceRequirements, apimachinery::pkg::api::resource::Quantity};
+use k8s_openapi::api::core::v1::{Volume, VolumeMount};
 
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
@@ -9,10 +10,10 @@ use utoipa::ToSchema;
 pub const COMPONENT_NAME: &str = "appService";
 
 #[derive(Clone, Debug, Serialize, Deserialize, ToSchema, JsonSchema, PartialEq)]
-pub struct EphemeralVolumeConfig {
-    pub access_modes: Vec<String>, // e.g., ["ReadWriteOnce"]
-    pub storage_size: String,      // e.g., "1Gi"
-                                   // Add any other fields that are relevant to your configuration
+pub struct StorageConfig {
+    pub volumes: Option<Vec<Volume>>,
+    #[serde(rename = "volumeMounts")]
+    pub volume_mounts: Option<Vec<VolumeMount>>,
 }
 
 // defines a app container
@@ -28,7 +29,7 @@ pub struct AppService {
     pub probes: Option<Probes>,
     pub middlewares: Option<Vec<Middleware>>,
     pub routing: Option<Vec<Routing>>,
-    pub ephemeral_volume_config: Option<EphemeralVolumeConfig>,
+    pub storage: Option<StorageConfig>,
 }
 
 pub fn default_resources() -> ResourceRequirements {

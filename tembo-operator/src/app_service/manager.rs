@@ -319,35 +319,10 @@ fn generate_deployment(
             readiness_probe,
             liveness_probe,
             security_context: Some(security_context),
-            volume_mounts: Some(vec![k8s_openapi::api::core::v1::VolumeMount {
-                name: "ephemeral".to_string(),
-                mount_path: "/state".to_string(), // Ensure this is correctly specified
-                ..k8s_openapi::api::core::v1::VolumeMount::default()
-            }]),
+            volume_mounts: appsvc.storage.clone().and_then(|s| s.volume_mounts),
             ..Container::default()
         }],
-        volumes: Some(vec![Volume {
-            name: "ephemeral".to_string(),
-            ephemeral: Some(k8s_openapi::api::core::v1::EphemeralVolumeSource {
-                volume_claim_template: Some(k8s_openapi::api::core::v1::PersistentVolumeClaimTemplate {
-                    // Removed metadata.name
-                    spec: k8s_openapi::api::core::v1::PersistentVolumeClaimSpec {
-                        access_modes: Some(vec!["ReadWriteOnce".to_string()]),
-                        resources: Some(k8s_openapi::api::core::v1::ResourceRequirements {
-                            requests: Some(std::collections::BTreeMap::from_iter(vec![(
-                                "storage".to_string(),
-                                k8s_openapi::apimachinery::pkg::api::resource::Quantity("1Gi".to_string()),
-                            )])),
-                            ..k8s_openapi::api::core::v1::ResourceRequirements::default()
-                        }),
-                        ..k8s_openapi::api::core::v1::PersistentVolumeClaimSpec::default()
-                    },
-                    ..k8s_openapi::api::core::v1::PersistentVolumeClaimTemplate::default()
-                }),
-                ..k8s_openapi::api::core::v1::EphemeralVolumeSource::default()
-            }),
-            ..Volume::default()
-        }]),
+        volumes: appsvc.storage.clone().and_then(|s| s.volumes),
         ..PodSpec::default()
     };
 
