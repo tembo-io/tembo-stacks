@@ -25,6 +25,7 @@ use super::{
     ingress::{generate_ingress_routes, reconcile_ingress},
     types::{AppService, EnvVarRef, Middleware, COMPONENT_NAME},
 };
+use k8s_openapi::api::core::v1::Volume;
 
 // private wrapper to hold the AppService Resources
 #[derive(Clone, Debug)]
@@ -188,7 +189,6 @@ fn generate_deployment(
         None
     };
 
-
     // https://tembo.io/docs/tembo-cloud/security/#tenant-isolation
     // These configs are the same as CNPG configs
     let security_context = SecurityContext {
@@ -319,8 +319,35 @@ fn generate_deployment(
             readiness_probe,
             liveness_probe,
             security_context: Some(security_context),
+            volume_mounts: Some(vec![k8s_openapi::api::core::v1::VolumeMount {
+                name: "ephemeral".to_string(),
+                mount_path: "/state".to_string(), // Ensure this is correctly specified
+                ..k8s_openapi::api::core::v1::VolumeMount::default()
+            }]),
             ..Container::default()
         }],
+        volumes: Some(vec![Volume {
+            name: "ephemeral".to_string(),
+            ephemeral: Some(k8s_openapi::api::core::v1::EphemeralVolumeSource {
+                volume_claim_template: Some(k8s_openapi::api::core::v1::PersistentVolumeClaimTemplate {
+                    // Removed metadata.name
+                    spec: k8s_openapi::api::core::v1::PersistentVolumeClaimSpec {
+                        access_modes: Some(vec!["ReadWriteOnce".to_string()]),
+                        resources: Some(k8s_openapi::api::core::v1::ResourceRequirements {
+                            requests: Some(std::collections::BTreeMap::from_iter(vec![(
+                                "storage".to_string(),
+                                k8s_openapi::apimachinery::pkg::api::resource::Quantity("1Gi".to_string()),
+                            )])),
+                            ..k8s_openapi::api::core::v1::ResourceRequirements::default()
+                        }),
+                        ..k8s_openapi::api::core::v1::PersistentVolumeClaimSpec::default()
+                    },
+                    ..k8s_openapi::api::core::v1::PersistentVolumeClaimTemplate::default()
+                }),
+                ..k8s_openapi::api::core::v1::EphemeralVolumeSource::default()
+            }),
+            ..Volume::default()
+        }]),
         ..PodSpec::default()
     };
 
