@@ -1,7 +1,9 @@
 use std::collections::BTreeMap;
 
-use k8s_openapi::{api::core::v1::ResourceRequirements, apimachinery::pkg::api::resource::Quantity};
-use k8s_openapi::api::core::v1::{Volume, VolumeMount};
+use k8s_openapi::{
+    api::core::v1::{ResourceRequirements, Volume, VolumeMount},
+    apimachinery::pkg::api::resource::Quantity,
+};
 
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
