@@ -15,5 +15,4 @@ spec:
           ingressPath: /ferretdb/v1
       env:
         - name: FERRETDB_POSTGRESQL_URL
-          # value: postgres://postgres:5432/ferretdb
-          value: postgres://sample-document-rw:5432/ferretdb
+          valueFromPlatform: ReadWriteConnection

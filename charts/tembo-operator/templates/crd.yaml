@@ -57,6 +57,19 @@ spec:
                         type: object
                       nullable: true
                       type: array
+                    ephemeral_volume_config:
+                      nullable: true
+                      properties:
+                        access_modes:
+                          items:
+                            type: string
+                          type: array
+                        storage_size:
+                          type: string
+                      required:
+                      - access_modes
+                      - storage_size
+                      type: object
                     image:
                       type: string
                     middlewares:
