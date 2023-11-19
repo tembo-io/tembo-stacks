@@ -1,9 +1,11 @@
-{{- if .Values.prometheusRule.enabled -}}
+{{- if (index .Values "controller").monitoring.prometheusRule.enabled -}}
+{{- $namespace := include "component.namespace" (list (list "controller" .Values .)) -}}
+{{- $fullname := include "controller.fullname" . -}}
 apiVersion: monitoring.coreos.com/v1
 kind: PrometheusRule
 metadata:
-  name: {{ .Release.Name }}-cnpg-alerts
-  namespace: {{ .Release.Namespace }}
+  name: {{ $fullname }}-cnpg-alerts
+  namespace: {{ $namespace }}
 spec:
   groups:
   - name: cnpg.rules

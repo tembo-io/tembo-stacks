@@ -1,0 +1,39 @@
+{{- $namespace := include "component.namespace" (list (list "pod-init" .Values .)) -}}
+{{- $fullname := include "pod-init.fullname" . -}}
+apiVersion: v1
+kind: ServiceAccount
+automountServiceAccountToken: true
+metadata:
+  name: {{ $fullname }}
+  namespace: {{ $namespace }}
+  labels:
+{{ include "pod-init-helm.labels" . | indent 4 }}
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: {{ $fullname }}
+  labels:
+{{ include "pod-init-helm.labels" . | indent 4 }}
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: {{ $fullname }}
+subjects:
+- kind: ServiceAccount
+  name: {{ $fullname }}
+  namespace: {{ $namespace }}
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: {{ $fullname }}
+  labels:
+{{ include "pod-init-helm.labels" . | indent 4 }}
+rules:
+- apiGroups: ["", "batch", "extensions", "apps"]
+  resources: ["pods", "replicasets", "jobs", "namespaces"]
+  verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+- apiGroups: ["postgresql.cnpg.io"]
+  resources: ["backups", "clusters", "poolers", "scheduledbackups"]
+  verbs: ["get", "list", "watch"]
