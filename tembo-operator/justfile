@@ -97,7 +97,7 @@ update-helm-repos:
 
 # generate and install crd into the cluster
 install-crd: generate-crd
-  kubectl apply -f ../charts/tembo-operator/templates/crd.yaml
+  helm template -s templates/crd.yaml ../charts/tembo-operator|kubectl apply -f -
 
 # delete kind
 delete-kind:
