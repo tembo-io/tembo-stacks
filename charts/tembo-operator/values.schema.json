@@ -48,19 +48,16 @@
                 "annotations": {
                     "type": "object"
                 },
-                "extraEnv": {
-                    "type": "array",
-                    "items": {
-                        "type": "object",
-                        "properties": {
-                            "name": {
-                                "type": "string"
-                            },
-                            "value": {
-                                "type": "string"
-                            }
+                "crds": {
+                    "type": "object",
+                    "properties": {
+                        "create": {
+                            "type": "boolean"
                         }
                     }
+                },
+                "extraEnv": {
+                    "type": "object"
                 },
                 "image": {
                     "type": "object",
@@ -82,6 +79,33 @@
                 "logLevel": {
                     "type": "string"
                 },
+                "monitoring": {
+                    "type": "object",
+                    "properties": {
+                        "podMonitor": {
+                            "type": "object",
+                            "properties": {
+                                "enabled": {
+                                    "type": "boolean"
+                                },
+                                "path": {
+                                    "type": "string"
+                                },
+                                "port": {
+                                    "type": "string"
+                                }
+                            }
+                        },
+                        "prometheusRule": {
+                            "type": "object",
+                            "properties": {
+                                "enabled": {
+                                    "type": "boolean"
+                                }
+                            }
+                        }
+                    }
+                },
                 "nameOverride": {
                     "type": "null"
                 },
@@ -93,28 +117,6 @@
                 },
                 "podAnnotations": {
                     "type": "object"
-                },
-                "podMonitor": {
-                    "type": "object",
-                    "properties": {
-                        "enabled": {
-                            "type": "boolean"
-                        },
-                        "path": {
-                            "type": "string"
-                        },
-                        "port": {
-                            "type": "string"
-                        }
-                    }
-                },
-                "prometheusRule": {
-                    "type": "object",
-                    "properties": {
-                        "enabled": {
-                            "type": "boolean"
-                        }
-                    }
                 },
                 "readinessProbe": {
                     "type": "object",
@@ -145,31 +147,7 @@
                     "type": "integer"
                 },
                 "resources": {
-                    "type": "object",
-                    "properties": {
-                        "limits": {
-                            "type": "object",
-                            "properties": {
-                                "cpu": {
-                                    "type": "string"
-                                },
-                                "memory": {
-                                    "type": "string"
-                                }
-                            }
-                        },
-                        "requests": {
-                            "type": "object",
-                            "properties": {
-                                "cpu": {
-                                    "type": "string"
-                                },
-                                "memory": {
-                                    "type": "string"
-                                }
-                            }
-                        }
-                    }
+                    "type": "object"
                 },
                 "service": {
                     "type": "object",

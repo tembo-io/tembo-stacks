@@ -15,5 +15,7 @@ fn main() {
 
     let crd_str = serde_yaml::to_string(&crd).unwrap();
     let st = crd_str.replace("required:\n                - queries", "");
-    print!("{}", st)
+    let prepend_string = "{{- if .Values.controller.crds.create }}\n";
+    let append_string = "{{- end }}";
+    print!("{}{}{}", prepend_string, st, append_string)
 }
