@@ -161,19 +161,18 @@ pub async fn create_namespace(
     let params = PatchParams::apply("conductor");
     // If the namespace already exists, do not include the label "tembo-pod-init.tembo.io/watch"
     // If it's a new namespace, include the label
-    let ns =
-        serde_json::json!({
-            "apiVersion": "v1",
-            "kind": "Namespace",
-            "metadata": {
-                "name": format!("{name}"),
-                "labels": {
-                    "tembo-pod-init.tembo.io/watch": "true",
-                    "tembo.io/instance_id": instance_id,
-                    "tembo.io/organization_id": organization_id
-                }
+    let ns = serde_json::json!({
+        "apiVersion": "v1",
+        "kind": "Namespace",
+        "metadata": {
+            "name": format!("{name}"),
+            "labels": {
+                "tembo-pod-init.tembo.io/watch": "true",
+                "tembo.io/instance_id": instance_id,
+                "tembo.io/organization_id": organization_id
             }
-        });
+        }
+    });
     info!("\nCreating namespace {}", name);
     let _o = ns_api
         .patch(name, &params, &Patch::Apply(&ns))
@@ -261,14 +260,19 @@ pub async fn get_pg_conn(
 ) -> Result<types::ConnectionInfo, ConductorError> {
     let (postgres_user_secret, app_user_secret) = get_secret_for_db(client, name).await?;
 
-    let postgres_data = postgres_user_secret
-        .data
-        .as_ref()
-        .ok_or(ConductorError::SecretDataNotFound("postgres_user_secret".to_string()))?;
+    let postgres_data =
+        postgres_user_secret
+            .data
+            .as_ref()
+            .ok_or(ConductorError::SecretDataNotFound(
+                "postgres_user_secret".to_string(),
+            ))?;
     let app_data = app_user_secret
         .data
         .as_ref()
-        .ok_or(ConductorError::SecretDataNotFound("app_user_secret".to_string()))?;
+        .ok_or(ConductorError::SecretDataNotFound(
+            "app_user_secret".to_string(),
+        ))?;
 
     let (postgres_user, postgres_pw) = get_field_value_from_secret(postgres_data)?;
     let (app_user, app_pw) = get_field_value_from_secret(app_data)?;
@@ -276,17 +280,16 @@ pub async fn get_pg_conn(
     let host = format!("{name}.{basedomain}");
 
     // If connectionPooler is enabled, set the pooler_host
-    let pooler_host =
-        match spec.connectionPooler.enabled {
-            true => {
-                if spec.connectionPooler.enabled {
-                    Some(format!("{name}-pooler.{basedomain}"))
-                } else {
-                    None
-                }
+    let pooler_host = match spec.connectionPooler.enabled {
+        true => {
+            if spec.connectionPooler.enabled {
+                Some(format!("{name}-pooler.{basedomain}"))
+            } else {
+                None
             }
-            _ => None,
-        };
+        }
+        _ => None,
+    };
 
     // Create ConnectionInfo for the postgres user
     // The user and password are base64 encoded when passed back to the control-plane
@@ -462,16 +465,14 @@ async fn get_stack_outputs(
     let stack_name = format!("org-{}-inst-{}-cf", org_name, db_name);
     // When moving this into operator, handle the specific errors that mean
     // "cloudformation is not done yet" and return a more specific error
-    let (role_name, role_arn) =
-        aws_config_state
-            .lookup_cloudformation_stack(&stack_name)
-            .await
-            .map_err(ConductorError::from)?;
-    let stack_outputs =
-        StackOutputs {
-            role_name,
-            role_arn,
-        };
+    let (role_name, role_arn) = aws_config_state
+        .lookup_cloudformation_stack(&stack_name)
+        .await
+        .map_err(ConductorError::from)?;
+    let stack_outputs = StackOutputs {
+        role_name,
+        role_arn,
+    };
     Ok(stack_outputs)
 }
 
@@ -486,11 +487,10 @@ pub async fn generate_rand_schedule() -> String {
 
 #[cfg(test)]
 mod tests {
-    const DECODER: base64::engine::GeneralPurpose =
-        base64::engine::GeneralPurpose::new(
-            &base64::alphabet::STANDARD,
-            base64::engine::general_purpose::PAD,
-        );
+    const DECODER: base64::engine::GeneralPurpose = base64::engine::GeneralPurpose::new(
+        &base64::alphabet::STANDARD,
+        base64::engine::general_purpose::PAD,
+    );
 
     use super::*;
     use base64::Engine;
