@@ -32,7 +32,8 @@ pub async fn reconcile_rbac(
     let role = reconcile_role(cdb, ctx.clone(), suffix, policy_rules).await?;
     let rle = role.clone();
     // reconcile role binding
-    let role_binding = reconcile_role_binding(cdb, ctx.clone(), service_account, rle.clone(), suffix).await?;
+    let role_binding =
+        reconcile_role_binding(cdb, ctx.clone(), service_account, rle.clone(), suffix).await?;
 
     Ok(Rbac {
         service_account: sa,

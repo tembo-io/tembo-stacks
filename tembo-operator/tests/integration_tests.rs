@@ -31,16 +31,19 @@ mod test {
         api::{
             apps::v1::Deployment,
             core::v1::{
-                Container, Namespace, PersistentVolumeClaim, Pod, PodSpec, ResourceRequirements, Secret,
-                Service,
+                Container, Namespace, PersistentVolumeClaim, Pod, PodSpec, ResourceRequirements,
+                Secret, Service,
             },
         },
         apiextensions_apiserver::pkg::apis::apiextensions::v1::CustomResourceDefinition,
-        apimachinery::pkg::{api::resource::Quantity, apis::meta::v1::ObjectMeta, util::intstr::IntOrString},
+        apimachinery::pkg::{
+            api::resource::Quantity, apis::meta::v1::ObjectMeta, util::intstr::IntOrString,
+        },
     };
     use kube::{
         api::{
-            AttachParams, DeleteParams, ListParams, Patch, PatchParams, PostParams, WatchEvent, WatchParams,
+            AttachParams, DeleteParams, ListParams, Patch, PatchParams, PostParams, WatchEvent,
+            WatchParams,
         },
         runtime::wait::{await_condition, conditions, Condition},
         Api, Client, Config, Error,
@@ -75,7 +78,8 @@ mod test {
         let selected_namespace = &kube_config.default_namespace;
 
         // Initialize the Kubernetes client
-        let client = Client::try_from(kube_config.clone()).expect("Failed to initialize Kubernetes client");
+        let client =
+            Client::try_from(kube_config.clone()).expect("Failed to initialize Kubernetes client");
 
         // Next, check that the currently selected namespace is labeled
         // to allow the running of tests.
@@ -170,7 +174,9 @@ mod test {
         let millisec_between_tries = 5;
 
         for _i in 1..max_retries {
-            let attach_res = pods_api.exec(pod_name.as_str(), &command, &attach_params).await;
+            let attach_res = pods_api
+                .exec(pod_name.as_str(), &command, &attach_params)
+                .await;
             let mut attached_process = match attach_res {
                 Ok(ap) => ap,
                 Err(e) => {
@@ -184,14 +190,21 @@ mod test {
             };
             let mut stdout_reader = attached_process.stdout().unwrap();
             let mut result_stdout = String::new();
-            stdout_reader.read_to_string(&mut result_stdout).await.unwrap();
+            stdout_reader
+                .read_to_string(&mut result_stdout)
+                .await
+                .unwrap();
 
             return result_stdout;
         }
         panic!("Failed to run command in container");
     }
 
-    async fn psql_with_retry(context: Arc<Context>, coredb_resource: CoreDB, query: String) -> PsqlOutput {
+    async fn psql_with_retry(
+        context: Arc<Context>,
+        coredb_resource: CoreDB,
+        query: String,
+    ) -> PsqlOutput {
         // Wait up to 100 seconds
         for _ in 1..20 {
             // Assert extension no longer created
@@ -247,7 +260,12 @@ mod test {
                     return Ok(resp);
                 } else {
                     tokio::time::sleep(Duration::from_secs(delay as u64)).await;
-                    println!("Retry {}/{} request -- status: {}", i, retries, resp.status());
+                    println!(
+                        "Retry {}/{} request -- status: {}",
+                        i,
+                        retries,
+                        resp.status()
+                    );
                 }
             }
         }
@@ -274,12 +292,22 @@ mod test {
             if let Ok(output) = result {
                 match inverse {
                     true => {
-                        if !output.stdout.clone().unwrap().contains(expected.clone().as_str()) {
+                        if !output
+                            .stdout
+                            .clone()
+                            .unwrap()
+                            .contains(expected.clone().as_str())
+                        {
                             return output;
                         }
                     }
                     false => {
-                        if output.stdout.clone().unwrap().contains(expected.clone().as_str()) {
+                        if output
+                            .stdout
+                            .clone()
+                            .unwrap()
+                            .contains(expected.clone().as_str())
+                        {
                             return output;
                         }
                     }
@@ -438,7 +466,10 @@ mod test {
         Ok(())
     }
 
-    async fn wait_until_status_not_running(coredbs: &Api<CoreDB>, name: &str) -> Result<(), kube::Error> {
+    async fn wait_until_status_not_running(
+        coredbs: &Api<CoreDB>,
+        name: &str,
+    ) -> Result<(), kube::Error> {
         const TIMEOUT_SECONDS_STATUS_RUNNING: u32 = 294;
         let wp = WatchParams {
             timeout: Some(TIMEOUT_SECONDS_STATUS_RUNNING),
@@ -465,7 +496,9 @@ mod test {
                     }
                 }
             }
-            Err(ValueError::Invalid("Stream terminated prematurely".to_string()))
+            Err(ValueError::Invalid(
+                "Stream terminated prematurely".to_string(),
+            ))
         })
         .await;
 
@@ -531,7 +564,10 @@ mod test {
         if passed_retry {
             Ok(resource_list)
         } else {
-            Err(errors::ValueError::Invalid("Failed to get all resources in namespace".to_string()).into())
+            Err(
+                errors::ValueError::Invalid("Failed to get all resources in namespace".to_string())
+                    .into(),
+            )
         }
     }
 
@@ -600,8 +636,8 @@ mod test {
         pod_ready_and_running(pods.clone(), pod_name.clone()).await;
 
         let pods: Api<Pod> = Api::namespaced(client.clone(), &namespace);
-        let lp =
-            ListParams::default().labels(format!("app=postgres-exporter,coredb.io/name={}", name).as_str());
+        let lp = ListParams::default()
+            .labels(format!("app=postgres-exporter,coredb.io/name={}", name).as_str());
         let exporter_pods = pods.list(&lp).await.expect("could not get pods");
         let exporter_pod_name = exporter_pods.items[0].metadata.name.as_ref().unwrap();
         println!("Exporter pod name: {}", &exporter_pod_name);
@@ -628,11 +664,16 @@ mod test {
                 if let Some(ref extensions) = status.extensions {
                     for extension in extensions {
                         for location in &extension.locations {
-                            if extension.name == "pg_jsonschema" && location.enabled.unwrap_or_default() {
+                            if extension.name == "pg_jsonschema"
+                                && location.enabled.unwrap_or_default()
+                            {
                                 found_extension = true;
                                 assert_eq!(location.database, "postgres");
                                 assert_eq!(
-                                    location.schema.clone().unwrap_or_else(|| "public".to_string()),
+                                    location
+                                        .schema
+                                        .clone()
+                                        .unwrap_or_else(|| "public".to_string()),
                                     "public"
                                 );
                             }
@@ -770,14 +811,17 @@ mod test {
         let secret_name = format!("{}-exporter", name);
         println!("Waiting for secret to be created: {}", secret_name);
         let establish = await_condition(secret_api.clone(), &secret_name, wait_for_secret());
-        let _ = tokio::time::timeout(Duration::from_secs(TIMEOUT_SECONDS_SECRET_PRESENT), establish)
-            .await
-            .unwrap_or_else(|_| {
-                panic!(
-                    "Did not find the secret {} present after waiting {} seconds",
-                    secret_name, TIMEOUT_SECONDS_SECRET_PRESENT
-                )
-            });
+        let _ = tokio::time::timeout(
+            Duration::from_secs(TIMEOUT_SECONDS_SECRET_PRESENT),
+            establish,
+        )
+        .await
+        .unwrap_or_else(|_| {
+            panic!(
+                "Did not find the secret {} present after waiting {} seconds",
+                secret_name, TIMEOUT_SECONDS_SECRET_PRESENT
+            )
+        });
         println!("Found secret: {}", secret_name);
 
         // assert for postgres-exporter secret to be created
@@ -802,8 +846,8 @@ mod test {
         pod_ready_and_running(pods.clone(), pod_name.clone()).await;
 
         let pods: Api<Pod> = Api::namespaced(client.clone(), &namespace);
-        let lp =
-            ListParams::default().labels(format!("app=postgres-exporter,coredb.io/name={}", name).as_str());
+        let lp = ListParams::default()
+            .labels(format!("app=postgres-exporter,coredb.io/name={}", name).as_str());
         let exporter_pods = pods.list(&lp).await.expect("could not get pods");
         let exporter_pod_name = exporter_pods.items[0].metadata.name.as_ref().unwrap();
         println!("Exporter pod name: {}", &exporter_pod_name);
@@ -836,7 +880,8 @@ mod test {
         assert_eq!(default_resources, resources.unwrap());
 
         // Assert no tables found
-        let result = psql_with_retry(context.clone(), coredb_resource.clone(), "\\dt".to_string()).await;
+        let result =
+            psql_with_retry(context.clone(), coredb_resource.clone(), "\\dt".to_string()).await;
         println!("psql out: {}", result.stdout.clone().unwrap());
         assert!(!result.stdout.clone().unwrap().contains("customers"));
 
@@ -858,7 +903,8 @@ mod test {
         assert!(result.stdout.clone().unwrap().contains("CREATE TABLE"));
 
         // Assert table 'customers' exists
-        let result = psql_with_retry(context.clone(), coredb_resource.clone(), "\\dt".to_string()).await;
+        let result =
+            psql_with_retry(context.clone(), coredb_resource.clone(), "\\dt".to_string()).await;
         println!("{}", result.stdout.clone().unwrap());
         assert!(result.stdout.clone().unwrap().contains("customers"));
 
@@ -990,8 +1036,13 @@ mod test {
         assert_eq!(Quantity("10Gi".to_owned()), s);
 
         // Cleanup test buddy pod resource
-        pods.delete(&test_pod_name, &Default::default()).await.unwrap();
-        println!("Waiting for test buddy pod to be deleted: {}", &test_pod_name);
+        pods.delete(&test_pod_name, &Default::default())
+            .await
+            .unwrap();
+        println!(
+            "Waiting for test buddy pod to be deleted: {}",
+            &test_pod_name
+        );
         let _assert_test_buddy_pod_deleted = tokio::time::timeout(
             Duration::from_secs(TIMEOUT_SECONDS_POD_DELETED),
             await_condition(pods.clone(), &test_pod_name, conditions::is_deleted("")),
@@ -1147,7 +1198,9 @@ mod test {
         println!("Restarting CNPG pod");
         // Restart the CNPG instance
         let cluster: Api<Cluster> = Api::namespaced(client.clone(), &namespace);
-        let restart = Utc::now().to_rfc3339_opts(SecondsFormat::Secs, true).to_string();
+        let restart = Utc::now()
+            .to_rfc3339_opts(SecondsFormat::Secs, true)
+            .to_string();
 
         // To restart the CNPG pod we need to annotate the Cluster resource with
         // kubectl.kubernetes.io/restartedAt: <timestamp>
@@ -1158,7 +1211,6 @@ mod test {
                 }
             }
         });
-
 
         // Use the patch method to update the Cluster resource
         let params = PatchParams::default();
@@ -1378,14 +1430,17 @@ mod test {
         // Assert namespace has been deleted
         println!("Waiting for namespace to be deleted: {}", &namespace);
         let namespace_clone = namespace.clone();
-        tokio::time::timeout(Duration::from_secs(TIMEOUT_SECONDS_NS_DELETED), async move {
-            loop {
-                let get_ns = ns_api.get_opt(&namespace_clone).await.unwrap();
-                if get_ns.is_none() {
-                    break;
+        tokio::time::timeout(
+            Duration::from_secs(TIMEOUT_SECONDS_NS_DELETED),
+            async move {
+                loop {
+                    let get_ns = ns_api.get_opt(&namespace_clone).await.unwrap();
+                    if get_ns.is_none() {
+                        break;
+                    }
                 }
-            }
-        })
+            },
+        )
         .await
         .unwrap_or_else(|_| {
             panic!(
@@ -1451,12 +1506,15 @@ mod test {
         });
 
         let ing_route_tcp_name = format!("{}-rw-0", name);
-        let ingress_route_tcp_api: Api<IngressRouteTCP> = Api::namespaced(client.clone(), &namespace);
+        let ingress_route_tcp_api: Api<IngressRouteTCP> =
+            Api::namespaced(client.clone(), &namespace);
         // Get the ingress route tcp
         let ing_route_tcp = ingress_route_tcp_api
             .get(&ing_route_tcp_name)
             .await
-            .unwrap_or_else(|_| panic!("Expected to find ingress route TCP {}", ing_route_tcp_name));
+            .unwrap_or_else(|_| {
+                panic!("Expected to find ingress route TCP {}", ing_route_tcp_name)
+            });
         let service_name = ing_route_tcp.spec.routes[0]
             .services
             .clone()
@@ -1485,12 +1543,15 @@ mod test {
         tokio::time::sleep(Duration::from_secs(5)).await;
 
         let ing_route_tcp_name = format!("extra-{}-rw", name);
-        let ingress_route_tcp_api: Api<IngressRouteTCP> = Api::namespaced(client.clone(), &namespace);
+        let ingress_route_tcp_api: Api<IngressRouteTCP> =
+            Api::namespaced(client.clone(), &namespace);
         // Get the ingress route tcp
         let ing_route_tcp = ingress_route_tcp_api
             .get(&ing_route_tcp_name)
             .await
-            .unwrap_or_else(|_| panic!("Expected to find ingress route TCP {}", ing_route_tcp_name));
+            .unwrap_or_else(|_| {
+                panic!("Expected to find ingress route TCP {}", ing_route_tcp_name)
+            });
         let service_name = ing_route_tcp.spec.routes[0]
             .services
             .clone()
@@ -1527,7 +1588,9 @@ mod test {
         let ing_route_tcp = ingress_route_tcp_api
             .get(&ing_route_tcp_name)
             .await
-            .unwrap_or_else(|_| panic!("Expected to find ingress route TCP {}", ing_route_tcp_name));
+            .unwrap_or_else(|_| {
+                panic!("Expected to find ingress route TCP {}", ing_route_tcp_name)
+            });
         let service_name = ing_route_tcp.spec.routes[0]
             .services
             .clone()
@@ -1632,7 +1695,8 @@ mod test {
             },
         });
 
-        let ingress_route_tcp_api: Api<IngressRouteTCP> = Api::namespaced(client.clone(), &namespace);
+        let ingress_route_tcp_api: Api<IngressRouteTCP> =
+            Api::namespaced(client.clone(), &namespace);
         let params = PatchParams::apply("functional-test-ingress-route-tcp");
         let _o = ingress_route_tcp_api
             .patch(name, &params, &Patch::Apply(&ing))
@@ -1746,7 +1810,8 @@ mod test {
             },
         });
 
-        let ingress_route_tcp_api: Api<IngressRouteTCP> = Api::namespaced(client.clone(), &namespace);
+        let ingress_route_tcp_api: Api<IngressRouteTCP> =
+            Api::namespaced(client.clone(), &namespace);
         let params = PatchParams::apply("functional-test-ingress-route-tcp");
         let _o = ingress_route_tcp_api
             .patch(name, &params, &Patch::Apply(&ing))
@@ -1798,7 +1863,9 @@ mod test {
         assert_eq!(actual_matcher_new_route, new_matcher);
 
         // Delete ingress_route_tcp_api
-        let _ = ingress_route_tcp_api.delete(name, &Default::default()).await;
+        let _ = ingress_route_tcp_api
+            .delete(name, &Default::default())
+            .await;
 
         // Cleanup CoreDB resource
         coredbs.delete(name, &Default::default()).await.unwrap();
@@ -1872,7 +1939,8 @@ mod test {
         pod_ready_and_running(pods.clone(), pod_name_secondary.clone()).await;
 
         // Assert that we can query the database with \dt;
-        let result = psql_with_retry(context.clone(), coredb_resource.clone(), "\\dx".to_string()).await;
+        let result =
+            psql_with_retry(context.clone(), coredb_resource.clone(), "\\dx".to_string()).await;
         assert!(result.stdout.clone().unwrap().contains("plpgsql"));
 
         // Assert that both pods are replicating successfully
@@ -1954,8 +2022,8 @@ mod test {
         pod_ready_and_running(pods.clone(), pod_name_primary.clone()).await;
 
         let pods: Api<Pod> = Api::namespaced(client.clone(), &namespace);
-        let lp =
-            ListParams::default().labels(format!("app=postgres-exporter,coredb.io/name={}", name).as_str());
+        let lp = ListParams::default()
+            .labels(format!("app=postgres-exporter,coredb.io/name={}", name).as_str());
         let exporter_pods = pods.list(&lp).await.expect("could not get pods");
         let exporter_pod_name = exporter_pods.items[0].metadata.name.as_ref().unwrap();
         println!("Exporter pod name: {}", &exporter_pod_name);
@@ -1963,7 +2031,8 @@ mod test {
         pod_ready_and_running(pods.clone(), exporter_pod_name.clone()).await;
 
         // Assert that we can query the database with \dx;
-        let result = psql_with_retry(context.clone(), coredb_resource.clone(), "\\dx".to_string()).await;
+        let result =
+            psql_with_retry(context.clone(), coredb_resource.clone(), "\\dx".to_string()).await;
         assert!(result.stdout.clone().unwrap().contains("plpgsql"));
 
         // Now upgrade the single instance to be HA
@@ -1988,7 +2057,8 @@ mod test {
         pod_ready_and_running(pods.clone(), pod_name_secondary.clone()).await;
 
         // Assert that we can query the database again now that HA is enabled with \dx;
-        let result = psql_with_retry(context.clone(), coredb_resource.clone(), "\\dx".to_string()).await;
+        let result =
+            psql_with_retry(context.clone(), coredb_resource.clone(), "\\dx".to_string()).await;
         assert!(result.stdout.clone().unwrap().contains("plpgsql"));
 
         // Assert that both pods are replicating successfully
@@ -2035,7 +2105,11 @@ mod test {
         println!("Waiting for Pod {} to be deleted", pod_name_secondary);
         let _assert_secondary_deleted = tokio::time::timeout(
             Duration::from_secs(TIMEOUT_SECONDS_POD_DELETED),
-            await_condition(pods.clone(), &pod_name_secondary, conditions::is_deleted("")),
+            await_condition(
+                pods.clone(),
+                &pod_name_secondary,
+                conditions::is_deleted(""),
+            ),
         )
         .await
         .unwrap_or_else(|_| {
@@ -2152,8 +2226,8 @@ mod test {
         pod_ready_and_running(pods.clone(), pod_name.clone()).await;
 
         let pods: Api<Pod> = Api::namespaced(client.clone(), &namespace);
-        let lp =
-            ListParams::default().labels(format!("app=postgres-exporter,coredb.io/name={}", name).as_str());
+        let lp = ListParams::default()
+            .labels(format!("app=postgres-exporter,coredb.io/name={}", name).as_str());
         let exporter_pods = pods.list(&lp).await.expect("could not get pods");
         let exporter_pod_name = exporter_pods.items[0].metadata.name.as_ref().unwrap();
         println!("Exporter pod name: {}", &exporter_pod_name);
@@ -2268,8 +2342,8 @@ mod test {
         pod_ready_and_running(pods.clone(), pod_name_primary.clone()).await;
 
         let pods: Api<Pod> = Api::namespaced(client.clone(), &namespace);
-        let lp =
-            ListParams::default().labels(format!("app=postgres-exporter,coredb.io/name={}", name).as_str());
+        let lp = ListParams::default()
+            .labels(format!("app=postgres-exporter,coredb.io/name={}", name).as_str());
         let exporter_pods = pods.list(&lp).await.expect("could not get pods");
         let exporter_pod_name = exporter_pods.items[0].metadata.name.as_ref().unwrap();
         println!("Exporter pod name: {}", &exporter_pod_name);
@@ -2282,7 +2356,8 @@ mod test {
         }
 
         // Assert that we can query the database with \dx;
-        let result = psql_with_retry(context.clone(), coredb_resource.clone(), "\\dx".to_string()).await;
+        let result =
+            psql_with_retry(context.clone(), coredb_resource.clone(), "\\dx".to_string()).await;
         assert!(result.stdout.clone().unwrap().contains("plpgsql"));
 
         // Assert that both pods are replicating successfully
@@ -2352,9 +2427,13 @@ mod test {
                 "ls /var/lib/postgresql/data/tembo/extension/aggs_for_vecs.control".to_owned(),
             ];
             let pod_name = pod.metadata.name.clone().expect("Pod should have a name");
-            let result =
-                run_command_in_container(pods.clone(), pod_name, cmd.clone(), Some("postgres".to_string()))
-                    .await;
+            let result = run_command_in_container(
+                pods.clone(),
+                pod_name,
+                cmd.clone(),
+                Some("postgres".to_string()),
+            )
+            .await;
             assert!(result.contains("aggs_for_vecs.control"));
         }
 
@@ -2404,8 +2483,8 @@ mod test {
 
         // Create a pod we can use to run commands in the cluster
         let pods: Api<Pod> = Api::namespaced(client.clone(), &namespace);
-        let lp =
-            ListParams::default().labels(format!("app=postgres-exporter,coredb.io/name={}", name).as_str());
+        let lp = ListParams::default()
+            .labels(format!("app=postgres-exporter,coredb.io/name={}", name).as_str());
 
         // Apply a basic configuration of CoreDB
         println!("Creating CoreDB resource {}", name);
@@ -2502,9 +2581,13 @@ mod test {
                 "ls /var/lib/postgresql/data/tembo/extension/aggs_for_vecs.control".to_owned(),
             ];
             let pod_name = pod.metadata.name.clone().expect("Pod should have a name");
-            let result =
-                run_command_in_container(pods.clone(), pod_name, cmd.clone(), Some("postgres".to_string()))
-                    .await;
+            let result = run_command_in_container(
+                pods.clone(),
+                pod_name,
+                cmd.clone(),
+                Some("postgres".to_string()),
+            )
+            .await;
             assert!(result.contains("aggs_for_vecs.control"));
         }
 
@@ -2574,9 +2657,13 @@ mod test {
                 "ls /var/lib/postgresql/data/tembo/extension/aggs_for_vecs.control".to_owned(),
             ];
             let pod_name = pod.metadata.name.clone().expect("Pod should have a name");
-            let result =
-                run_command_in_container(pods.clone(), pod_name, cmd.clone(), Some("postgres".to_string()))
-                    .await;
+            let result = run_command_in_container(
+                pods.clone(),
+                pod_name,
+                cmd.clone(),
+                Some("postgres".to_string()),
+            )
+            .await;
             assert!(result.contains("aggs_for_vecs.control"));
         }
 
@@ -2626,8 +2713,8 @@ mod test {
 
         // Create a pod we can use to run commands in the cluster
         let pods: Api<Pod> = Api::namespaced(client.clone(), &namespace);
-        let lp =
-            ListParams::default().labels(format!("app=postgres-exporter,coredb.io/name={}", name).as_str());
+        let lp = ListParams::default()
+            .labels(format!("app=postgres-exporter,coredb.io/name={}", name).as_str());
 
         // Apply a basic configuration of CoreDB
         println!("Creating CoreDB resource {}", name);
@@ -2704,7 +2791,8 @@ mod test {
         pod_ready_and_running(pods.clone(), exporter_pod_name.clone()).await;
 
         // Assert that we can query the database with \dx;
-        let result = psql_with_retry(context.clone(), coredb_resource.clone(), "\\dx".to_string()).await;
+        let result =
+            psql_with_retry(context.clone(), coredb_resource.clone(), "\\dx".to_string()).await;
 
         let stdout = match result.stdout {
             Some(output) => output,
@@ -2762,7 +2850,10 @@ mod test {
                     break;
                 } else {
                     retries += 1;
-                    println!("Waiting for pgmq.control to be present, retry: {}/10", retries);
+                    println!(
+                        "Waiting for pgmq.control to be present, retry: {}/10",
+                        retries
+                    );
                     tokio::time::sleep(Duration::from_secs(5)).await;
                 }
             }
@@ -2863,9 +2954,13 @@ mod test {
                 "ls /var/lib/postgresql/data/tembo/extension/pgmq.control".to_owned(),
             ];
             let pod_name = pod.metadata.name.clone().expect("Pod should have a name");
-            let result =
-                run_command_in_container(pods.clone(), pod_name, cmd.clone(), Some("postgres".to_string()))
-                    .await;
+            let result = run_command_in_container(
+                pods.clone(),
+                pod_name,
+                cmd.clone(),
+                Some("postgres".to_string()),
+            )
+            .await;
             assert!(result.contains("pgmq.control"));
         }
 
@@ -2996,9 +3091,10 @@ mod test {
         coredbs.patch(cdb_name, &params, &patch).await.unwrap();
 
         // assert we created two Deployments, with the names we provided
-        let deployment_items: Vec<Deployment> = list_resources(client.clone(), cdb_name, &namespace, 2)
-            .await
-            .unwrap();
+        let deployment_items: Vec<Deployment> =
+            list_resources(client.clone(), cdb_name, &namespace, 2)
+                .await
+                .unwrap();
         // two AppService deployments. the postgres exporter is disabled
         assert!(deployment_items.len() == 2);
 
@@ -3010,8 +3106,14 @@ mod test {
 
         let app_0 = deployment_items[0].clone();
         let app_1 = deployment_items[1].clone();
-        assert_eq!(app_0.metadata.name.unwrap(), format!("{cdb_name}-postgrest"));
-        assert_eq!(app_1.metadata.name.unwrap(), format!("{cdb_name}-test-app-1"));
+        assert_eq!(
+            app_0.metadata.name.unwrap(),
+            format!("{cdb_name}-postgrest")
+        );
+        assert_eq!(
+            app_1.metadata.name.unwrap(),
+            format!("{cdb_name}-test-app-1")
+        );
 
         // Assert resources in first appService
         // select the pod
@@ -3136,12 +3238,16 @@ mod test {
         let patch = Patch::Apply(&coredb_json);
         coredbs.patch(cdb_name, &params, &patch).await.unwrap();
 
-        let deployment_items: Vec<Deployment> = list_resources(client.clone(), cdb_name, &namespace, 1)
-            .await
-            .unwrap();
+        let deployment_items: Vec<Deployment> =
+            list_resources(client.clone(), cdb_name, &namespace, 1)
+                .await
+                .unwrap();
         assert!(deployment_items.len() == 1);
         let app_0 = deployment_items[0].clone();
-        assert_eq!(app_0.metadata.name.unwrap(), format!("{cdb_name}-postgrest"));
+        assert_eq!(
+            app_0.metadata.name.unwrap(),
+            format!("{cdb_name}-postgrest")
+        );
 
         // should still be just one Service
         let service_items: Vec<Service> = list_resources(client.clone(), cdb_name, &namespace, 1)
@@ -3162,7 +3268,9 @@ mod test {
         }
         let postgres_url = format!("https://{}.localhost:8443/", cdb_name);
         // with no headers, request will succeed against postgREST
-        let response = http_get_with_retry(&postgres_url, None, 100, 5).await.unwrap();
+        let response = http_get_with_retry(&postgres_url, None, 100, 5)
+            .await
+            .unwrap();
         let body: ApiResponse = response.json().await.unwrap();
         assert_eq!(body.info.title, "PostgREST API");
 
@@ -3315,7 +3423,9 @@ CREATE EVENT TRIGGER pgrst_watch
         // send a request to graphql route
         let gql_uri = format!("{}graphql?query=%7B%20bookCollection%20%7B%20edges%20%7B%20node%20%7B%20id%20%7D%20%7D%20%7D%20%7D", postgres_url);
         // panics if its a non-200 response
-        let _response = http_get_with_retry(&gql_uri, Some(headers), 10, 5).await.unwrap();
+        let _response = http_get_with_retry(&gql_uri, Some(headers), 10, 5)
+            .await
+            .unwrap();
 
         // Delete all of them
         let coredb_json = serde_json::json!({
@@ -3331,9 +3441,10 @@ CREATE EVENT TRIGGER pgrst_watch
         let params = PatchParams::apply("tembo-integration-test");
         let patch = Patch::Apply(&coredb_json);
         coredbs.patch(cdb_name, &params, &patch).await.unwrap();
-        let deployment_items: Vec<Deployment> = list_resources(client.clone(), cdb_name, &namespace, 0)
-            .await
-            .unwrap();
+        let deployment_items: Vec<Deployment> =
+            list_resources(client.clone(), cdb_name, &namespace, 0)
+                .await
+                .unwrap();
         assert!(deployment_items.is_empty());
 
         let service_items: Vec<Service> = list_resources(client.clone(), cdb_name, &namespace, 0)
@@ -3397,7 +3508,11 @@ CREATE EVENT TRIGGER pgrst_watch
             );
         }
 
-        async fn get_pg_start_time(coredbs: &Api<CoreDB>, name: &str, ctx: Arc<Context>) -> DateTime<Utc> {
+        async fn get_pg_start_time(
+            coredbs: &Api<CoreDB>,
+            name: &str,
+            ctx: Arc<Context>,
+        ) -> DateTime<Utc> {
             const PG_TIMESTAMP_DECL: &str = "%Y-%m-%d %H:%M:%S.%f%#z";
 
             let coredb = coredbs.get(name).await.expect("spec not found");
@@ -3517,7 +3632,9 @@ CREATE EVENT TRIGGER pgrst_watch
 
         // Apply the annotation to restart Postgres
         {
-            let restart = Utc::now().to_rfc3339_opts(SecondsFormat::Secs, true).to_string();
+            let restart = Utc::now()
+                .to_rfc3339_opts(SecondsFormat::Secs, true)
+                .to_string();
 
             let patch_json = serde_json::json!({
                 "metadata": {
@@ -3711,8 +3828,8 @@ CREATE EVENT TRIGGER pgrst_watch
         pod_ready_and_running(pods.clone(), pod_name.clone()).await;
 
         let pods: Api<Pod> = Api::namespaced(client.clone(), &namespace);
-        let lp =
-            ListParams::default().labels(format!("app=postgres-exporter,coredb.io/name={}", name).as_str());
+        let lp = ListParams::default()
+            .labels(format!("app=postgres-exporter,coredb.io/name={}", name).as_str());
         let exporter_pods = pods.list(&lp).await.expect("could not get pods");
         let exporter_pod_name = exporter_pods.items[0].metadata.name.as_ref().unwrap();
         println!("Exporter pod name: {}", &exporter_pod_name);
@@ -3732,7 +3849,8 @@ CREATE EVENT TRIGGER pgrst_watch
             if runtime_config.is_some() {
                 let runtime_config = runtime_config.unwrap();
                 for config in runtime_config {
-                    if config.name == "shared_preload_libraries" && config.value == expected_config {
+                    if config.name == "shared_preload_libraries" && config.value == expected_config
+                    {
                         found_configs = true;
                     }
                 }
@@ -3885,8 +4003,8 @@ CREATE EVENT TRIGGER pgrst_watch
         pod_ready_and_running(pods.clone(), pod_name.clone()).await;
 
         let pods: Api<Pod> = Api::namespaced(client.clone(), &namespace);
-        let lp =
-            ListParams::default().labels(format!("app=postgres-exporter,coredb.io/name={}", name).as_str());
+        let lp = ListParams::default()
+            .labels(format!("app=postgres-exporter,coredb.io/name={}", name).as_str());
         let exporter_pods = pods.list(&lp).await.expect("could not get pods");
         let exporter_pod_name = exporter_pods.items[0].metadata.name.as_ref().unwrap();
         println!("Exporter pod name: {}", &exporter_pod_name);
@@ -3899,7 +4017,8 @@ CREATE EVENT TRIGGER pgrst_watch
         }
 
         // Assert that we can query the database with \dx;
-        let result = psql_with_retry(context.clone(), coredb_resource.clone(), "\\dx".to_string()).await;
+        let result =
+            psql_with_retry(context.clone(), coredb_resource.clone(), "\\dx".to_string()).await;
         assert!(result.stdout.clone().unwrap().contains("plpgsql"));
 
         // Check to make sure the initial backup has run and its completed
@@ -3947,7 +4066,8 @@ CREATE EVENT TRIGGER pgrst_watch
         let _backup_resource = backup.patch(&backup_name, &params, &patch).await.unwrap();
 
         // Assert that we can query the database with \dx;
-        let result = psql_with_retry(context.clone(), coredb_resource.clone(), "\\dx".to_string()).await;
+        let result =
+            psql_with_retry(context.clone(), coredb_resource.clone(), "\\dx".to_string()).await;
         assert!(result.stdout.clone().unwrap().contains("plpgsql"));
 
         // Wait for backup to complete
@@ -4088,7 +4208,8 @@ CREATE EVENT TRIGGER pgrst_watch
         }
 
         // Assert that we can query the database with \dx;
-        let result = psql_with_retry(context.clone(), coredb_resource.clone(), "\\dx".to_string()).await;
+        let result =
+            psql_with_retry(context.clone(), coredb_resource.clone(), "\\dx".to_string()).await;
         assert!(result.stdout.clone().unwrap().contains("plpgsql"));
 
         // Assert that the extensions are installed on both replicas
@@ -4154,7 +4275,11 @@ CREATE EVENT TRIGGER pgrst_watch
         println!("Waiting for CoreDB to be deleted: {}", &restore_name);
         let _assert_coredb_deleted = tokio::time::timeout(
             Duration::from_secs(TIMEOUT_SECONDS_COREDB_DELETED),
-            await_condition(restore_coredbs.clone(), restore_name, conditions::is_deleted("")),
+            await_condition(
+                restore_coredbs.clone(),
+                restore_name,
+                conditions::is_deleted(""),
+            ),
         )
         .await
         .unwrap_or_else(|_| {
@@ -4235,8 +4360,8 @@ CREATE EVENT TRIGGER pgrst_watch
         pod_ready_and_running(pods.clone(), pod_name.clone()).await;
 
         let pods: Api<Pod> = Api::namespaced(client.clone(), &namespace);
-        let lp =
-            ListParams::default().labels(format!("app=postgres-exporter,coredb.io/name={}", name).as_str());
+        let lp = ListParams::default()
+            .labels(format!("app=postgres-exporter,coredb.io/name={}", name).as_str());
         let exporter_pods = pods.list(&lp).await.expect("could not get pods");
         let exporter_pod_name = exporter_pods.items[0].metadata.name.as_ref().unwrap();
         println!("Exporter pod name: {}", &exporter_pod_name);
@@ -4266,7 +4391,13 @@ CREATE EVENT TRIGGER pgrst_watch
 
         // Check pooler_deployment for correct resources
         let pooler_deployment_resources_json = serde_json::to_value(
-            pooler_deployment.spec.unwrap().template.spec.unwrap().containers[0]
+            pooler_deployment
+                .spec
+                .unwrap()
+                .template
+                .spec
+                .unwrap()
+                .containers[0]
                 .resources
                 .as_ref()
                 .unwrap(),
@@ -4275,7 +4406,8 @@ CREATE EVENT TRIGGER pgrst_watch
         assert_eq!(pooler_deployment_resources_json, resources);
 
         // Check for pooler IngressRouteTCP
-        let pooler_ingressroutetcps: Api<IngressRouteTCP> = Api::namespaced(client.clone(), &namespace);
+        let pooler_ingressroutetcps: Api<IngressRouteTCP> =
+            Api::namespaced(client.clone(), &namespace);
         let _pooler_ingressroutetcp = pooler_ingressroutetcps
             .get(format!("{pooler_name}-0").as_str())
             .await
@@ -4319,7 +4451,11 @@ CREATE EVENT TRIGGER pgrst_watch
         // Wait for pooler service to be deleted
         let _assert_pooler_service_deleted = tokio::time::timeout(
             Duration::from_secs(30),
-            await_condition(pooler_services.clone(), &pooler_name, conditions::is_deleted("")),
+            await_condition(
+                pooler_services.clone(),
+                &pooler_name,
+                conditions::is_deleted(""),
+            ),
         );
         println!("Pooler service deleted: {}", pooler_name);
 

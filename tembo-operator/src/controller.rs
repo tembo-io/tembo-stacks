@@ -6,7 +6,10 @@ use crate::{
     app_service::manager::reconcile_app_services,
     cloudnativepg::{
         backups::Backup,
-        cnpg::{cnpg_cluster_from_cdb, reconcile_cnpg, reconcile_cnpg_scheduled_backup, reconcile_pooler},
+        cnpg::{
+            cnpg_cluster_from_cdb, reconcile_cnpg, reconcile_cnpg_scheduled_backup,
+            reconcile_pooler,
+        },
     },
     config::Config,
     deployment_postgres_exporter::reconcile_prometheus_exporter_deployment,
@@ -209,7 +212,9 @@ impl CoreDB {
                 }
             }
             Err(_e) => {
-                warn!("DATA_PLANE_BASEDOMAIN is not set, skipping reconciliation of IngressRouteTCP");
+                warn!(
+                    "DATA_PLANE_BASEDOMAIN is not set, skipping reconciliation of IngressRouteTCP"
+                );
             }
         };
 
@@ -254,13 +259,17 @@ impl CoreDB {
             })?;
         }
 
-        let _ =
-            reconcile_postgres_role_secret(self, ctx.clone(), "readonly", &format!("{}-ro", name.clone()))
-                .await
-                .map_err(|e| {
-                    error!("Error reconciling postgres exporter secret: {:?}", e);
-                    Action::requeue(Duration::from_secs(300))
-                })?;
+        let _ = reconcile_postgres_role_secret(
+            self,
+            ctx.clone(),
+            "readonly",
+            &format!("{}-ro", name.clone()),
+        )
+        .await
+        .map_err(|e| {
+            error!("Error reconciling postgres exporter secret: {:?}", e);
+            Action::requeue(Duration::from_secs(300))
+        })?;
 
         // Deploy cluster
         reconcile_cnpg(self, ctx.clone()).await?;
@@ -333,7 +342,10 @@ impl CoreDB {
                     trunk_installs: self.status.as_ref().and_then(|f| f.trunk_installs.clone()),
                     resources: Some(self.spec.resources.clone()),
                     runtime_config: Some(current_config_values),
-                    first_recoverability_time: self.status.as_ref().and_then(|f| f.first_recoverability_time),
+                    first_recoverability_time: self
+                        .status
+                        .as_ref()
+                        .and_then(|f| f.first_recoverability_time),
                     pg_postmaster_start_time: None,
                     last_fully_reconciled_at: None,
                 }
@@ -388,7 +400,11 @@ impl CoreDB {
         if phase == Some("Terminating".to_string()) {
             return Ok(Action::await_change());
         }
-        let recorder = ctx.diagnostics.read().await.recorder(ctx.client.clone(), self);
+        let recorder = ctx
+            .diagnostics
+            .read()
+            .await
+            .recorder(ctx.client.clone(), self);
         // CoreDB doesn't have dependencies in this example case, so we just publish an event
         recorder
             .publish(Event {
@@ -410,7 +426,8 @@ impl CoreDB {
         wait_for_ready: bool,
     ) -> Result<Pod, Action> {
         let requires_load =
-            extensions_that_require_load(client.clone(), &self.metadata.namespace.clone().unwrap()).await?;
+            extensions_that_require_load(client.clone(), &self.metadata.namespace.clone().unwrap())
+                .await?;
         let cluster = cnpg_cluster_from_cdb(self, None, requires_load);
         let cluster_name = cluster
             .metadata
@@ -427,7 +444,10 @@ impl CoreDB {
         // Return an error if the query fails
         let pod_list = pods.await.map_err(|_e| {
             // It is not expected to fail the query to the pods API
-            error!("Failed to query for CNPG primary pod of {}", &self.name_any());
+            error!(
+                "Failed to query for CNPG primary pod of {}",
+                &self.name_any()
+            );
             Action::requeue(Duration::from_secs(300))
         })?;
         // Return an error if the list is empty
@@ -452,12 +472,14 @@ impl CoreDB {
 
     #[instrument(skip(self, client))]
     pub async fn primary_pod_cnpg(&self, client: Client) -> Result<Pod, Action> {
-        self.primary_pod_cnpg_conditional_readiness(client, true).await
+        self.primary_pod_cnpg_conditional_readiness(client, true)
+            .await
     }
 
     #[instrument(skip(self, client))]
     pub async fn primary_pod_cnpg_ready_or_not(&self, client: Client) -> Result<Pod, Action> {
-        self.primary_pod_cnpg_conditional_readiness(client, false).await
+        self.primary_pod_cnpg_conditional_readiness(client, false)
+            .await
     }
 
     #[instrument(skip(self, client))]
@@ -467,7 +489,8 @@ impl CoreDB {
         wait_for_ready: bool,
     ) -> Result<Vec<Pod>, Action> {
         let requires_load =
-            extensions_that_require_load(client.clone(), &self.metadata.namespace.clone().unwrap()).await?;
+            extensions_that_require_load(client.clone(), &self.metadata.namespace.clone().unwrap())
+                .await?;
         let cluster = cnpg_cluster_from_cdb(self, None, requires_load);
         let cluster_name = cluster
             .metadata
@@ -492,12 +515,18 @@ impl CoreDB {
         let replica_pods = pods.list(&list_params_replica);
 
         let primary_pod_list = primary_pods.await.map_err(|_e| {
-            error!("Failed to query for CNPG primary pods of {}", &self.name_any());
+            error!(
+                "Failed to query for CNPG primary pods of {}",
+                &self.name_any()
+            );
             Action::requeue(Duration::from_secs(300))
         })?;
 
         let replica_pod_list = replica_pods.await.map_err(|_e| {
-            error!("Failed to query for CNPG replica pods of {}", &self.name_any());
+            error!(
+                "Failed to query for CNPG replica pods of {}",
+                &self.name_any()
+            );
             Action::requeue(Duration::from_secs(300))
         })?;
 
@@ -533,12 +562,14 @@ impl CoreDB {
 
     #[instrument(skip(self, client))]
     pub async fn pods_by_cluster(&self, client: Client) -> Result<Vec<Pod>, Action> {
-        self.pods_by_cluster_conditional_readiness(client, true).await
+        self.pods_by_cluster_conditional_readiness(client, true)
+            .await
     }
 
     #[instrument(skip(self, client))]
     pub async fn pods_by_cluster_ready_or_not(&self, client: Client) -> Result<Vec<Pod>, Action> {
-        self.pods_by_cluster_conditional_readiness(client, false).await
+        self.pods_by_cluster_conditional_readiness(client, false)
+            .await
     }
 
     #[instrument(skip(self, client))]
@@ -597,7 +628,10 @@ impl CoreDB {
                     .unwrap_or_else(|| "Unknown".to_string());
                 debug!(
                     "Status of instance {} pod {} in namespace {}: {}",
-                    self.metadata.name.clone().expect("CoreDB should have a name"),
+                    self.metadata
+                        .name
+                        .clone()
+                        .expect("CoreDB should have a name"),
                     pod_name,
                     namespace,
                     status
@@ -660,7 +694,10 @@ impl CoreDB {
     // get_recovery_time returns the time at which the first recovery will be possible from the
     // oldest completed Backup object in the namespace.
     #[instrument(skip(self, context))]
-    pub async fn get_recovery_time(&self, context: Arc<Context>) -> Result<Option<DateTime<Utc>>, Action> {
+    pub async fn get_recovery_time(
+        &self,
+        context: Arc<Context>,
+    ) -> Result<Option<DateTime<Utc>>, Action> {
         let client = context.client.clone();
         let namespace = self
             .metadata
@@ -714,7 +751,10 @@ pub fn is_postgres_ready() -> impl Condition<Pod> + 'static {
 }
 
 #[instrument(skip(ctx, cdb))]
-pub async fn get_current_coredb_resource(cdb: &CoreDB, ctx: Arc<Context>) -> Result<CoreDB, Action> {
+pub async fn get_current_coredb_resource(
+    cdb: &CoreDB,
+    ctx: Arc<Context>,
+) -> Result<CoreDB, Action> {
     let coredb_api: Api<CoreDB> = Api::namespaced(
         ctx.client.clone(),
         &cdb.metadata
@@ -722,7 +762,11 @@ pub async fn get_current_coredb_resource(cdb: &CoreDB, ctx: Arc<Context>) -> Res
             .clone()
             .expect("CoreDB should have a namespace"),
     );
-    let coredb_name = cdb.metadata.name.as_ref().expect("CoreDB should have a name");
+    let coredb_name = cdb
+        .metadata
+        .name
+        .as_ref()
+        .expect("CoreDB should have a name");
     let coredb = coredb_api.get(coredb_name).await.map_err(|e| {
         error!("Error getting CoreDB resource: {:?}", e);
         Action::requeue(Duration::from_secs(10))
@@ -731,7 +775,10 @@ pub async fn get_current_coredb_resource(cdb: &CoreDB, ctx: Arc<Context>) -> Res
 }
 
 // Get current config values
-pub async fn get_current_config_values(cdb: &CoreDB, ctx: Arc<Context>) -> Result<Vec<PgConfig>, Action> {
+pub async fn get_current_config_values(
+    cdb: &CoreDB,
+    ctx: Arc<Context>,
+) -> Result<Vec<PgConfig>, Action> {
     let cfg = list_config_params(cdb, ctx.clone()).await?;
     Ok(cfg)
 }
