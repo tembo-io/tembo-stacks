@@ -64,14 +64,17 @@ pub struct PostgresConfig {
 }
 
 fn create_cluster_backup_barman_data(cdb: &CoreDB) -> Option<ClusterBackupBarmanObjectStoreData> {
-    let encryption = match &cdb.spec.backup.encryption {
-        Some(encryption) => match encryption.as_str() {
-            "AES256" => Some(ClusterBackupBarmanObjectStoreDataEncryption::Aes256),
-            "aws:kms" => Some(ClusterBackupBarmanObjectStoreDataEncryption::AwsKms),
+    let encryption =
+        match &cdb.spec.backup.encryption {
+            Some(encryption) => {
+                match encryption.as_str() {
+                    "AES256" => Some(ClusterBackupBarmanObjectStoreDataEncryption::Aes256),
+                    "aws:kms" => Some(ClusterBackupBarmanObjectStoreDataEncryption::AwsKms),
+                    _ => None,
+                }
+            }
             _ => None,
-        },
-        _ => None,
-    };
+        };
 
     Some(ClusterBackupBarmanObjectStoreData {
         compression: Some(ClusterBackupBarmanObjectStoreDataCompression::Snappy),
@@ -82,14 +85,17 @@ fn create_cluster_backup_barman_data(cdb: &CoreDB) -> Option<ClusterBackupBarman
 }
 
 fn create_cluster_backup_barman_wal(cdb: &CoreDB) -> Option<ClusterBackupBarmanObjectStoreWal> {
-    let encryption = match &cdb.spec.backup.encryption {
-        Some(encryption) => match encryption.as_str() {
-            "AES256" => Some(ClusterBackupBarmanObjectStoreWalEncryption::Aes256),
-            "aws:kms" => Some(ClusterBackupBarmanObjectStoreWalEncryption::AwsKms),
+    let encryption =
+        match &cdb.spec.backup.encryption {
+            Some(encryption) => {
+                match encryption.as_str() {
+                    "AES256" => Some(ClusterBackupBarmanObjectStoreWalEncryption::Aes256),
+                    "aws:kms" => Some(ClusterBackupBarmanObjectStoreWalEncryption::AwsKms),
+                    _ => None,
+                }
+            }
             _ => None,
-        },
-        _ => None,
-    };
+        };
 
     if encryption.is_some() {
         Some(ClusterBackupBarmanObjectStoreWal {
@@ -152,24 +158,25 @@ fn create_cluster_backup(
 ) -> Option<ClusterBackup> {
     let retention_days = match &cdb.spec.backup.retentionPolicy {
         None => "30d".to_string(),
-        Some(retention_policy) => match retention_policy.parse::<i32>() {
-            Ok(days) => {
-                format!("{}d", days)
+        Some(retention_policy) => {
+            match retention_policy.parse::<i32>() {
+                Ok(days) => {
+                    format!("{}d", days)
+                }
+                Err(_) => {
+                    warn!(
+                        "Invalid retention policy because could not convert to i32, using default of 30 days"
+                    );
+                    "30d".to_string()
+                }
             }
-            Err(_) => {
-                warn!("Invalid retention policy because could not convert to i32, using default of 30 days");
-                "30d".to_string()
-            }
-        },
+        }
     };
 
     Some(ClusterBackup {
-        barman_object_store: Some(create_cluster_backup_barman_object_store(
-            cdb,
-            endpoint_url,
-            backup_path,
-            s3_credentials,
-        )),
+        barman_object_store: Some(
+            create_cluster_backup_barman_object_store(cdb, endpoint_url, backup_path, s3_credentials)
+        ),
         retention_policy: Some(retention_days), // Adjust as needed
         ..ClusterBackup::default()
     })
@@ -253,15 +260,16 @@ pub fn cnpg_backup_configuration(
             .expect("Expected service account template annotations to contain an EKS role ARN")
             .clone();
 
-        service_account_template = Some(ClusterServiceAccountTemplate {
-            metadata: ClusterServiceAccountTemplateMetadata {
-                annotations: Some(BTreeMap::from([(
-                    "eks.amazonaws.com/role-arn".to_string(),
-                    role_arn,
-                )])),
-                ..ClusterServiceAccountTemplateMetadata::default()
-            },
-        });
+        service_account_template =
+            Some(ClusterServiceAccountTemplate {
+                metadata: ClusterServiceAccountTemplateMetadata {
+                    annotations: Some(BTreeMap::from([(
+                        "eks.amazonaws.com/role-arn".to_string(),
+                        role_arn,
+                    )])),
+                    ..ClusterServiceAccountTemplateMetadata::default()
+                },
+            });
     }
     // Copy the endpoint_url and s3_credentials from cdb to configure backups
     let endpoint_url = cdb.spec.backup.endpoint_url.as_deref().unwrap_or_default();
@@ -829,9 +837,9 @@ fn update_restarted_at(cdb: &CoreDB, maybe_cluster: Option<&Cluster>, new_spec: 
 
     // Forward the `restartedAt` annotation from CoreDB over to the CNPG cluster,
     // does not matter if changed or not.
-    new_spec.metadata.annotations.as_mut().map(|cluster_annotations| {
-        cluster_annotations.insert(RESTARTED_AT.into(), cdb_restarted_at.to_owned())
-    });
+    new_spec.metadata.annotations.as_mut().map(
+        |cluster_annotations| cluster_annotations.insert(RESTARTED_AT.into(), cdb_restarted_at.to_owned())
+    );
 
     let restart_annotation_updated = previous_restarted_at != Some(cdb_restarted_at);
 
@@ -1502,13 +1510,14 @@ fn remove_pod_from_fenced_instances_annotation(
 #[instrument(skip(cdb, ctx), fields(trace_id, instance_name = %cdb.name_any(), pod_name))]
 pub async fn unfence_pod(cdb: &CoreDB, ctx: Arc<Context>, pod_name: &str) -> Result<(), Action> {
     let instance_name = cdb.metadata.name.as_deref().unwrap_or_default();
-    let namespace = match cdb.namespace() {
-        Some(ns) => ns,
-        None => {
-            error!("Namespace is not set for CoreDB for instance {}", instance_name);
-            return Err(Action::requeue(Duration::from_secs(300)));
-        }
-    };
+    let namespace =
+        match cdb.namespace() {
+            Some(ns) => ns,
+            None => {
+                error!("Namespace is not set for CoreDB for instance {}", instance_name);
+                return Err(Action::requeue(Duration::from_secs(300)));
+            }
+        };
 
     let cluster: Api<Cluster> = Api::namespaced(ctx.client.clone(), &namespace);
     let co = cluster.get(instance_name).await.map_err(|e| {
@@ -2287,7 +2296,7 @@ mod tests {
     #[test]
     fn test_generate_restore_destination_path() {
         // Define test cases
-        let test_cases = vec![
+        let test_cases = [
             (
                 "s3://cdb-plat-use1-dev-instance-backups/coredb/coredb/org-coredb-inst-test-testing-test-1",
                 "s3://cdb-plat-use1-dev-instance-backups/coredb/coredb",

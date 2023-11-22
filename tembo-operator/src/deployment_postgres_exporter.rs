@@ -80,12 +80,13 @@ pub async fn reconcile_prometheus_exporter_deployment(cdb: &CoreDB, ctx: Arc<Con
     };
 
     // Generate ContainerPort for the Container
-    let container_port = vec![ContainerPort {
-        container_port: 9187,
-        name: Some("metrics".to_string()),
-        protocol: Some("TCP".to_string()),
-        ..ContainerPort::default()
-    }];
+    let container_port =
+        vec![ContainerPort {
+            container_port: 9187,
+            name: Some("metrics".to_string()),
+            protocol: Some("TCP".to_string()),
+            ..ContainerPort::default()
+        }];
 
     // Generate SecurityContext for the Container
     let security_context = SecurityContext {
@@ -202,10 +203,11 @@ pub async fn reconcile_prometheus_exporter_deployment(cdb: &CoreDB, ctx: Arc<Con
     };
 
     let ps = PatchParams::apply("cntrlr").force();
-    let _o = deployment_api
-        .patch(&name, &ps, &Patch::Apply(&deployment))
-        .await
-        .map_err(Error::KubeError)?;
+    let _o =
+        deployment_api
+            .patch(&name, &ps, &Patch::Apply(&deployment))
+            .await
+            .map_err(Error::KubeError)?;
 
     Ok(())
 }

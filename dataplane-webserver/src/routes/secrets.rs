@@ -104,9 +104,8 @@ pub async fn get_secret(
         Ok(client) => client,
         Err(_) => {
             error!("Failed to create Kubernetes client");
-            return Ok(
-                HttpResponse::InternalServerError().json("Failed to create Kubernetes client")
-            );
+            return Ok(HttpResponse::InternalServerError()
+                .json("Failed to create Kubernetes client"));
         }
     };
 
@@ -180,9 +179,8 @@ pub async fn get_secret_v1(
         Ok(client) => client,
         Err(_) => {
             error!("Failed to create Kubernetes client");
-            return Ok(
-                HttpResponse::InternalServerError().json("Failed to create Kubernetes client")
-            );
+            return Ok(HttpResponse::InternalServerError()
+                .json("Failed to create Kubernetes client"));
         }
     };
     // Find namespace by labels

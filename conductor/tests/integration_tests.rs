@@ -51,26 +51,27 @@ mod test {
         // wait for conductor to send message to data_plane_events queue
         let mut attempt = 0;
 
-        let msg: Option<Message<StateToControlPlane>> = loop {
-            attempt += 1;
-            if attempt > retries {
-                panic!(
-                    "No message found in data plane queue after - {} - retries",
-                    retries
-                );
-            } else {
-                // read message from data_plane_events queue
-                let msg = queue
-                    .read::<StateToControlPlane>("myqueue_data_plane", 30_i32)
-                    .await
-                    .expect("database error");
-                if msg.is_some() {
-                    break msg;
+        let msg: Option<Message<StateToControlPlane>> =
+            loop {
+                attempt += 1;
+                if attempt > retries {
+                    panic!(
+                        "No message found in data plane queue after - {} - retries",
+                        retries
+                    );
                 } else {
-                    thread::sleep(time::Duration::from_secs(retry_delay_seconds));
-                }
+                    // read message from data_plane_events queue
+                    let msg = queue
+                        .read::<StateToControlPlane>("myqueue_data_plane", 30_i32)
+                        .await
+                        .expect("database error");
+                    if msg.is_some() {
+                        break msg;
+                    } else {
+                        thread::sleep(time::Duration::from_secs(retry_delay_seconds));
+                    }
+                };
             };
-        };
         msg.expect("no message found")
     }
 
@@ -180,17 +181,18 @@ mod test {
 
         let pod_name = format!("{namespace}-1");
 
-        let _check_for_pod = tokio::time::timeout(
-            std::time::Duration::from_secs(timeout_seconds_start_pod),
-            await_condition(pods.clone(), &pod_name, conditions::is_pod_running()),
-        )
-        .await
-        .unwrap_or_else(|_| {
-            panic!(
-                "Did not find the pod {} to be running after waiting {} seconds",
-                pod_name, timeout_seconds_start_pod
+        let _check_for_pod =
+            tokio::time::timeout(
+                std::time::Duration::from_secs(timeout_seconds_start_pod),
+                await_condition(pods.clone(), &pod_name, conditions::is_pod_running()),
             )
-        });
+            .await
+            .unwrap_or_else(|_| {
+                panic!(
+                    "Did not find the pod {} to be running after waiting {} seconds",
+                    pod_name, timeout_seconds_start_pod
+                )
+            });
 
         // wait for conductor to send message to data_plane_events queue
         let retries = 120;

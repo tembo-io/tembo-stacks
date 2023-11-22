@@ -90,9 +90,10 @@ pub fn check_query_only_accesses_namespace(
 
     // Recurse through all terms in the expression to find any terms that specify
     // label matching, and make sure all of them specify the namespace label.
-    let mut visitor = NamespaceVisitor {
-        namespace: namespace.clone(),
-    };
+    let mut visitor =
+        NamespaceVisitor {
+            namespace: namespace.clone(),
+        };
     let all_metrics_specify_namespace = walk_expr(&mut visitor, &abstract_syntax_tree);
 
     // Check if we are performing an unauthorized query.
@@ -108,9 +109,8 @@ pub fn check_query_only_accesses_namespace(
                 "Unauthorized request: namespace '{}', query '{}'",
                 namespace, query
             );
-            return Err(
-                HttpResponse::Forbidden().json("Must include namespace in all vector selectors")
-            );
+            return Err(HttpResponse::Forbidden()
+                .json("Must include namespace in all vector selectors"));
         }
     }
     Ok(query)

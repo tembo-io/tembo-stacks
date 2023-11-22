@@ -12,15 +12,16 @@ pub struct Metrics {
 
 impl Default for Metrics {
     fn default() -> Self {
-        let reconcile_duration = HistogramVec::new(
-            histogram_opts!(
-                "cdb_controller_reconcile_duration_seconds",
-                "The duration of reconcile to complete in seconds"
+        let reconcile_duration =
+            HistogramVec::new(
+                histogram_opts!(
+                    "cdb_controller_reconcile_duration_seconds",
+                    "The duration of reconcile to complete in seconds"
+                )
+                .buckets(vec![0.01, 0.1, 0.25, 0.5, 1., 5., 15., 60.]),
+                &[],
             )
-            .buckets(vec![0.01, 0.1, 0.25, 0.5, 1., 5., 15., 60.]),
-            &[],
-        )
-        .unwrap();
+            .unwrap();
         let failures = IntCounterVec::new(
             opts!(
                 "cbd_controller_reconciliation_errors_total",

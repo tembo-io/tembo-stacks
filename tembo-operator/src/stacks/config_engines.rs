@@ -234,10 +234,7 @@ fn parse_storage(stack: &Stack) -> Result<f64, ValueError> {
     let (storage, unit) = split_string(&storage_str)?;
     match unit.as_str() {
         "Gi" => Ok(storage),
-        _ => Err(ValueError::Invalid(format!(
-            "Invalid storage value: {}",
-            storage_str
-        ))),
+        _ => Err(ValueError::Invalid(format!("Invalid storage value: {}", storage_str))),
     }
 }
 

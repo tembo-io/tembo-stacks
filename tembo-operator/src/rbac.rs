@@ -138,13 +138,14 @@ async fn reconcile_role_binding(
     role: Role,
     suffix: Option<&str>,
 ) -> Result<RoleBinding, Error> {
-    let suffix = suffix.map_or("role-binding".to_owned(), |s| {
-        if s.is_empty() {
-            "role-binding".to_owned()
-        } else {
-            s.to_owned()
-        }
-    });
+    let suffix =
+        suffix.map_or("role-binding".to_owned(), |s| {
+            if s.is_empty() {
+                "role-binding".to_owned()
+            } else {
+                s.to_owned()
+            }
+        });
     let client = ctx.client.clone();
     let ns = cdb.namespace().unwrap();
     let name = format!("{}-{}", cdb.name_any(), suffix);

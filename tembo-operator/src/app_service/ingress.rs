@@ -169,8 +169,10 @@ pub fn generate_ingress_routes(
                 match route.ingress_path.clone() {
                     Some(path) => {
                         let matcher = format!("{host_matcher} && PathPrefix(`{}`)", path);
-                        let middlewares: Option<Vec<IngressRouteRoutesMiddlewares>> =
-                            route.middlewares.clone().map(|names| {
+                        let middlewares: Option<Vec<IngressRouteRoutesMiddlewares>> = route
+                            .middlewares
+                            .clone()
+                            .map(|names| {
                                 names
                                     .into_iter()
                                     .map(|m| IngressRouteRoutesMiddlewares {

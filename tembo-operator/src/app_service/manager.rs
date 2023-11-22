@@ -25,7 +25,6 @@ use super::{
     ingress::{generate_ingress_routes, reconcile_ingress},
     types::{AppService, EnvVarRef, Middleware, COMPONENT_NAME},
 };
-use k8s_openapi::api::core::v1::Volume;
 
 // private wrapper to hold the AppService Resources
 #[derive(Clone, Debug)]
@@ -83,30 +82,31 @@ fn generate_service(
     let mut labels = selector_labels.clone();
     labels.insert("component".to_owned(), COMPONENT_NAME.to_owned());
 
-    let ports = match appsvc.routing.as_ref() {
-        Some(routing) => {
-            // de-dupe any ports because we can have multiple appService routing configs for the same port
-            // but we only need one ServicePort per port
-            let distinct_ports = routing
-                .iter()
-                .map(|r| r.port)
-                .collect::<std::collections::HashSet<u16>>();
+    let ports =
+        match appsvc.routing.as_ref() {
+            Some(routing) => {
+                // de-dupe any ports because we can have multiple appService routing configs for the same port
+                // but we only need one ServicePort per port
+                let distinct_ports = routing
+                    .iter()
+                    .map(|r| r.port)
+                    .collect::<std::collections::HashSet<u16>>();
 
-            let ports: Vec<ServicePort> = distinct_ports
-                .into_iter()
-                .map(|p| ServicePort {
-                    port: p as i32,
-                    // there can be more than one ServicePort per Service
-                    // these must be unique, so we'll use the port number
-                    name: Some(format!("http-{}", p)),
-                    target_port: None,
-                    ..ServicePort::default()
-                })
-                .collect();
-            Some(ports)
-        }
-        None => None,
-    };
+                let ports: Vec<ServicePort> = distinct_ports
+                    .into_iter()
+                    .map(|p| ServicePort {
+                        port: p as i32,
+                        // there can be more than one ServicePort per Service
+                        // these must be unique, so we'll use the port number
+                        name: Some(format!("http-{}", p)),
+                        target_port: None,
+                        ..ServicePort::default()
+                    })
+                    .collect();
+                Some(ports)
+            }
+            None => None,
+        };
     Service {
         metadata: ObjectMeta {
             name: Some(resource_name.to_owned()),
@@ -145,30 +145,31 @@ fn generate_deployment(
         ..ObjectMeta::default()
     };
 
-    let (readiness_probe, liveness_probe) = match appsvc.probes.clone() {
-        Some(probes) => {
-            let readiness_probe = Probe {
-                http_get: Some(HTTPGetAction {
-                    path: Some(probes.readiness.path),
-                    port: IntOrString::String(probes.readiness.port),
-                    ..HTTPGetAction::default()
-                }),
-                initial_delay_seconds: Some(probes.readiness.initial_delay_seconds as i32),
-                ..Probe::default()
-            };
-            let liveness_probe = Probe {
-                http_get: Some(HTTPGetAction {
-                    path: Some(probes.liveness.path),
-                    port: IntOrString::String(probes.liveness.port),
-                    ..HTTPGetAction::default()
-                }),
-                initial_delay_seconds: Some(probes.liveness.initial_delay_seconds as i32),
-                ..Probe::default()
-            };
-            (Some(readiness_probe), Some(liveness_probe))
-        }
-        None => (None, None),
-    };
+    let (readiness_probe, liveness_probe) =
+        match appsvc.probes.clone() {
+            Some(probes) => {
+                let readiness_probe = Probe {
+                    http_get: Some(HTTPGetAction {
+                        path: Some(probes.readiness.path),
+                        port: IntOrString::String(probes.readiness.port),
+                        ..HTTPGetAction::default()
+                    }),
+                    initial_delay_seconds: Some(probes.readiness.initial_delay_seconds as i32),
+                    ..Probe::default()
+                };
+                let liveness_probe = Probe {
+                    http_get: Some(HTTPGetAction {
+                        path: Some(probes.liveness.path),
+                        port: IntOrString::String(probes.liveness.port),
+                        ..HTTPGetAction::default()
+                    }),
+                    initial_delay_seconds: Some(probes.liveness.initial_delay_seconds as i32),
+                    ..Probe::default()
+                };
+                (Some(readiness_probe), Some(liveness_probe))
+            }
+            None => (None, None),
+        };
 
     // container ports
     let container_ports = if let Some(routings) = appsvc.routing.as_ref() {
@@ -176,14 +177,15 @@ fn generate_deployment(
             .iter()
             .map(|r| r.port)
             .collect::<std::collections::HashSet<u16>>();
-        let container_ports: Vec<ContainerPort> = distinct_ports
-            .into_iter()
-            .map(|p| ContainerPort {
-                container_port: p as i32,
-                protocol: Some("TCP".to_string()),
-                ..ContainerPort::default()
-            })
-            .collect();
+        let container_ports: Vec<ContainerPort> =
+            distinct_ports
+                .into_iter()
+                .map(|p| ContainerPort {
+                    container_port: p as i32,
+                    protocol: Some("TCP".to_string()),
+                    ..ContainerPort::default()
+                })
+                .collect();
         Some(container_ports)
     } else {
         None
@@ -455,16 +457,17 @@ pub async fn reconcile_app_services(cdb: &CoreDB, ctx: Arc<Context>) -> Result<(
     let deployment_api: Api<Deployment> = Api::namespaced(client.clone(), &ns);
     let service_api: Api<Service> = Api::namespaced(client.clone(), &ns);
 
-    let desired_deployments = match cdb.spec.app_services.clone() {
-        Some(appsvcs) => appsvcs
-            .iter()
-            .map(|a| format!("{}-{}", coredb_name, a.name.clone()))
-            .collect(),
-        None => {
-            debug!("No AppServices found in Instance: {}", ns);
-            vec![]
-        }
-    };
+    let desired_deployments =
+        match cdb.spec.app_services.clone() {
+            Some(appsvcs) => appsvcs
+                .iter()
+                .map(|a| format!("{}-{}", coredb_name, a.name.clone()))
+                .collect(),
+            None => {
+                debug!("No AppServices found in Instance: {}", ns);
+                vec![]
+            }
+        };
 
     // only deploy the Kubernetes Service when there are routing configurations
     // we need one service per PORT, not necessarily 1 per AppService route
@@ -537,13 +540,14 @@ pub async fn reconcile_app_services(cdb: &CoreDB, ctx: Arc<Context>) -> Result<(
         }
     }
 
-    let appsvcs = match cdb.spec.app_services.clone() {
-        Some(appsvcs) => appsvcs,
-        None => {
-            debug!("ns: {}, No AppServices found in spec", ns);
-            vec![]
-        }
-    };
+    let appsvcs =
+        match cdb.spec.app_services.clone() {
+            Some(appsvcs) => appsvcs,
+            None => {
+                debug!("ns: {}, No AppServices found in spec", ns);
+                vec![]
+            }
+        };
 
     let domain = match std::env::var("DATA_PLANE_BASEDOMAIN") {
         Ok(domain) => domain,
@@ -558,11 +562,12 @@ pub async fn reconcile_app_services(cdb: &CoreDB, ctx: Arc<Context>) -> Result<(
         .collect();
     let apply_errored = apply_resources(resources.clone(), &client, &ns).await;
 
-    let desired_routes: Vec<IngressRouteRoutes> = resources
-        .iter()
-        .filter_map(|r| r.ingress_routes.clone())
-        .flatten()
-        .collect();
+    let desired_routes: Vec<IngressRouteRoutes> =
+        resources
+            .iter()
+            .filter_map(|r| r.ingress_routes.clone())
+            .flatten()
+            .collect();
 
     let desired_middlewares = appsvcs
         .iter()

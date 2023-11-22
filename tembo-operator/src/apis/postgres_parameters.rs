@@ -250,9 +250,7 @@ impl FromStr for ConfigValue {
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         if s.contains(',') {
-            Ok(ConfigValue::Multiple(
-                s.split(',').map(|s| s.to_string()).collect(),
-            ))
+            Ok(ConfigValue::Multiple(s.split(',').map(|s| s.to_string()).collect()))
         } else {
             Ok(ConfigValue::Single(s.to_string()))
         }
@@ -382,10 +380,11 @@ mod pg_param_tests {
 
     #[test]
     fn test_pg_config() {
-        let pg_config = PgConfig {
-            name: "max_parallel_workers".to_string(),
-            value: "32".parse().unwrap(),
-        };
+        let pg_config =
+            PgConfig {
+                name: "max_parallel_workers".to_string(),
+                value: "32".parse().unwrap(),
+            };
         assert_eq!(pg_config.to_postgres(), "max_parallel_workers = '32'");
         let pg_config_multi = PgConfig {
             name: "shared_preload_libraries".to_string(),
@@ -520,10 +519,11 @@ mod pg_param_tests {
     #[test]
     fn test_serialization() {
         // assert a PgConfig can be serialized and deserialized
-        let pgc = PgConfig {
-            name: "shared_preload_libraries".to_string(),
-            value: "a,b,c".parse().unwrap(),
-        };
+        let pgc =
+            PgConfig {
+                name: "shared_preload_libraries".to_string(),
+                value: "a,b,c".parse().unwrap(),
+            };
         match pgc.clone().value {
             ConfigValue::Multiple(set) => {
                 assert_eq!(set.len(), 3);

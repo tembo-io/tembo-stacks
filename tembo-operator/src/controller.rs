@@ -892,80 +892,81 @@ mod test {
     async fn test_process_backups_multiple_backups() {
         let coredb = CoreDB::test();
 
-        let backup_list = vec![
-            Backup {
-                metadata: ObjectMeta {
-                    name: Some("backup-1".to_string()),
-                    namespace: Some("test".to_string()),
-                    ..Default::default()
-                },
-                spec: BackupSpec {
-                    cluster: Some(BackupCluster {
-                        name: "backup-1".to_string(),
+        let backup_list =
+            vec![
+                Backup {
+                    metadata: ObjectMeta {
+                        name: Some("backup-1".to_string()),
+                        namespace: Some("test".to_string()),
+                        ..Default::default()
+                    },
+                    spec: BackupSpec {
+                        cluster: Some(BackupCluster {
+                            name: "backup-1".to_string(),
+                        }),
+                        ..Default::default()
+                    },
+                    status: Some(BackupStatus {
+                        phase: Some("completed".to_string()),
+                        stopped_at: Some("2023-09-19T23:14:00Z".to_string()),
+                        ..Default::default()
                     }),
-                    ..Default::default()
                 },
-                status: Some(BackupStatus {
-                    phase: Some("completed".to_string()),
-                    stopped_at: Some("2023-09-19T23:14:00Z".to_string()),
-                    ..Default::default()
-                }),
-            },
-            Backup {
-                metadata: ObjectMeta {
-                    name: Some("backup-2".to_string()),
-                    namespace: Some("test".to_string()),
-                    ..Default::default()
-                },
-                spec: BackupSpec {
-                    cluster: Some(BackupCluster {
-                        name: "backup-2".to_string(),
+                Backup {
+                    metadata: ObjectMeta {
+                        name: Some("backup-2".to_string()),
+                        namespace: Some("test".to_string()),
+                        ..Default::default()
+                    },
+                    spec: BackupSpec {
+                        cluster: Some(BackupCluster {
+                            name: "backup-2".to_string(),
+                        }),
+                        ..Default::default()
+                    },
+                    status: Some(BackupStatus {
+                        phase: Some("completed".to_string()),
+                        stopped_at: Some("2023-09-18T22:12:00Z".to_string()), // This is the oldest
+                        ..Default::default()
                     }),
-                    ..Default::default()
                 },
-                status: Some(BackupStatus {
-                    phase: Some("completed".to_string()),
-                    stopped_at: Some("2023-09-18T22:12:00Z".to_string()), // This is the oldest
-                    ..Default::default()
-                }),
-            },
-            Backup {
-                metadata: ObjectMeta {
-                    name: Some("backup-3".to_string()),
-                    namespace: Some("test".to_string()),
-                    ..Default::default()
-                },
-                spec: BackupSpec {
-                    cluster: Some(BackupCluster {
-                        name: "backup-3".to_string(),
+                Backup {
+                    metadata: ObjectMeta {
+                        name: Some("backup-3".to_string()),
+                        namespace: Some("test".to_string()),
+                        ..Default::default()
+                    },
+                    spec: BackupSpec {
+                        cluster: Some(BackupCluster {
+                            name: "backup-3".to_string(),
+                        }),
+                        ..Default::default()
+                    },
+                    status: Some(BackupStatus {
+                        phase: Some("completed".to_string()),
+                        stopped_at: Some("2023-09-19T21:11:00Z".to_string()),
+                        ..Default::default()
                     }),
-                    ..Default::default()
                 },
-                status: Some(BackupStatus {
-                    phase: Some("completed".to_string()),
-                    stopped_at: Some("2023-09-19T21:11:00Z".to_string()),
-                    ..Default::default()
-                }),
-            },
-            Backup {
-                metadata: ObjectMeta {
-                    name: Some("backup-4".to_string()),
-                    namespace: Some("test".to_string()),
-                    ..Default::default()
-                },
-                spec: BackupSpec {
-                    cluster: Some(BackupCluster {
-                        name: "backup-4".to_string(),
+                Backup {
+                    metadata: ObjectMeta {
+                        name: Some("backup-4".to_string()),
+                        namespace: Some("test".to_string()),
+                        ..Default::default()
+                    },
+                    spec: BackupSpec {
+                        cluster: Some(BackupCluster {
+                            name: "backup-4".to_string(),
+                        }),
+                        ..Default::default()
+                    },
+                    status: Some(BackupStatus {
+                        phase: Some("failed".to_string()),
+                        stopped_at: Some("2023-09-19T21:11:00Z".to_string()),
+                        ..Default::default()
                     }),
-                    ..Default::default()
                 },
-                status: Some(BackupStatus {
-                    phase: Some("failed".to_string()),
-                    stopped_at: Some("2023-09-19T21:11:00Z".to_string()),
-                    ..Default::default()
-                }),
-            },
-        ];
+            ];
 
         let oldest_backup_time = coredb.process_backups(backup_list);
 

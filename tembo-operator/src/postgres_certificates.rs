@@ -63,19 +63,20 @@ pub async fn reconcile_certificates(client: Client, coredb: &CoreDB, namespace: 
         "type": "Opaque"
     });
     let ps = PatchParams::apply("cntrlr").force();
-    let _o = match secrets_api
-        .patch(&secret_name, &ps, &Patch::Apply(&new_secret))
-        .await
-    {
-        Ok(_secret) => _secret,
-        Err(e) => {
-            error!(
-                "Failed to apply CA certificate secret from cert-manager namespace to namespace {}, {}",
-                namespace, e
-            );
-            return Err(Action::requeue(Duration::from_secs(300)));
-        }
-    };
+    let _o =
+        match secrets_api
+            .patch(&secret_name, &ps, &Patch::Apply(&new_secret))
+            .await
+        {
+            Ok(_secret) => _secret,
+            Err(e) => {
+                error!(
+                    "Failed to apply CA certificate secret from cert-manager namespace to namespace {}, {}",
+                    namespace, e
+                );
+                return Err(Action::requeue(Duration::from_secs(300)));
+            }
+        };
 
     let common_name = format!("{}-rw", coredb_name);
     let mut dns_names = vec![

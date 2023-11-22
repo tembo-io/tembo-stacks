@@ -35,125 +35,128 @@ pub async fn reconcile_network_policies(client: Client, namespace: &str) -> Resu
     });
     apply_network_policy(namespace, &np_api, deny_all).await?;
 
-    let allow_dns = serde_json::json!({
-        "apiVersion": "networking.k8s.io/v1",
-        "kind": "NetworkPolicy",
-        "metadata": {
-          "name": "allow-egress-to-kube-dns",
-          "namespace": format!("{namespace}"),
-        },
-        "spec": {
-          "podSelector": {},
-          "policyTypes": [
-            "Egress"
-          ],
-          "egress": [
-            {
-              "to": [
-                {
-                  "podSelector": {
-                    "matchLabels": {
-                      "k8s-app": "kube-dns"
-                    }
-                  },
-                  "namespaceSelector": {
-                    "matchLabels": {
-                      "kubernetes.io/metadata.name": "kube-system"
-                    }
-                  }
-                }
+    let allow_dns =
+        serde_json::json!({
+            "apiVersion": "networking.k8s.io/v1",
+            "kind": "NetworkPolicy",
+            "metadata": {
+              "name": "allow-egress-to-kube-dns",
+              "namespace": format!("{namespace}"),
+            },
+            "spec": {
+              "podSelector": {},
+              "policyTypes": [
+                "Egress"
               ],
-              "ports": [
+              "egress": [
                 {
-                  "protocol": "UDP",
-                  "port": 53
-                },
-                {
-                  "protocol": "TCP",
-                  "port": 53
+                  "to": [
+                    {
+                      "podSelector": {
+                        "matchLabels": {
+                          "k8s-app": "kube-dns"
+                        }
+                      },
+                      "namespaceSelector": {
+                        "matchLabels": {
+                          "kubernetes.io/metadata.name": "kube-system"
+                        }
+                      }
+                    }
+                  ],
+                  "ports": [
+                    {
+                      "protocol": "UDP",
+                      "port": 53
+                    },
+                    {
+                      "protocol": "TCP",
+                      "port": 53
+                    }
+                  ]
                 }
               ]
             }
-          ]
-        }
-    });
+        });
     apply_network_policy(namespace, &np_api, allow_dns).await?;
 
     // Namespaces that should be allowed to access an instance namespace
-    let allow_system_ingress = serde_json::json!({
-        "apiVersion": "networking.k8s.io/v1",
-        "kind": "NetworkPolicy",
-        "metadata": {
-          "name": "allow-system",
-          "namespace": format!("{namespace}"),
-        },
-        "spec": {
-          "podSelector": {},
-          "policyTypes": ["Ingress"],
-          "ingress": [
-            {
-              "from": [
+    let allow_system_ingress =
+        serde_json::json!({
+            "apiVersion": "networking.k8s.io/v1",
+            "kind": "NetworkPolicy",
+            "metadata": {
+              "name": "allow-system",
+              "namespace": format!("{namespace}"),
+            },
+            "spec": {
+              "podSelector": {},
+              "policyTypes": ["Ingress"],
+              "ingress": [
                 {
-                  "namespaceSelector": {
-                    "matchLabels": {
-                      "kubernetes.io/metadata.name": "monitoring"
+                  "from": [
+                    {
+                      "namespaceSelector": {
+                        "matchLabels": {
+                          "kubernetes.io/metadata.name": "monitoring"
+                        }
+                      }
+                    },
+                    {
+                      "namespaceSelector": {
+                        "matchLabels": {
+                          "kubernetes.io/metadata.name": "cnpg-system"
+                        }
+                      }
+                    },
+                    {
+                      "namespaceSelector": {
+                        "matchLabels": {
+                          "kubernetes.io/metadata.name": "coredb-operator"
+                        }
+                      }
+                    },
+                    {
+                      "namespaceSelector": {
+                        "matchLabels": {
+                          "kubernetes.io/metadata.name": "traefik"
+                        }
+                      }
                     }
-                  }
-                },
-                {
-                  "namespaceSelector": {
-                    "matchLabels": {
-                      "kubernetes.io/metadata.name": "cnpg-system"
-                    }
-                  }
-                },
-                {
-                  "namespaceSelector": {
-                    "matchLabels": {
-                      "kubernetes.io/metadata.name": "coredb-operator"
-                    }
-                  }
-                },
-                {
-                  "namespaceSelector": {
-                    "matchLabels": {
-                      "kubernetes.io/metadata.name": "traefik"
-                    }
-                  }
+                  ]
                 }
               ]
             }
-          ]
-        }
-    });
+        });
     apply_network_policy(namespace, &np_api, allow_system_ingress).await?;
 
     // Namespaces that should be accessible from instance namespaces
-    let allow_system_egress = serde_json::json!({
-        "apiVersion": "networking.k8s.io/v1",
-        "kind": "NetworkPolicy",
-        "metadata": {
-          "name": "allow-system-egress",
-          "namespace": format!("{namespace}"),
-        },
-        "spec": {
-          "podSelector": {},
-          "policyTypes": ["Egress"],
-          "egress": [
-            {
-              "to": [
+    let allow_system_egress =
+        serde_json::json!({
+            "apiVersion": "networking.k8s.io/v1",
+            "kind": "NetworkPolicy",
+            "metadata": {
+              "name": "allow-system-egress",
+              "namespace": format!("{namespace}"),
+            },
+            "spec": {
+              "podSelector": {},
+              "policyTypes": ["Egress"],
+              "egress": [
                 {
-                  "namespaceSelector": {
-                    "matchLabels": {
-                      "kubernetes.io/metadata.name": "minio"
+                  "to": [
+                    {
+                      "namespaceSelector": {
+                        "matchLabels": {
+                          "kubernetes.io/metadata.name": "minio"
+                        }
+                      }
                     }
-                  }
+                  ]
                 }
               ]
             }
-          ]
-        }
-    });
+        });
     apply_network_policy(namespace, &np_api, allow_system_egress).await?;
 
     let allow_public_internet = serde_json::json!({

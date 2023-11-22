@@ -56,10 +56,12 @@ pub async fn reconcile_heartbeat(coredb: &CoreDB, ctx: Arc<Context>) -> Result<(
     // Match to make sure the HEARTBEAT_FUNCTION is installed on the database instance, requeue if
     // it fails for some reason.
     match setup_heartbeat(coredb, ctx.clone()).await {
-        Ok(_) => debug!(
-            "Successfully created setup_heartbeat function on instance {}",
-            coredb.name_any()
-        ),
+        Ok(_) => {
+            debug!(
+                "Successfully created setup_heartbeat function on instance {}",
+                coredb.name_any()
+            )
+        }
         Err(e) => {
             warn!("Did not create setup_heartbeat function, will requeue: {:?}", e);
             return Err(Action::requeue(Duration::from_secs(30)));

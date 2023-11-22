@@ -94,15 +94,16 @@ pub async fn reconcile_extra_postgres_ing_route_tcp(
     let ingress_route_tcp_name = format!("extra-{}-rw", cdb.name_any());
     let owner_reference = cdb.controller_owner_ref(&()).unwrap();
 
-    let ingress_route_tcp_to_apply = postgres_ingress_route_tcp(
-        ingress_route_tcp_name.clone(),
-        namespace.to_string(),
-        owner_reference,
-        matcher_actual,
-        service_name_read_write.to_string(),
-        middleware_names,
-        port,
-    );
+    let ingress_route_tcp_to_apply =
+        postgres_ingress_route_tcp(
+            ingress_route_tcp_name.clone(),
+            namespace.to_string(),
+            owner_reference,
+            matcher_actual,
+            service_name_read_write.to_string(),
+            middleware_names,
+            port,
+        );
     let ingress_route_tcp_api: Api<IngressRouteTCP> = Api::namespaced(ctx.client.clone(), namespace);
     if !extra_domain_names.is_empty() {
         apply_ingress_route_tcp(
@@ -372,15 +373,16 @@ pub async fn reconcile_postgres_ing_route_tcp(
         }
         let ingress_route_tcp_name_new = ingress_route_tcp_name_new;
 
-        let ingress_route_tcp_to_apply = postgres_ingress_route_tcp(
-            ingress_route_tcp_name_new.clone(),
-            namespace.to_string(),
-            owner_reference.clone(),
-            newest_matcher.clone(),
-            service_name.to_string(),
-            middleware_names.clone(),
-            port.clone(),
-        );
+        let ingress_route_tcp_to_apply =
+            postgres_ingress_route_tcp(
+                ingress_route_tcp_name_new.clone(),
+                namespace.to_string(),
+                owner_reference.clone(),
+                newest_matcher.clone(),
+                service_name.to_string(),
+                middleware_names.clone(),
+                port.clone(),
+            );
         // Apply this ingress route tcp
         apply_ingress_route_tcp(
             ingress_route_tcp_api.clone(),
@@ -456,12 +458,13 @@ pub async fn reconcile_postgres_ing_route_tcp(
 }
 
 fn generate_ip_allow_list_middleware_tcp(cdb: &CoreDB) -> MiddlewareTCP {
-    let source_range = match cdb.spec.ip_allow_list.clone() {
-        None => {
-            vec![]
-        }
-        Some(ips) => ips,
-    };
+    let source_range =
+        match cdb.spec.ip_allow_list.clone() {
+            None => {
+                vec![]
+            }
+            Some(ips) => ips,
+        };
 
     let mut valid_ips = valid_cidrs(&source_range);
 
@@ -566,18 +569,19 @@ mod tests {
 
     #[test]
     fn test_mixed_ips() {
-        let cdb = CoreDB {
-            metadata: ObjectMeta::default(),
-            spec: CoreDBSpec {
-                ip_allow_list: Some(vec![
-                    "10.0.0.1".to_string(),
-                    "192.168.1.0/24".to_string(),
-                    "10.0.0.255".to_string(),
-                ]),
-                ..CoreDBSpec::default()
-            },
-            status: None,
-        };
+        let cdb =
+            CoreDB {
+                metadata: ObjectMeta::default(),
+                spec: CoreDBSpec {
+                    ip_allow_list: Some(vec![
+                        "10.0.0.1".to_string(),
+                        "192.168.1.0/24".to_string(),
+                        "10.0.0.255".to_string(),
+                    ]),
+                    ..CoreDBSpec::default()
+                },
+                status: None,
+            };
         let result = generate_ip_allow_list_middleware_tcp(&cdb);
         // Add assertions to ensure that the middleware contains the correct IPs and not the invalid one
         let source_range = result.spec.ip_allow_list.clone().unwrap().source_range.unwrap();

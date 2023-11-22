@@ -76,13 +76,14 @@ async fn send_status_update(
             return Ok(());
         }
     };
-    let data_plane_events_queue = match env::var("DATA_PLANE_EVENTS_QUEUE") {
-        Ok(data_plane_events_queue) => data_plane_events_queue,
-        Err(_) => {
-            error!("DATA_PLANE_EVENTS_QUEUE is not set, skipping status update");
-            return Ok(());
-        }
-    };
+    let data_plane_events_queue =
+        match env::var("DATA_PLANE_EVENTS_QUEUE") {
+            Ok(data_plane_events_queue) => data_plane_events_queue,
+            Err(_) => {
+                error!("DATA_PLANE_EVENTS_QUEUE is not set, skipping status update");
+                return Ok(());
+            }
+        };
     let org_inst = match get_org_inst_id(&coredb) {
         Ok(org_inst) => org_inst,
         Err(_) => {

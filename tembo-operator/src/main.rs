@@ -29,10 +29,11 @@ async fn app_main() -> anyhow::Result<()> {
     let state = State::default();
     let controller = controller::run(state.clone());
 
-    let server_port = std::env::var("PORT")
-        .unwrap_or_else(|_| String::from("8080"))
-        .parse::<u16>()
-        .unwrap_or(8080);
+    let server_port =
+        std::env::var("PORT")
+            .unwrap_or_else(|_| String::from("8080"))
+            .parse::<u16>()
+            .unwrap_or(8080);
 
     // Start web server
     let server = HttpServer::new(move || {
@@ -52,9 +53,10 @@ async fn app_main() -> anyhow::Result<()> {
 }
 
 fn main() -> anyhow::Result<()> {
-    let rt = tokio::runtime::Builder::new_multi_thread()
-        .enable_all()
-        .thread_stack_size(4 * 1024 * 1024)
-        .build()?;
+    let rt =
+        tokio::runtime::Builder::new_multi_thread()
+            .enable_all()
+            .thread_stack_size(4 * 1024 * 1024)
+            .build()?;
     rt.block_on(app_main())
 }

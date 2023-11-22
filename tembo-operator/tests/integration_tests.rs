@@ -440,11 +440,12 @@ mod test {
 
     async fn wait_until_status_not_running(coredbs: &Api<CoreDB>, name: &str) -> Result<(), kube::Error> {
         const TIMEOUT_SECONDS_STATUS_RUNNING: u32 = 294;
-        let wp = WatchParams {
-            timeout: Some(TIMEOUT_SECONDS_STATUS_RUNNING),
-            field_selector: Some(format!("metadata.name={}", name)),
-            ..Default::default()
-        };
+        let wp =
+            WatchParams {
+                timeout: Some(TIMEOUT_SECONDS_STATUS_RUNNING),
+                field_selector: Some(format!("metadata.name={}", name)),
+                ..Default::default()
+            };
         let mut stream = coredbs.watch(&wp, "0").await?.boxed();
 
         let result = timeout(Duration::from_secs(300), async {
@@ -547,13 +548,14 @@ mod test {
         let mut rng = rand::thread_rng();
         let suffix = rng.gen_range(0..100000);
         let name = &format!("test-coredb-{}", suffix);
-        let namespace = match create_namespace(client.clone(), name).await {
-            Ok(namespace) => namespace,
-            Err(e) => {
-                eprintln!("Error creating namespace: {}", e);
-                std::process::exit(1);
-            }
-        };
+        let namespace =
+            match create_namespace(client.clone(), name).await {
+                Ok(namespace) => namespace,
+                Err(e) => {
+                    eprintln!("Error creating namespace: {}", e);
+                    std::process::exit(1);
+                }
+            };
 
         let kind = "CoreDB";
         let replicas = 1;
@@ -565,31 +567,32 @@ mod test {
         println!("Creating CoreDB resource {}", name);
         let coredbs: Api<CoreDB> = Api::namespaced(client.clone(), &namespace);
         // Generate basic CoreDB resource to start with
-        let coredb_json = serde_json::json!({
-            "apiVersion": API_VERSION,
-            "kind": kind,
-            "metadata": {
-                "name": name
-            },
-            "spec": {
-                "replicas": replicas,
-                "extensions": [{
-                        // Try including an extension
-                        // without specifying a schema
-                        "name": "pg_jsonschema",
-                        "description": "fake description",
-                        "locations": [{
-                            "enabled": true,
-                            "version": "0.1.4",
-                            "database": "postgres",
+        let coredb_json =
+            serde_json::json!({
+                "apiVersion": API_VERSION,
+                "kind": kind,
+                "metadata": {
+                    "name": name
+                },
+                "spec": {
+                    "replicas": replicas,
+                    "extensions": [{
+                            // Try including an extension
+                            // without specifying a schema
+                            "name": "pg_jsonschema",
+                            "description": "fake description",
+                            "locations": [{
+                                "enabled": true,
+                                "version": "0.1.4",
+                                "database": "postgres",
+                            }],
                         }],
-                    }],
-                "trunk_installs": [{
-                        "name": "pg_jsonschema",
-                        "version": "0.1.4",
-                }]
-            }
-        });
+                    "trunk_installs": [{
+                            "name": "pg_jsonschema",
+                            "version": "0.1.4",
+                    }]
+                }
+            });
         let params = PatchParams::apply("tembo-integration-test");
         let patch = Patch::Apply(&coredb_json);
         let coredb_resource = coredbs.patch(name, &params, &patch).await.unwrap();
@@ -694,13 +697,14 @@ mod test {
         let mut rng = rand::thread_rng();
         let suffix = rng.gen_range(0..100000);
         let name = &format!("test-coredb-{}", suffix);
-        let namespace = match create_namespace(client.clone(), name).await {
-            Ok(namespace) => namespace,
-            Err(e) => {
-                eprintln!("Error creating namespace: {}", e);
-                std::process::exit(1);
-            }
-        };
+        let namespace =
+            match create_namespace(client.clone(), name).await {
+                Ok(namespace) => namespace,
+                Err(e) => {
+                    eprintln!("Error creating namespace: {}", e);
+                    std::process::exit(1);
+                }
+            };
         let kind = "CoreDB";
         let replicas = 1;
 
@@ -862,14 +866,15 @@ mod test {
         println!("{}", result.stdout.clone().unwrap());
         assert!(result.stdout.clone().unwrap().contains("customers"));
 
-        let result = wait_until_psql_contains(
-            context.clone(),
-            coredb_resource.clone(),
-            "select * from pg_extension;".to_string(),
-            "aggs_for_vecs".to_string(),
-            false,
-        )
-        .await;
+        let result =
+            wait_until_psql_contains(
+                context.clone(),
+                coredb_resource.clone(),
+                "select * from pg_extension;".to_string(),
+                "aggs_for_vecs".to_string(),
+                false,
+            )
+            .await;
 
         println!("{}", result.stdout.clone().unwrap());
         assert!(result.stdout.clone().unwrap().contains("aggs_for_vecs"));
@@ -904,51 +909,54 @@ mod test {
             "-qO-".to_owned(),
             "http://localhost:9187/metrics".to_owned(),
         ];
-        let result_stdout = run_command_in_container(
-            pods.clone(),
-            exporter_pod_name.to_string(),
-            c,
-            Some("postgres-exporter".to_string()),
-        )
-        .await;
+        let result_stdout =
+            run_command_in_container(
+                pods.clone(),
+                exporter_pod_name.to_string(),
+                c,
+                Some("postgres-exporter".to_string()),
+            )
+            .await;
         assert!(result_stdout.contains(&test_metric_decr));
 
         // Assert we can drop an extension after its been created
-        let coredb_json = serde_json::json!({
-            "apiVersion": API_VERSION,
-            "kind": kind,
-            "metadata": {
-                "name": name
-            },
-            "spec": {
-                "replicas": replicas,
-                "extensions": [
-                    {
-                        "name": "aggs_for_vecs",
-                        "description": "aggs_for_vecs extension",
-                        "locations": [{
-                            "enabled": false,
-                            "version": "1.3.0",
-                            "database": "postgres",
-                            "schema": "public"}
-                        ]
-                    }]
-            }
-        });
+        let coredb_json =
+            serde_json::json!({
+                "apiVersion": API_VERSION,
+                "kind": kind,
+                "metadata": {
+                    "name": name
+                },
+                "spec": {
+                    "replicas": replicas,
+                    "extensions": [
+                        {
+                            "name": "aggs_for_vecs",
+                            "description": "aggs_for_vecs extension",
+                            "locations": [{
+                                "enabled": false,
+                                "version": "1.3.0",
+                                "database": "postgres",
+                                "schema": "public"}
+                            ]
+                        }]
+                }
+            });
 
         // Apply crd with extension disabled
         let params = PatchParams::apply("coredb-integration-test");
         let patch = Patch::Apply(&coredb_json);
         let coredb_resource = coredbs.patch(name, &params, &patch).await.unwrap();
 
-        let result = wait_until_psql_contains(
-            context.clone(),
-            coredb_resource.clone(),
-            "select extname from pg_catalog.pg_extension;".to_string(),
-            "aggs_for_vecs".to_string(),
-            true,
-        )
-        .await;
+        let result =
+            wait_until_psql_contains(
+                context.clone(),
+                coredb_resource.clone(),
+                "select extname from pg_catalog.pg_extension;".to_string(),
+                "aggs_for_vecs".to_string(),
+                true,
+            )
+            .await;
 
         assert!(
             !result.stdout.clone().unwrap().contains("aggs_for_vecs"),
@@ -1029,13 +1037,14 @@ mod test {
         let mut rng = rand::thread_rng();
         let suffix = rng.gen_range(0..100000);
         let name = &format!("test-coredb-{}", suffix);
-        let namespace = match create_namespace(client.clone(), name).await {
-            Ok(namespace) => namespace,
-            Err(e) => {
-                eprintln!("Error creating namespace: {}", e);
-                std::process::exit(1);
-            }
-        };
+        let namespace =
+            match create_namespace(client.clone(), name).await {
+                Ok(namespace) => namespace,
+                Err(e) => {
+                    eprintln!("Error creating namespace: {}", e);
+                    std::process::exit(1);
+                }
+            };
 
         let kind = "CoreDB";
         let replicas = 1;
@@ -1132,14 +1141,15 @@ mod test {
 
         println!("Waiting to install extension pgmq");
 
-        let result = wait_until_psql_contains(
-            context.clone(),
-            coredb_resource.clone(),
-            "select extname from pg_catalog.pg_extension;".to_string(),
-            "pgmq".to_string(),
-            false,
-        )
-        .await;
+        let result =
+            wait_until_psql_contains(
+                context.clone(),
+                coredb_resource.clone(),
+                "select extname from pg_catalog.pg_extension;".to_string(),
+                "pgmq".to_string(),
+                false,
+            )
+            .await;
 
         println!("{}", result.stdout.clone().unwrap());
         assert!(result.stdout.clone().unwrap().contains("pgmq"));
@@ -1151,13 +1161,14 @@ mod test {
 
         // To restart the CNPG pod we need to annotate the Cluster resource with
         // kubectl.kubernetes.io/restartedAt: <timestamp>
-        let patch_json = serde_json::json!({
-            "metadata": {
-                "annotations": {
-                    "kubectl.kubernetes.io/restartedAt": restart
+        let patch_json =
+            serde_json::json!({
+                "metadata": {
+                    "annotations": {
+                        "kubectl.kubernetes.io/restartedAt": restart
+                    }
                 }
-            }
-        });
+            });
 
 
         // Use the patch method to update the Cluster resource
@@ -1165,14 +1176,15 @@ mod test {
         let patch = Patch::Merge(patch_json);
         let _patch = cluster.patch(name, &params, &patch);
 
-        let _result = wait_until_psql_contains(
-            context.clone(),
-            coredb_resource.clone(),
-            "show shared_preload_libraries;".to_string(),
-            "pg_partman_bgw".to_string(),
-            false,
-        )
-        .await;
+        let _result =
+            wait_until_psql_contains(
+                context.clone(),
+                coredb_resource.clone(),
+                "show shared_preload_libraries;".to_string(),
+                "pg_partman_bgw".to_string(),
+                false,
+            )
+            .await;
 
         // Assert that shared_preload_libraries contains pg_stat_statements
         // and pg_partman_bgw
@@ -1225,13 +1237,14 @@ mod test {
         let mut rng = rand::thread_rng();
         let suffix = rng.gen_range(0..100000);
         let name = &format!("test-coredb-{}", suffix);
-        let namespace = match create_namespace(client.clone(), name).await {
-            Ok(namespace) => namespace,
-            Err(e) => {
-                eprintln!("Error creating namespace: {}", e);
-                std::process::exit(1);
-            }
-        };
+        let namespace =
+            match create_namespace(client.clone(), name).await {
+                Ok(namespace) => namespace,
+                Err(e) => {
+                    eprintln!("Error creating namespace: {}", e);
+                    std::process::exit(1);
+                }
+            };
         let kind = "CoreDB";
         let replicas = 1;
 
@@ -1241,19 +1254,20 @@ mod test {
         // Apply a basic configuration of CoreDB
         println!("Creating CoreDB resource {}", name);
         let coredbs: Api<CoreDB> = Api::namespaced(client.clone(), &namespace);
-        let coredb_json = serde_json::json!({
-            "apiVersion": API_VERSION,
-            "kind": kind,
-            "metadata": {
-                "name": name,
-                "annotations": {
-                    "coredbs.coredb.io/watch": "false"
+        let coredb_json =
+            serde_json::json!({
+                "apiVersion": API_VERSION,
+                "kind": kind,
+                "metadata": {
+                    "name": name,
+                    "annotations": {
+                        "coredbs.coredb.io/watch": "false"
+                    }
+                },
+                "spec": {
+                    "replicas": replicas,
                 }
-            },
-            "spec": {
-                "replicas": replicas,
-            }
-        });
+            });
         let params = PatchParams::apply("coredb-integration-test-skip-reconciliation");
         let patch = Patch::Apply(&coredb_json);
         let _coredb_resource = coredbs.patch(name, &params, &patch).await.unwrap();
@@ -1306,13 +1320,14 @@ mod test {
         let mut rng = rand::thread_rng();
         let suffix = rng.gen_range(0..100000);
         let name = &format!("test-coredb-{}", suffix);
-        let namespace = match create_namespace(client.clone(), name).await {
-            Ok(namespace) => namespace,
-            Err(e) => {
-                eprintln!("Error creating namespace: {}", e);
-                std::process::exit(1);
-            }
-        };
+        let namespace =
+            match create_namespace(client.clone(), name).await {
+                Ok(namespace) => namespace,
+                Err(e) => {
+                    eprintln!("Error creating namespace: {}", e);
+                    std::process::exit(1);
+                }
+            };
         let replicas = 1;
 
         let ns_api: Api<Namespace> = Api::all(client.clone());
@@ -1320,33 +1335,34 @@ mod test {
         // Create coredb
         println!("Creating CoreDB resource {}", name);
         let coredbs: Api<CoreDB> = Api::namespaced(client.clone(), &namespace);
-        let coredb_json = serde_json::json!({
-            "apiVersion": API_VERSION,
-            "kind": "CoreDB",
-            "metadata": {
-                "name": name
-            },
-            "spec": {
-                "replicas": replicas,
-                "trunk_installs": [
-                    {
-                        "name": "aggs_for_vecs",
-                        "version": "1.3.0",
-                    },
-                ],
-                "extensions": [
-                    {
-                        "name": "aggs_for_vecs",
-                        "description": "aggs_for_vecs extension",
-                        "locations": [{
-                            "enabled": false,
+        let coredb_json =
+            serde_json::json!({
+                "apiVersion": API_VERSION,
+                "kind": "CoreDB",
+                "metadata": {
+                    "name": name
+                },
+                "spec": {
+                    "replicas": replicas,
+                    "trunk_installs": [
+                        {
+                            "name": "aggs_for_vecs",
                             "version": "1.3.0",
-                            "database": "postgres",
-                            "schema": "public"}
-                        ]
-                    }]
-            }
-        });
+                        },
+                    ],
+                    "extensions": [
+                        {
+                            "name": "aggs_for_vecs",
+                            "description": "aggs_for_vecs extension",
+                            "locations": [{
+                                "enabled": false,
+                                "version": "1.3.0",
+                                "database": "postgres",
+                                "schema": "public"}
+                            ]
+                        }]
+                }
+            });
         let params = PatchParams::apply("tembo-integration-test");
         let patch = Patch::Apply(&coredb_json);
         coredbs.patch(name, &params, &patch).await.unwrap();
@@ -1405,13 +1421,14 @@ mod test {
         let mut rng = rand::thread_rng();
         let suffix = rng.gen_range(0..100000);
         let name = &format!("test-coredb-{}", suffix.clone());
-        let namespace = match create_namespace(client.clone(), name).await {
-            Ok(namespace) => namespace,
-            Err(e) => {
-                eprintln!("Error creating namespace: {}", e);
-                std::process::exit(1);
-            }
-        };
+        let namespace =
+            match create_namespace(client.clone(), name).await {
+                Ok(namespace) => namespace,
+                Err(e) => {
+                    eprintln!("Error creating namespace: {}", e);
+                    std::process::exit(1);
+                }
+            };
         let kind = "CoreDB";
         let replicas = 1;
 
@@ -1467,16 +1484,17 @@ mod test {
         // The coredb service is named the same as the coredb resource
         assert_eq!(&service_name, format!("{}-rw", name).as_str());
 
-        let coredb_json = serde_json::json!({
-            "apiVersion": API_VERSION,
-            "kind": kind,
-            "metadata": {
-                "name": name
-            },
-            "spec": {
-                "extra_domains_rw": ["any-given-domain.com", "another-domain.com"]
-            }
-        });
+        let coredb_json =
+            serde_json::json!({
+                "apiVersion": API_VERSION,
+                "kind": kind,
+                "metadata": {
+                    "name": name
+                },
+                "spec": {
+                    "extra_domains_rw": ["any-given-domain.com", "another-domain.com"]
+                }
+            });
         let params = PatchParams::apply("functional-test-ingress-route-tcp");
         let patch = Patch::Merge(&coredb_json);
         let _coredb_resource = coredbs.patch(name, &params, &patch).await.unwrap();
@@ -1596,48 +1614,51 @@ mod test {
         let mut rng = rand::thread_rng();
         let suffix = rng.gen_range(0..100000);
         let name = &format!("test-coredb-{}", suffix.clone());
-        let namespace = match create_namespace(client.clone(), name).await {
-            Ok(namespace) => namespace,
-            Err(e) => {
-                eprintln!("Error creating namespace: {}", e);
-                std::process::exit(1);
-            }
-        };
+        let namespace =
+            match create_namespace(client.clone(), name).await {
+                Ok(namespace) => namespace,
+                Err(e) => {
+                    eprintln!("Error creating namespace: {}", e);
+                    std::process::exit(1);
+                }
+            };
         let kind = "CoreDB";
         let replicas = 1;
 
         // Create an ingress route tcp to be adopted
-        let ing = serde_json::json!({
-            "apiVersion": "traefik.containo.us/v1alpha1",
-            "kind": "IngressRouteTCP",
-            "metadata": {
-                "name": name,
-            },
-            "spec": {
-                "entryPoints": ["postgresql"],
-                "routes": [
-                    {
-                        "match": format!("HostSNI(`{name}.localhost`)"),
-                        "services": [
-                            {
-                                "name": format!("{name}"),
-                                "port": 5432,
-                            },
-                        ],
-                    },
-                ],
-                "tls": {
-                    "passthrough": true,
+        let ing =
+            serde_json::json!({
+                "apiVersion": "traefik.containo.us/v1alpha1",
+                "kind": "IngressRouteTCP",
+                "metadata": {
+                    "name": name,
                 },
-            },
-        });
+                "spec": {
+                    "entryPoints": ["postgresql"],
+                    "routes": [
+                        {
+                            "match": format!("HostSNI(`{name}.localhost`)"),
+                            "services": [
+                                {
+                                    "name": format!("{name}"),
+                                    "port": 5432,
+                                },
+                            ],
+                        },
+                    ],
+                    "tls": {
+                        "passthrough": true,
+                    },
+                },
+            });
 
         let ingress_route_tcp_api: Api<IngressRouteTCP> = Api::namespaced(client.clone(), &namespace);
         let params = PatchParams::apply("functional-test-ingress-route-tcp");
-        let _o = ingress_route_tcp_api
-            .patch(name, &params, &Patch::Apply(&ing))
-            .await
-            .unwrap();
+        let _o =
+            ingress_route_tcp_api
+                .patch(name, &params, &Patch::Apply(&ing))
+                .await
+                .unwrap();
 
         // Create a pod we can use to run commands in the cluster
         let pods: Api<Pod> = Api::namespaced(client.clone(), &namespace);
@@ -1709,49 +1730,52 @@ mod test {
         let mut rng = rand::thread_rng();
         let suffix = rng.gen_range(0..100000);
         let name = &format!("test-coredb-{}", suffix.clone());
-        let namespace = match create_namespace(client.clone(), name).await {
-            Ok(namespace) => namespace,
-            Err(e) => {
-                eprintln!("Error creating namespace: {}", e);
-                std::process::exit(1);
-            }
-        };
+        let namespace =
+            match create_namespace(client.clone(), name).await {
+                Ok(namespace) => namespace,
+                Err(e) => {
+                    eprintln!("Error creating namespace: {}", e);
+                    std::process::exit(1);
+                }
+            };
         let kind = "CoreDB";
         let replicas = 1;
 
         let old_matcher = format!("HostSNI(`{name}.other-host`)");
         // Create an ingress route tcp to be adopted
-        let ing = serde_json::json!({
-            "apiVersion": "traefik.containo.us/v1alpha1",
-            "kind": "IngressRouteTCP",
-            "metadata": {
-                "name": name,
-            },
-            "spec": {
-                "entryPoints": ["postgresql"],
-                "routes": [
-                    {
-                        "match": old_matcher,
-                        "services": [
-                            {
-                                "name": "incorrect-service-name",
-                                "port": 1234,
-                            },
-                        ],
-                    },
-                ],
-                "tls": {
-                    "passthrough": true,
+        let ing =
+            serde_json::json!({
+                "apiVersion": "traefik.containo.us/v1alpha1",
+                "kind": "IngressRouteTCP",
+                "metadata": {
+                    "name": name,
                 },
-            },
-        });
+                "spec": {
+                    "entryPoints": ["postgresql"],
+                    "routes": [
+                        {
+                            "match": old_matcher,
+                            "services": [
+                                {
+                                    "name": "incorrect-service-name",
+                                    "port": 1234,
+                                },
+                            ],
+                        },
+                    ],
+                    "tls": {
+                        "passthrough": true,
+                    },
+                },
+            });
 
         let ingress_route_tcp_api: Api<IngressRouteTCP> = Api::namespaced(client.clone(), &namespace);
         let params = PatchParams::apply("functional-test-ingress-route-tcp");
-        let _o = ingress_route_tcp_api
-            .patch(name, &params, &Patch::Apply(&ing))
-            .await
-            .unwrap();
+        let _o =
+            ingress_route_tcp_api
+                .patch(name, &params, &Patch::Apply(&ing))
+                .await
+                .unwrap();
 
         // Create a pod we can use to run commands in the cluster
         let pods: Api<Pod> = Api::namespaced(client.clone(), &namespace);
@@ -1832,13 +1856,14 @@ mod test {
         let mut rng = rand::thread_rng();
         let suffix = rng.gen_range(0..100000);
         let name = &format!("test-coredb-{}", suffix);
-        let namespace = match create_namespace(client.clone(), name).await {
-            Ok(namespace) => namespace,
-            Err(e) => {
-                eprintln!("Error creating namespace: {}", e);
-                std::process::exit(1);
-            }
-        };
+        let namespace =
+            match create_namespace(client.clone(), name).await {
+                Ok(namespace) => namespace,
+                Err(e) => {
+                    eprintln!("Error creating namespace: {}", e);
+                    std::process::exit(1);
+                }
+            };
 
         let kind = "CoreDB";
         let replicas = 2;
@@ -1876,12 +1901,13 @@ mod test {
         assert!(result.stdout.clone().unwrap().contains("plpgsql"));
 
         // Assert that both pods are replicating successfully
-        let result = psql_with_retry(
-            context.clone(),
-            coredb_resource.clone(),
-            "SELECT state FROM pg_stat_replication".to_string(),
-        )
-        .await;
+        let result =
+            psql_with_retry(
+                context.clone(),
+                coredb_resource.clone(),
+                "SELECT state FROM pg_stat_replication".to_string(),
+            )
+            .await;
         assert!(result.stdout.clone().unwrap().contains("streaming"));
 
         // CLEANUP TEST
@@ -1917,13 +1943,14 @@ mod test {
         let mut rng = rand::thread_rng();
         let suffix = rng.gen_range(0..100000);
         let name = &format!("test-coredb-{}", suffix);
-        let namespace = match create_namespace(client.clone(), name).await {
-            Ok(namespace) => namespace,
-            Err(e) => {
-                eprintln!("Error creating namespace: {}", e);
-                std::process::exit(1);
-            }
-        };
+        let namespace =
+            match create_namespace(client.clone(), name).await {
+                Ok(namespace) => namespace,
+                Err(e) => {
+                    eprintln!("Error creating namespace: {}", e);
+                    std::process::exit(1);
+                }
+            };
 
         let kind = "CoreDB";
         let replicas = 1;
@@ -2088,13 +2115,14 @@ mod test {
         let mut rng = rand::thread_rng();
         let suffix = rng.gen_range(0..100000);
         let name = &format!("test-requires-load-{}", suffix);
-        let namespace = match create_namespace(client.clone(), name).await {
-            Ok(namespace) => namespace,
-            Err(e) => {
-                eprintln!("Error creating namespace: {}", e);
-                std::process::exit(1);
-            }
-        };
+        let namespace =
+            match create_namespace(client.clone(), name).await {
+                Ok(namespace) => namespace,
+                Err(e) => {
+                    eprintln!("Error creating namespace: {}", e);
+                    std::process::exit(1);
+                }
+            };
 
         let kind = "CoreDB";
         let replicas = 1;
@@ -2106,42 +2134,43 @@ mod test {
         println!("Creating CoreDB resource {}", name);
         let coredbs: Api<CoreDB> = Api::namespaced(client.clone(), &namespace);
         // Generate basic CoreDB resource to start with
-        let coredb_json = serde_json::json!({
-            "apiVersion": API_VERSION,
-            "kind": kind,
-            "metadata": {
-                "name": name
-            },
-            "spec": {
-                "replicas": replicas,
-                "extensions": [{
-                        "name": "pg_cron",
-                        "description": "cron",
-                        "locations": [{
-                            "enabled": true,
+        let coredb_json =
+            serde_json::json!({
+                "apiVersion": API_VERSION,
+                "kind": kind,
+                "metadata": {
+                    "name": name
+                },
+                "spec": {
+                    "replicas": replicas,
+                    "extensions": [{
+                            "name": "pg_cron",
+                            "description": "cron",
+                            "locations": [{
+                                "enabled": true,
+                                "version": "1.5.2",
+                                "database": "postgres",
+                            }],
+                        },
+                        {
+                            "name": "citus",
+                            "description": "citus",
+                            "locations": [{
+                                "enabled": true,
+                                "version": "12.0.1",
+                                "database": "postgres",
+                            }],
+                    }],
+                    "trunk_installs": [{
+                            "name": "pg_cron",
                             "version": "1.5.2",
-                            "database": "postgres",
-                        }],
                     },
                     {
-                        "name": "citus",
-                        "description": "citus",
-                        "locations": [{
-                            "enabled": true,
+                            "name": "citus",
                             "version": "12.0.1",
-                            "database": "postgres",
-                        }],
-                }],
-                "trunk_installs": [{
-                        "name": "pg_cron",
-                        "version": "1.5.2",
-                },
-                {
-                        "name": "citus",
-                        "version": "12.0.1",
-                }]
-            }
-        });
+                    }]
+                }
+            });
         let params = PatchParams::apply("tembo-integration-test");
         let patch = Patch::Apply(&coredb_json);
         let coredb_resource = coredbs.patch(name, &params, &patch).await.unwrap();
@@ -2231,13 +2260,14 @@ mod test {
         let mut rng = rand::thread_rng();
         let suffix = rng.gen_range(0..100000);
         let name = &format!("test-coredb-{}", suffix);
-        let namespace = match create_namespace(client.clone(), name).await {
-            Ok(namespace) => namespace,
-            Err(e) => {
-                eprintln!("Error creating namespace: {}", e);
-                std::process::exit(1);
-            }
-        };
+        let namespace =
+            match create_namespace(client.clone(), name).await {
+                Ok(namespace) => namespace,
+                Err(e) => {
+                    eprintln!("Error creating namespace: {}", e);
+                    std::process::exit(1);
+                }
+            };
 
         let kind = "CoreDB";
         let replicas = 2;
@@ -2286,42 +2316,44 @@ mod test {
         assert!(result.stdout.clone().unwrap().contains("plpgsql"));
 
         // Assert that both pods are replicating successfully
-        let result = psql_with_retry(
-            context.clone(),
-            coredb_resource.clone(),
-            "SELECT state FROM pg_stat_replication".to_string(),
-        )
-        .await;
+        let result =
+            psql_with_retry(
+                context.clone(),
+                coredb_resource.clone(),
+                "SELECT state FROM pg_stat_replication".to_string(),
+            )
+            .await;
         assert!(result.stdout.clone().unwrap().contains("streaming"));
 
         // Add in an extension and lets make sure it's installed on all pods
-        let coredb_json = serde_json::json!({
-            "apiVersion": API_VERSION,
-            "kind": kind,
-            "metadata": {
-                "name": name
-            },
-            "spec": {
-                "replicas": replicas,
-                "trunk_installs": [
-                    {
-                        "name": "aggs_for_vecs",
-                        "version": "1.3.0",
-                    },
-                ],
-                "extensions": [
-                    {
-                        "name": "aggs_for_vecs",
-                        "description": "aggs_for_vecs extension",
-                        "locations": [{
-                            "enabled": false,
+        let coredb_json =
+            serde_json::json!({
+                "apiVersion": API_VERSION,
+                "kind": kind,
+                "metadata": {
+                    "name": name
+                },
+                "spec": {
+                    "replicas": replicas,
+                    "trunk_installs": [
+                        {
+                            "name": "aggs_for_vecs",
                             "version": "1.3.0",
-                            "database": "postgres",
-                            "schema": "public"}
-                        ]
-                    }]
-            }
-        });
+                        },
+                    ],
+                    "extensions": [
+                        {
+                            "name": "aggs_for_vecs",
+                            "description": "aggs_for_vecs extension",
+                            "locations": [{
+                                "enabled": false,
+                                "version": "1.3.0",
+                                "database": "postgres",
+                                "schema": "public"}
+                            ]
+                        }]
+                }
+            });
         let params = PatchParams::apply("tembo-integration-test");
         let patch = Patch::Apply(&coredb_json);
         let coredb_resource = coredbs.patch(name, &params, &patch).await.unwrap();
@@ -2339,12 +2371,13 @@ mod test {
         // Assert that the extensions are installed on both replicas
         let retrieved_pods_result = coredb_resource.pods_by_cluster(client.clone()).await;
 
-        let retrieved_pods = match retrieved_pods_result {
-            Ok(pods_list) => pods_list,
-            Err(e) => {
-                panic!("Failed to retrieve pods: {:?}", e);
-            }
-        };
+        let retrieved_pods =
+            match retrieved_pods_result {
+                Ok(pods_list) => pods_list,
+                Err(e) => {
+                    panic!("Failed to retrieve pods: {:?}", e);
+                }
+            };
         for pod in &retrieved_pods {
             let cmd = vec![
                 "/bin/sh".to_owned(),
@@ -2391,13 +2424,14 @@ mod test {
         let mut rng = rand::thread_rng();
         let suffix = rng.gen_range(0..100000);
         let name = &format!("test-coredb-{}", suffix);
-        let namespace = match create_namespace(client.clone(), name).await {
-            Ok(namespace) => namespace,
-            Err(e) => {
-                eprintln!("Error creating namespace: {}", e);
-                std::process::exit(1);
-            }
-        };
+        let namespace =
+            match create_namespace(client.clone(), name).await {
+                Ok(namespace) => namespace,
+                Err(e) => {
+                    eprintln!("Error creating namespace: {}", e);
+                    std::process::exit(1);
+                }
+            };
 
         let kind = "CoreDB";
         let replicas = 1;
@@ -2435,43 +2469,45 @@ mod test {
         let exporter_pod_name = exporter_pods.items[0].metadata.name.as_ref().unwrap();
         pod_ready_and_running(pods.clone(), exporter_pod_name.clone()).await;
 
-        let _result = wait_until_psql_contains(
-            context.clone(),
-            coredb_resource.clone(),
-            "select extname from pg_catalog.pg_extension;".to_string(),
-            "plpgsql".to_string(),
-            false,
-        )
-        .await;
+        let _result =
+            wait_until_psql_contains(
+                context.clone(),
+                coredb_resource.clone(),
+                "select extname from pg_catalog.pg_extension;".to_string(),
+                "plpgsql".to_string(),
+                false,
+            )
+            .await;
 
         // Add in an extension and lets make sure it's installed on all pods
-        let coredb_json = serde_json::json!({
-            "apiVersion": API_VERSION,
-            "kind": kind,
-            "metadata": {
-                "name": name
-            },
-            "spec": {
-                "replicas": replicas,
-                "trunk_installs": [
-                    {
-                        "name": "aggs_for_vecs",
-                        "version": "1.3.0",
-                    },
-                ],
-                "extensions": [
-                    {
-                        "name": "aggs_for_vecs",
-                        "description": "aggs_for_vecs extension",
-                        "locations": [{
-                            "enabled": false,
+        let coredb_json =
+            serde_json::json!({
+                "apiVersion": API_VERSION,
+                "kind": kind,
+                "metadata": {
+                    "name": name
+                },
+                "spec": {
+                    "replicas": replicas,
+                    "trunk_installs": [
+                        {
+                            "name": "aggs_for_vecs",
                             "version": "1.3.0",
-                            "database": "postgres",
-                            "schema": "public"}
-                        ]
-                    }]
-            }
-        });
+                        },
+                    ],
+                    "extensions": [
+                        {
+                            "name": "aggs_for_vecs",
+                            "description": "aggs_for_vecs extension",
+                            "locations": [{
+                                "enabled": false,
+                                "version": "1.3.0",
+                                "database": "postgres",
+                                "schema": "public"}
+                            ]
+                        }]
+                }
+            });
         let params = PatchParams::apply("tembo-integration-test");
         let patch = Patch::Apply(&coredb_json);
         let coredb_resource = coredbs.patch(name, &params, &patch).await.unwrap();
@@ -2489,12 +2525,13 @@ mod test {
         // Assert that the extensions are installed on both replicas
         let retrieved_pods_result = coredb_resource.pods_by_cluster(client.clone()).await;
 
-        let retrieved_pods = match retrieved_pods_result {
-            Ok(pods_list) => pods_list,
-            Err(e) => {
-                panic!("Failed to retrieve pods: {:?}", e);
-            }
-        };
+        let retrieved_pods =
+            match retrieved_pods_result {
+                Ok(pods_list) => pods_list,
+                Err(e) => {
+                    panic!("Failed to retrieve pods: {:?}", e);
+                }
+            };
         for pod in &retrieved_pods {
             let cmd = vec![
                 "/bin/sh".to_owned(),
@@ -2511,33 +2548,34 @@ mod test {
         // Now lets make the instance HA and ensure that all extenstions are present on both
         // replicas
         let replicas = 2;
-        let coredb_json = serde_json::json!({
-            "apiVersion": API_VERSION,
-            "kind": kind,
-            "metadata": {
-                "name": name
-            },
-            "spec": {
-                "replicas": replicas,
-                "trunk_installs": [
-                    {
-                        "name": "aggs_for_vecs",
-                        "version": "1.3.0",
-                    },
-                ],
-                "extensions": [
-                    {
-                        "name": "aggs_for_vecs",
-                        "description": "aggs_for_vecs extension",
-                        "locations": [{
-                            "enabled": false,
+        let coredb_json =
+            serde_json::json!({
+                "apiVersion": API_VERSION,
+                "kind": kind,
+                "metadata": {
+                    "name": name
+                },
+                "spec": {
+                    "replicas": replicas,
+                    "trunk_installs": [
+                        {
+                            "name": "aggs_for_vecs",
                             "version": "1.3.0",
-                            "database": "postgres",
-                            "schema": "public"}
-                        ]
-                    }]
-            }
-        });
+                        },
+                    ],
+                    "extensions": [
+                        {
+                            "name": "aggs_for_vecs",
+                            "description": "aggs_for_vecs extension",
+                            "locations": [{
+                                "enabled": false,
+                                "version": "1.3.0",
+                                "database": "postgres",
+                                "schema": "public"}
+                            ]
+                        }]
+                }
+            });
         let params = PatchParams::apply("tembo-integration-test");
         let patch = Patch::Apply(&coredb_json);
         let coredb_resource = coredbs.patch(name, &params, &patch).await.unwrap();
@@ -2561,12 +2599,13 @@ mod test {
         // Assert that the extensions are installed on both replicas
         let retrieved_pods_result = coredb_resource.pods_by_cluster(client.clone()).await;
 
-        let retrieved_pods = match retrieved_pods_result {
-            Ok(pods_list) => pods_list,
-            Err(e) => {
-                panic!("Failed to retrieve pods: {:?}", e);
-            }
-        };
+        let retrieved_pods =
+            match retrieved_pods_result {
+                Ok(pods_list) => pods_list,
+                Err(e) => {
+                    panic!("Failed to retrieve pods: {:?}", e);
+                }
+            };
         for pod in &retrieved_pods {
             let cmd = vec![
                 "/bin/sh".to_owned(),
@@ -2613,13 +2652,14 @@ mod test {
         let mut rng = rand::thread_rng();
         let suffix = rng.gen_range(0..100000);
         let name = &format!("test-coredb-{}", suffix);
-        let namespace = match create_namespace(client.clone(), name).await {
-            Ok(namespace) => namespace,
-            Err(e) => {
-                eprintln!("Error creating namespace: {}", e);
-                std::process::exit(1);
-            }
-        };
+        let namespace =
+            match create_namespace(client.clone(), name).await {
+                Ok(namespace) => namespace,
+                Err(e) => {
+                    eprintln!("Error creating namespace: {}", e);
+                    std::process::exit(1);
+                }
+            };
 
         let kind = "CoreDB";
         let replicas = 1;
@@ -2726,12 +2766,13 @@ mod test {
         // Assert that the extensions are installed on both replicas
         let retrieved_pods_result = coredb_resource.pods_by_cluster(client.clone()).await;
 
-        let retrieved_pods = match retrieved_pods_result {
-            Ok(pods_list) => pods_list,
-            Err(e) => {
-                panic!("Failed to retrieve pods: {:?}", e);
-            }
-        };
+        let retrieved_pods =
+            match retrieved_pods_result {
+                Ok(pods_list) => pods_list,
+                Err(e) => {
+                    panic!("Failed to retrieve pods: {:?}", e);
+                }
+            };
 
         for i in 1..=replicas {
             let pod_name = format!("{}-{}", name, i);
@@ -2850,12 +2891,13 @@ mod test {
         // Assert that the extensions are installed on both replicas
         let retrieved_pods_result = coredb_resource.pods_by_cluster(client.clone()).await;
 
-        let retrieved_pods = match retrieved_pods_result {
-            Ok(pods_list) => pods_list,
-            Err(e) => {
-                panic!("Failed to retrieve pods: {:?}", e);
-            }
-        };
+        let retrieved_pods =
+            match retrieved_pods_result {
+                Ok(pods_list) => pods_list,
+                Err(e) => {
+                    panic!("Failed to retrieve pods: {:?}", e);
+                }
+            };
         for pod in &retrieved_pods {
             let cmd = vec![
                 "/bin/sh".to_owned(),
@@ -2900,13 +2942,14 @@ mod test {
         let mut rng = rand::thread_rng();
         let suffix = rng.gen_range(0..100000);
         let cdb_name = &format!("test-coredb-{}", suffix);
-        let namespace = match create_namespace(client.clone(), cdb_name).await {
-            Ok(namespace) => namespace,
-            Err(e) => {
-                eprintln!("Error creating namespace: {}", e);
-                std::process::exit(1);
-            }
-        };
+        let namespace =
+            match create_namespace(client.clone(), cdb_name).await {
+                Ok(namespace) => namespace,
+                Err(e) => {
+                    eprintln!("Error creating namespace: {}", e);
+                    std::process::exit(1);
+                }
+            };
 
         let kind = "CoreDB";
 
@@ -3096,42 +3139,43 @@ mod test {
         assert_eq!(app_1_resources, expected);
 
         // Delete the one without a service, but leave the postgrest appService
-        let coredb_json = serde_json::json!({
-            "apiVersion": API_VERSION,
-            "kind": kind,
-            "metadata": {
-                "name": cdb_name
-            },
-            "spec": {
-                "appServices": [
-                    {
-                        "name": "postgrest",
-                        "image": "postgrest/postgrest:v10.0.0",
-                        "env": [
-                            {
-                                "name": "PGRST_DB_URI",
-                                "valueFromPlatform": "ReadWriteConnection"
-                            },
-                            {
-                                "name": "PGRST_DB_SCHEMA",
-                                "value": "public"
-                            },
-                            {
-                                "name": "PGRST_DB_ANON_ROLE",
-                                "value": "postgres"
-                            }
-                        ],
-                        "routing": [
-                            {
-                                "port": 3000,
-                                "ingressPath": "/"
-                            }
-                        ],
-                    }
-                ],
-                "postgresExporterEnabled": false
-            }
-        });
+        let coredb_json =
+            serde_json::json!({
+                "apiVersion": API_VERSION,
+                "kind": kind,
+                "metadata": {
+                    "name": cdb_name
+                },
+                "spec": {
+                    "appServices": [
+                        {
+                            "name": "postgrest",
+                            "image": "postgrest/postgrest:v10.0.0",
+                            "env": [
+                                {
+                                    "name": "PGRST_DB_URI",
+                                    "valueFromPlatform": "ReadWriteConnection"
+                                },
+                                {
+                                    "name": "PGRST_DB_SCHEMA",
+                                    "value": "public"
+                                },
+                                {
+                                    "name": "PGRST_DB_ANON_ROLE",
+                                    "value": "postgres"
+                                }
+                            ],
+                            "routing": [
+                                {
+                                    "port": 3000,
+                                    "ingressPath": "/"
+                                }
+                            ],
+                        }
+                    ],
+                    "postgresExporterEnabled": false
+                }
+            });
         let params = PatchParams::apply("tembo-integration-test");
         let patch = Patch::Apply(&coredb_json);
         coredbs.patch(cdb_name, &params, &patch).await.unwrap();
@@ -3305,12 +3349,13 @@ CREATE EVENT TRIGGER pgrst_watch
         println!("result: {:#?}", result);
         assert!(result.success);
         // create a table for gql to inflect
-        let _result = psql_with_retry(
-            context.clone(),
-            cdb.clone(),
-            "create table book (id serial primary key, name text);".to_string(),
-        )
-        .await;
+        let _result =
+            psql_with_retry(
+                context.clone(),
+                cdb.clone(),
+                "create table book (id serial primary key, name text);".to_string(),
+            )
+            .await;
 
         // send a request to graphql route
         let gql_uri = format!("{}graphql?query=%7B%20bookCollection%20%7B%20edges%20%7B%20node%20%7B%20id%20%7D%20%7D%20%7D%20%7D", postgres_url);
@@ -3621,13 +3666,14 @@ CREATE EVENT TRIGGER pgrst_watch
         let mut rng = rand::thread_rng();
         let suffix = rng.gen_range(0..100000);
         let name = &format!("test-coredb-{}", suffix);
-        let namespace = match create_namespace(client.clone(), name).await {
-            Ok(namespace) => namespace,
-            Err(e) => {
-                eprintln!("Error creating namespace: {}", e);
-                std::process::exit(1);
-            }
-        };
+        let namespace =
+            match create_namespace(client.clone(), name).await {
+                Ok(namespace) => namespace,
+                Err(e) => {
+                    eprintln!("Error creating namespace: {}", e);
+                    std::process::exit(1);
+                }
+            };
 
         let kind = "CoreDB";
         let replicas = 1;
@@ -3721,10 +3767,9 @@ CREATE EVENT TRIGGER pgrst_watch
 
         // Assert status contains configs
         let mut found_configs = false;
-        let expected_config = ConfigValue::Multiple(BTreeSet::from_iter(vec![
-            "pg_stat_statements".to_string(),
-            "pg_partman_bgw".to_string(),
-        ]));
+        let expected_config = ConfigValue::Multiple(
+            BTreeSet::from_iter(vec!["pg_stat_statements".to_string(), "pg_partman_bgw".to_string()])
+        );
 
         // Wait for status.runtime_config to contain expected_config
         while !found_configs {
@@ -3784,13 +3829,14 @@ CREATE EVENT TRIGGER pgrst_watch
         let mut rng = rand::thread_rng();
         let suffix = rng.gen_range(0..100000);
         let name = &format!("test-coredb-{}", suffix);
-        let namespace = match create_namespace(client.clone(), name).await {
-            Ok(namespace) => namespace,
-            Err(e) => {
-                eprintln!("Error creating namespace: {}", e);
-                std::process::exit(1);
-            }
-        };
+        let namespace =
+            match create_namespace(client.clone(), name).await {
+                Ok(namespace) => namespace,
+                Err(e) => {
+                    eprintln!("Error creating namespace: {}", e);
+                    std::process::exit(1);
+                }
+            };
 
         let kind = "CoreDB";
         let replicas = 1;
@@ -3914,12 +3960,13 @@ CREATE EVENT TRIGGER pgrst_watch
         .await;
         assert!(result.stdout.clone().unwrap().contains("CREATE TABLE"));
 
-        let result = psql_with_retry(
-            context.clone(),
-            coredb_resource.clone(),
-            "INSERT INTO test (name) VALUES ('test');".to_string(),
-        )
-        .await;
+        let result =
+            psql_with_retry(
+                context.clone(),
+                coredb_resource.clone(),
+                "INSERT INTO test (name) VALUES ('test');".to_string(),
+            )
+            .await;
         assert!(result.stdout.clone().unwrap().contains("INSERT 0 1"));
 
         // Now take a new backup of the instance
@@ -4094,12 +4141,13 @@ CREATE EVENT TRIGGER pgrst_watch
         // Assert that the extensions are installed on both replicas
         let retrieved_pods_result = coredb_resource.pods_by_cluster(client.clone()).await;
 
-        let retrieved_pods = match retrieved_pods_result {
-            Ok(pods_list) => pods_list,
-            Err(e) => {
-                panic!("Failed to retrieve pods: {:?}", e);
-            }
-        };
+        let retrieved_pods =
+            match retrieved_pods_result {
+                Ok(pods_list) => pods_list,
+                Err(e) => {
+                    panic!("Failed to retrieve pods: {:?}", e);
+                }
+            };
         for pod in &retrieved_pods {
             let cmd = vec![
                 "/bin/sh".to_owned(),
@@ -4152,17 +4200,18 @@ CREATE EVENT TRIGGER pgrst_watch
             .await
             .unwrap();
         println!("Waiting for CoreDB to be deleted: {}", &restore_name);
-        let _assert_coredb_deleted = tokio::time::timeout(
-            Duration::from_secs(TIMEOUT_SECONDS_COREDB_DELETED),
-            await_condition(restore_coredbs.clone(), restore_name, conditions::is_deleted("")),
-        )
-        .await
-        .unwrap_or_else(|_| {
-            panic!(
-                "CoreDB {} was not deleted after waiting {} seconds",
-                restore_name, TIMEOUT_SECONDS_COREDB_DELETED
+        let _assert_coredb_deleted =
+            tokio::time::timeout(
+                Duration::from_secs(TIMEOUT_SECONDS_COREDB_DELETED),
+                await_condition(restore_coredbs.clone(), restore_name, conditions::is_deleted("")),
             )
-        });
+            .await
+            .unwrap_or_else(|_| {
+                panic!(
+                    "CoreDB {} was not deleted after waiting {} seconds",
+                    restore_name, TIMEOUT_SECONDS_COREDB_DELETED
+                )
+            });
         println!("CoreDB resource deleted {}", restore_name);
 
         // Delete namespace
@@ -4181,13 +4230,14 @@ CREATE EVENT TRIGGER pgrst_watch
         let mut rng = rand::thread_rng();
         let suffix = rng.gen_range(0..100000);
         let name = &format!("test-coredb-{}", suffix);
-        let namespace = match create_namespace(client.clone(), name).await {
-            Ok(namespace) => namespace,
-            Err(e) => {
-                eprintln!("Error creating namespace: {}", e);
-                std::process::exit(1);
-            }
-        };
+        let namespace =
+            match create_namespace(client.clone(), name).await {
+                Ok(namespace) => namespace,
+                Err(e) => {
+                    eprintln!("Error creating namespace: {}", e);
+                    std::process::exit(1);
+                }
+            };
 
         let kind = "CoreDB";
         let replicas = 1;
@@ -4276,21 +4326,23 @@ CREATE EVENT TRIGGER pgrst_watch
 
         // Check for pooler IngressRouteTCP
         let pooler_ingressroutetcps: Api<IngressRouteTCP> = Api::namespaced(client.clone(), &namespace);
-        let _pooler_ingressroutetcp = pooler_ingressroutetcps
-            .get(format!("{pooler_name}-0").as_str())
-            .await
-            .unwrap();
+        let _pooler_ingressroutetcp =
+            pooler_ingressroutetcps
+                .get(format!("{pooler_name}-0").as_str())
+                .await
+                .unwrap();
         println!("Found pooler IngressRouteTCP: {pooler_name}-0");
 
         // Query the database to make sure the pgbouncer role was created
-        let _pgb_query = wait_until_psql_contains(
-            context.clone(),
-            coredb_resource.clone(),
-            "SELECT rolname FROM pg_roles;".to_string(),
-            "cnpg_pooler_pgbouncer".to_string(),
-            false,
-        )
-        .await;
+        let _pgb_query =
+            wait_until_psql_contains(
+                context.clone(),
+                coredb_resource.clone(),
+                "SELECT rolname FROM pg_roles;".to_string(),
+                "cnpg_pooler_pgbouncer".to_string(),
+                false,
+            )
+            .await;
 
         // Update coredb to disable pooler
         let _coredb_json = serde_json::json!({

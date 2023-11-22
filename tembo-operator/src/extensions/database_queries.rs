@@ -153,16 +153,17 @@ pub async fn list_config_params(cdb: &CoreDB, ctx: Arc<Context>) -> Result<Vec<P
     let psql_out = cdb
         .psql("SHOW ALL;".to_owned(), "postgres".to_owned(), ctx)
         .await?;
-    let result_string = match psql_out.stdout {
-        None => {
-            error!(
-                "No stdout from psql when looking for config values for {}",
-                cdb.metadata.name.clone().unwrap()
-            );
-            return Err(Action::requeue(Duration::from_secs(300)));
-        }
-        Some(out) => out,
-    };
+    let result_string =
+        match psql_out.stdout {
+            None => {
+                error!(
+                    "No stdout from psql when looking for config values for {}",
+                    cdb.metadata.name.clone().unwrap()
+                );
+                return Err(Action::requeue(Duration::from_secs(300)));
+            }
+            Some(out) => out,
+        };
     Ok(parse_config_params(&result_string))
 }
 
@@ -207,13 +208,14 @@ pub async fn is_not_restarting(
         return Ok(result);
     };
 
-    let restarted_requested_at: DateTime<Utc> = DateTime::parse_from_rfc3339(restarted_at)
-        .map_err(|err| {
-            error!("{cdb_name}: Failed to deserialize DateTime from `restartedAt`: {err}");
+    let restarted_requested_at: DateTime<Utc> =
+        DateTime::parse_from_rfc3339(restarted_at)
+            .map_err(|err| {
+                error!("{cdb_name}: Failed to deserialize DateTime from `restartedAt`: {err}");
 
-            Action::requeue(Duration::from_secs(300))
-        })?
-        .into();
+                Action::requeue(Duration::from_secs(300))
+            })?
+            .into();
 
 
     let pg_postmaster = match pg_postmaster_result {
@@ -265,11 +267,12 @@ pub async fn is_not_restarting(
         }
     };
 
-    let pg_postmaster_start_time = parse_psql_output(&pg_postmaster).ok_or_else(|| {
-        error!("{cdb_name}: failed to parse pg_postmaster_start_time() output");
+    let pg_postmaster_start_time =
+        parse_psql_output(&pg_postmaster).ok_or_else(|| {
+            error!("{cdb_name}: failed to parse pg_postmaster_start_time() output");
 
-        Action::requeue(Duration::from_secs(300))
-    })?;
+            Action::requeue(Duration::from_secs(300))
+        })?;
 
     let server_started_at: DateTime<Utc> = DateTime::parse_from_str(pg_postmaster_start_time, PG_TIMESTAMP_DECL)
         .map_err(|err| {
@@ -306,13 +309,14 @@ fn get_pod_not_ready_duration(pod: Pod) -> Result<Option<Duration>, Box<dyn std:
                     let last_not_ready_time = last_transition.0;
                     let duration_since_not_ready = Utc::now() - last_not_ready_time;
 
-                    let std_duration = match duration_since_not_ready.to_std() {
-                        Ok(duration) => duration,
-                        Err(_) => {
-                            error!("Failed to convert duration to std::time::Duration");
-                            return Ok(None);
-                        }
-                    };
+                    let std_duration =
+                        match duration_since_not_ready.to_std() {
+                            Ok(duration) => duration,
+                            Err(_) => {
+                                error!("Failed to convert duration to std::time::Duration");
+                                return Ok(None);
+                            }
+                        };
 
                     return Ok(Some(std_duration));
                 }

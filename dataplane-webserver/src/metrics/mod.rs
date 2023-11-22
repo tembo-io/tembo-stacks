@@ -27,16 +27,17 @@ pub async fn query_prometheus(
 
     let mut start = range_query.start;
     // If 'end' query parameter was provided, use it. Otherwise use current time.
-    let end = match range_query.end {
-        Some(end) => end,
-        None => match SystemTime::now().duration_since(SystemTime::UNIX_EPOCH) {
-            Ok(n) => n.as_secs_f64(),
-            Err(_) => {
-                error!("Failed to get current time");
-                return HttpResponse::InternalServerError().json("Failed to get current time");
-            }
-        },
-    };
+    let end =
+        match range_query.end {
+            Some(end) => end,
+            None => match SystemTime::now().duration_since(SystemTime::UNIX_EPOCH) {
+                Ok(n) => n.as_secs_f64(),
+                Err(_) => {
+                    error!("Failed to get current time");
+                    return HttpResponse::InternalServerError().json("Failed to get current time");
+                }
+            },
+        };
     let step = match range_query.step.clone() {
         Some(step) => step,
         None => "60s".to_string(),
@@ -51,7 +52,7 @@ pub async fn query_prometheus(
             .json("Query time range too large, must be less than or equal to 1 day");
     }
     if end < start {
-        start = end.clone();
+        start = end;
     }
 
     // Get timeout from config
@@ -59,13 +60,14 @@ pub async fn query_prometheus(
     // Set reqwest timeout to 50% greater than the prometheus timeout, plus 500ms, since we
     // prefer for Prometheus to perform the timeout rather than reqwest client.
     let reqwest_timeout_ms = prometheus_timeout_ms + (prometheus_timeout_ms / 2) + 500;
-    let reqwest_timeout_ms: u64 = match reqwest_timeout_ms.try_into() {
-        Ok(n) => n,
-        Err(_) => {
-            error!("Failed to convert timeout to u64");
-            return HttpResponse::InternalServerError().json("Failed to convert timeout");
-        }
-    };
+    let reqwest_timeout_ms: u64 =
+        match reqwest_timeout_ms.try_into() {
+            Ok(n) => n,
+            Err(_) => {
+                error!("Failed to convert timeout to u64");
+                return HttpResponse::InternalServerError().json("Failed to convert timeout");
+            }
+        };
     let timeout = format!("{prometheus_timeout_ms}ms");
 
     let query_params = vec![

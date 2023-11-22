@@ -59,10 +59,7 @@ pub fn validate_requested_secret(secret_name: &String) -> Result<&AvailableSecre
         .find(|&secret| &secret.name == secret_name);
 
     if requested_secret.is_none() {
-        return Err(format!(
-            "Secret '{}' not found as allowed name",
-            secret_name
-        ));
+        return Err(format!("Secret '{}' not found as allowed name", secret_name));
     }
 
     let secret_config = requested_secret.expect("We just checked this is not none");

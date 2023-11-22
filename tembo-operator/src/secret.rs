@@ -207,10 +207,7 @@ pub async fn fetch_decoded_data_key_from_secret(
                     let secret_data = String::from_utf8(password_bytes.0.clone()).unwrap();
                     Ok(secret_data)
                 } else {
-                    Err(Error::MissingSecretError(format!(
-                        "Key {} not found in secret",
-                        key_name
-                    )))
+                    Err(Error::MissingSecretError(format!("Key {} not found in secret", key_name)))
                 }
             } else {
                 Err(Error::MissingSecretError("No data found in secret".to_owned()))

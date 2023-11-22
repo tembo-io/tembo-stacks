@@ -218,15 +218,16 @@ mod tests {
         assert!(failed.is_err());
 
         // provide a supported middleware but with malformed configuration
-        let supported_bad_config = serde_json::json!({
-            "replacePath": {
-                "name": "my-custom-headers",
-                "config":
-                    {
-                        "replacePath": "expects_a_vec<string>",
-                    }
-            },
-        });
+        let supported_bad_config =
+            serde_json::json!({
+                "replacePath": {
+                    "name": "my-custom-headers",
+                    "config":
+                        {
+                            "replacePath": "expects_a_vec<string>",
+                        }
+                },
+            });
         let failed = serde_json::from_value::<Middleware>(supported_bad_config);
         assert!(failed.is_err());
     }

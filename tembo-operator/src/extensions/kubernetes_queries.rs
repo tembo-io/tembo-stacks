@@ -180,11 +180,12 @@ pub async fn remove_trunk_installs_from_status(
         trunk_installs: Some(new_trunk_installs_status),
         ..current_status
     };
-    let patch_status = json!({
-        "apiVersion": "coredb.io/v1alpha1",
-        "kind": "CoreDB",
-        "status": new_status
-    });
+    let patch_status =
+        json!({
+            "apiVersion": "coredb.io/v1alpha1",
+            "kind": "CoreDB",
+            "status": new_status
+        });
     patch_cdb_status_merge(cdb, name, patch_status).await?;
     info!("Patched status for {}", name);
     Ok(())
@@ -247,11 +248,12 @@ pub async fn add_trunk_install_to_status(
         ..current_status
     };
 
-    let patch_status = json!({
-        "apiVersion": "coredb.io/v1alpha1",
-        "kind": "CoreDB",
-        "status": new_status
-    });
+    let patch_status =
+        json!({
+            "apiVersion": "coredb.io/v1alpha1",
+            "kind": "CoreDB",
+            "status": new_status
+        });
 
     patch_cdb_status_merge(cdb, name, patch_status).await?;
 
@@ -365,27 +367,28 @@ mod tests {
 
     #[test]
     fn test_add_new_trunk_install_with_diff_names_new_host() {
-        let initial_trunk_installs = vec![
-            TrunkInstallStatus {
-                error: false,
-                installed_to_pods: Some(vec![
-                    "test-coredb-24631-1".to_string(),
-                    "test-coredb-24631-2".to_string(),
-                ]),
-                name: "test_name".to_string(),
-                version: Some("1.0.0".to_string()),
-                loading: false,
-                error_message: None,
-            },
-            TrunkInstallStatus {
-                error: false,
-                installed_to_pods: Some(vec!["test-coredb-24631-1".to_string()]),
-                name: "test_name2".to_string(),
-                version: Some("1.0.0".to_string()),
-                loading: false,
-                error_message: None,
-            },
-        ];
+        let initial_trunk_installs =
+            vec![
+                TrunkInstallStatus {
+                    error: false,
+                    installed_to_pods: Some(vec![
+                        "test-coredb-24631-1".to_string(),
+                        "test-coredb-24631-2".to_string(),
+                    ]),
+                    name: "test_name".to_string(),
+                    version: Some("1.0.0".to_string()),
+                    loading: false,
+                    error_message: None,
+                },
+                TrunkInstallStatus {
+                    error: false,
+                    installed_to_pods: Some(vec!["test-coredb-24631-1".to_string()]),
+                    name: "test_name2".to_string(),
+                    version: Some("1.0.0".to_string()),
+                    loading: false,
+                    error_message: None,
+                },
+            ];
 
         let new_trunk_install = TrunkInstallStatus {
             error: false,
@@ -466,14 +469,15 @@ mod tests {
             ])
         );
 
-        let new_trunk_install = TrunkInstallStatus {
-            error: false,
-            installed_to_pods: Some(vec!["test-coredb-24631-2".to_string()]),
-            name: "pg_stat_statements".to_string(),
-            version: Some("1.10.0".to_string()),
-            error_message: None,
-            loading: false,
-        };
+        let new_trunk_install =
+            TrunkInstallStatus {
+                error: false,
+                installed_to_pods: Some(vec!["test-coredb-24631-2".to_string()]),
+                name: "pg_stat_statements".to_string(),
+                version: Some("1.10.0".to_string()),
+                error_message: None,
+                loading: false,
+            };
 
         let updated_trunk_installs =
             update_trunk_installs(updated_trunk_installs.clone(), &new_trunk_install);

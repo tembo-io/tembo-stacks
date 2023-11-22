@@ -385,10 +385,11 @@ mod tests {
             },
         ];
 
-        let current_status = vec![ExtensionStatus {
-            name: "ext1".to_string(),
-            description: None,
-            locations: vec![
+        let current_status =
+            vec![ExtensionStatus {
+                name: "ext1".to_string(),
+                description: None,
+                locations: vec![
                 // Requesting to enable a currently disabled extension
                 ExtensionInstallLocationStatus {
                     enabled: Some(false),
@@ -435,7 +436,7 @@ mod tests {
                     error_message: Some("Failed to enable extension".to_string()),
                 },
             ],
-        }];
+            }];
 
         let cdb = CoreDB {
             metadata: Default::default(),
@@ -532,13 +533,14 @@ mod tests {
         let result = determine_updated_extensions_status(&cdb, all_actually_installed_extensions);
 
         // Update the extensions status
-        let cdb = CoreDB {
-            status: Some(CoreDBStatus {
-                extensions: Some(result),
-                ..CoreDBStatus::default()
-            }),
-            ..cdb
-        };
+        let cdb =
+            CoreDB {
+                status: Some(CoreDBStatus {
+                    extensions: Some(result),
+                    ..CoreDBStatus::default()
+                }),
+                ..cdb
+            };
 
         // Check that the current status is updated in the expected way from the provided actually_installed_extensions list
         let location_status =
@@ -591,13 +593,14 @@ mod tests {
         let extension_locations_to_toggle = determine_extension_locations_to_toggle(&cdb);
         // We just make this CDB so that we can use our getter function to
         // search through the extension results from determine_extension_locations_to_toggle
-        let cdb_spec_check = CoreDB {
-            spec: CoreDBSpec {
-                extensions: extension_locations_to_toggle,
-                ..CoreDBSpec::default()
-            },
-            ..cdb
-        };
+        let cdb_spec_check =
+            CoreDB {
+                spec: CoreDBSpec {
+                    extensions: extension_locations_to_toggle,
+                    ..CoreDBSpec::default()
+                },
+                ..cdb
+            };
 
         // When available and disabled, requesting to enable, we should try to toggle it
         let location =
@@ -790,14 +793,15 @@ mod tests {
 
     #[test]
     fn test_trunk_install_conversion() {
-        let status = TrunkInstallStatus {
-            name: "pgmq".to_string(),
-            version: Some("1.0".to_string()),
-            error: false,
-            error_message: None,
-            installed_to_pods: None,
-            loading: false,
-        };
+        let status =
+            TrunkInstallStatus {
+                name: "pgmq".to_string(),
+                version: Some("1.0".to_string()),
+                error: false,
+                error_message: None,
+                installed_to_pods: None,
+                loading: false,
+            };
         let trunk_install: TrunkInstall = status.into();
         assert_eq!(trunk_install.name, "pgmq");
         assert_eq!(trunk_install.version, Some("1.0".to_string()));

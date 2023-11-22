@@ -338,12 +338,13 @@ async fn run(metrics: CustomMetrics) -> Result<(), ConductorError> {
                 let spec_js = serde_json::to_string(&current_spec.spec).unwrap();
                 debug!("dbname: {}, current_spec: {:?}", &namespace, spec_js);
 
-                let report_event = match read_msg.message.event_type {
-                    Event::Create => Event::Created,
-                    Event::Update => Event::Updated,
-                    Event::Restore => Event::Restored,
-                    _ => unreachable!(),
-                };
+                let report_event =
+                    match read_msg.message.event_type {
+                        Event::Create => Event::Created,
+                        Event::Update => Event::Updated,
+                        Event::Restore => Event::Restored,
+                        _ => unreachable!(),
+                    };
                 types::StateToControlPlane {
                     data_plane_id: read_msg.message.data_plane_id,
                     org_id: read_msg.message.org_id,
@@ -504,14 +505,15 @@ async fn requeue_short(
 async fn main() -> std::io::Result<()> {
     env_logger::init();
 
-    let controller = controllers::basic(
-        processors::factory(
-            selectors::simple::histogram([1.0, 2.0, 5.0, 10.0, 20.0, 50.0]),
-            aggregation::cumulative_temporality_selector(),
+    let controller =
+        controllers::basic(
+            processors::factory(
+                selectors::simple::histogram([1.0, 2.0, 5.0, 10.0, 20.0, 50.0]),
+                aggregation::cumulative_temporality_selector(),
+            )
+            .with_memory(true),
         )
-        .with_memory(true),
-    )
-    .build();
+        .build();
 
     let exporter = opentelemetry_prometheus::exporter(controller).init();
     let meter = global::meter("actix_web");
@@ -536,9 +538,9 @@ async fn main() -> std::io::Result<()> {
                 loop {
                     match run(custom_metrics_copy.clone()).await {
                         Ok(_) => {}
-                        Err(ConductorError::PgmqError(pgmq::errors::PgmqError::DatabaseError(
-                            Error::PoolTimedOut,
-                        ))) => {
+                        Err(ConductorError::PgmqError(
+                            pgmq::errors::PgmqError::DatabaseError(Error::PoolTimedOut)
+                        )) => {
                             custom_metrics_copy.clone().conductor_errors.add(
                                 &opentelemetry::Context::current(),
                                 1,

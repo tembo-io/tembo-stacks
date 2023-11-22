@@ -676,14 +676,15 @@ mod tests {
         assert!(result.is_empty());
 
         // Test when CoreDB has no status
-        let cdb_without_status = CoreDB {
-            metadata: ObjectMeta {
-                name: Some("coredb1".to_string()),
-                ..Default::default()
-            },
-            spec: CoreDBSpec { ..Default::default() },
-            status: None,
-        };
+        let cdb_without_status =
+            CoreDB {
+                metadata: ObjectMeta {
+                    name: Some("coredb1".to_string()),
+                    ..Default::default()
+                },
+                spec: CoreDBSpec { ..Default::default() },
+                status: None,
+            };
         let coredb_name = "cdb_without_status";
         let result = initialize_trunk_install_statuses(&cdb_without_status, coredb_name);
         assert!(result.is_empty());
