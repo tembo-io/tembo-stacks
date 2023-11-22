@@ -59,10 +59,13 @@ jobs:
           prefix-key: "${{ matrix.name }}-lint"
           workspaces: |
             ${{ matrix.path }}
-      - name: Cargo format
-        run: cd ${{ matrix.path }} && cargo +nightly fmt --all --check
-      - name: Clippy
-        run: cd ${{ matrix.path }} && cargo +nightly clippy
+      - name: Cargo format and clippy
+        run: |
+          set -xe
+          cd ${{ matrix.path }}
+          cargo +nightly --version
+          cargo +nightly fmt --all --check
+          cargo +nightly clippy
 
   test:
     name: Run tests
