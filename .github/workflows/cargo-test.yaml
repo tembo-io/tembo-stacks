@@ -51,13 +51,13 @@ jobs:
         uses: actions-rs/toolchain@v1
         with:
           profile: minimal
-          toolchain: nightly
+          toolchain: 1.73.0-nightly
           components: rustfmt, clippy
       - name: Install minimal stable with clippy and rustfmt
         uses: actions-rs/toolchain@v1
         with:
           profile: minimal
-          toolchain: stable
+          toolchain: 1.73.0
           components: rustfmt, clippy
       - uses: Swatinem/rust-cache@v2
         with:
