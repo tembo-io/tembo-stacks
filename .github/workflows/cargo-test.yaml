@@ -68,9 +68,9 @@ jobs:
         run: |
           set -xe
           cd ${{ matrix.path }}
-          cargo +nightly --version
-          cargo +nightly fmt --all --check
-          cargo +nightly clippy
+          cargo +nightly-2023-11-18 --version
+          cargo +nightly-2023-11-18 fmt --all --check
+          cargo +nightly-2023-11-18 clippy
 
   test:
     name: Run tests
