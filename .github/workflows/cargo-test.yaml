@@ -46,28 +46,23 @@ jobs:
         run: |
           set -xe
           sudo apt-get update
-          sudo apt-get install -y pkg-config libssl-dev
-      - name: Install minimal nightly with clippy and rustfmt
-        uses: actions-rs/toolchain@v1
-        with:
-          profile: minimal
-          toolchain: nightly
-          components: rustfmt, clippy
-      - name: Install minimal stable with clippy and rustfmt
-        uses: actions-rs/toolchain@v1
-        with:
-          profile: minimal
-          toolchain: stable
-          components: rustfmt, clippy
+          sudo apt-get install -y pkg-config libssl-dev curl
+      - name: Install rust nightly
+        run: |
+          set -xe
+          curl --proto '=https' --tlsv1.2 --retry 10 --retry-connrefused -fsSL "https://sh.rustup.rs" | sh -s -- --default-toolchain none -y
+          source "$HOME/.cargo/env"
+          echo "$HOME/.cargo/bin" >> $GITHUB_PATH
+          rustup toolchain install nightly
       - uses: Swatinem/rust-cache@v2
         with:
-          prefix-key: "${{ matrix.name }}-lint2"
+          prefix-key: "${{ matrix.name }}-lint"
           workspaces: |
             ${{ matrix.path }}
       - name: Cargo format
         run: cd ${{ matrix.path }} && cargo +nightly fmt --all --check
       - name: Clippy
-        run: cd ${{ matrix.path }} && cargo +stable clippy
+        run: cd ${{ matrix.path }} && cargo +nightly clippy
 
   test:
     name: Run tests
@@ -82,9 +77,13 @@ jobs:
       matrix: ${{ fromJson(needs.find_directories.outputs.directories) }}
     steps:
       - uses: actions/checkout@v2
-      - uses: actions-rs/toolchain@v1
-        with:
-          toolchain: stable
+      - name: Install rust stable
+        run: |
+          set -xe
+          curl --proto '=https' --tlsv1.2 --retry 10 --retry-connrefused -fsSL "https://sh.rustup.rs" | sh -s -- --default-toolchain none -y
+          source "$HOME/.cargo/env"
+          echo "$HOME/.cargo/bin" >> $GITHUB_PATH
+          rustup toolchain install stable
       - name: Install system dependencies
         run: |
           set -xe
@@ -92,7 +91,7 @@ jobs:
           sudo apt-get install -y pkg-config libssl-dev
       - uses: Swatinem/rust-cache@v2
         with:
-          prefix-key: "${{ matrix.name }}-test2"
+          prefix-key: "${{ matrix.name }}-test"
           workspaces: |
             ${{ matrix.path }}
       - name: Unit tests
