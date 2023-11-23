@@ -13,6 +13,7 @@ prometheusRule:
 
 env: []
 
+## Configure resource requests and limits
 resources:
   limits:
     cpu: 1000m
