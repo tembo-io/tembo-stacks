@@ -1,3 +1,4 @@
+{{- if (index .Values "controller").enabled }}
 {{- if (index .Values "controller").monitoring.prometheusRule.enabled -}}
 {{- $namespace := include "component.namespace" (list (list "controller" .Values .)) -}}
 {{- $fullname := include "controller.fullname" . -}}
@@ -81,4 +82,5 @@ spec:
       for: 15m
       labels:
         severity: critical
+{{- end }}
 {{- end }}

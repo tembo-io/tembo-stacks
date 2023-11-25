@@ -15,6 +15,7 @@
 
 # -- The controller configuration
 controller:
+  enabled: true
   nameOverride:
   namespaceOverride:
 
@@ -97,6 +98,7 @@ controller:
 
 # -- The pod-init configuration
 pod-init:
+  enabled: true
   nameOverride:
   namespaceOverride:
 
@@ -177,9 +179,11 @@ pod-init:
 
 # -- Cloudnative-PG configuration
 cloudnative-pg:
+  enabled: true
   config:
     create: true
     data:
+      # -- INHERITED_ANNOTATIONS needs to match what is set in pod-init namespaceSelector.matchLabels
       INHERITED_ANNOTATIONS: "tembo-pod-init.tembo.io/*, tembo.io/*"
   monitoring:
     podMonitorEnabled: false

@@ -22,28 +22,17 @@ install-traefik:
 	# https://github.com/traefik/traefik-helm-chart/issues/757#issuecomment-1753995542
 	kubectl apply -f https://raw.githubusercontent.com/traefik/traefik/v3.0.0-beta2/docs/content/reference/dynamic-configuration/kubernetes-crd-definition-v1.yml
 
+install-operator:
+	just install-cert-manager
+	helm upgrade --install --create-namespace --namespace=tembo-system --values=./testdata/operator-values.yaml tembo ../charts/tembo-operator
+
 install-kube-prometheus-stack:
 	kubectl create namespace monitoring || true
 	helm upgrade --install --namespace=monitoring --values=./testdata/prometheus-stack.yaml monitoring prometheus-community/kube-prometheus-stack
 
-install-tembo-pod-init:
-	kubectl create namespace tembo-pod-init || true
-	helm upgrade --install \
-	  cert-manager jetstack/cert-manager \
-		--version=1.12.1 \
-	  --namespace cert-manager \
-	  --create-namespace \
-		--values=./testdata/cert-manager.yaml && \
-	helm upgrade --install --namespace=tembo-pod-init --values=./testdata/pod-init.yaml tembo-pod-init ../charts/tembo-pod-init
+install-cert-manager:
+	helm upgrade --install cert-manager jetstack/cert-manager --namespace cert-manager --create-namespace --set installCRDs=true
 	kubectl apply -f ./testdata/local-postgres-issuer.yaml
-
-install-cnpg:
-	helm upgrade --install cnpg \
-	  --namespace cnpg-system \
-	  --create-namespace \
-		--values=./testdata/cnpg.yaml \
-		--version=0.18.2 \
-	  cnpg/cloudnative-pg
 
 install-tempo:
 	helm upgrade --install \
@@ -71,7 +60,7 @@ install-reflector:
 
 enable-cnpg-default-namespace:
 	kubectl label namespace default "tembo-pod-init.tembo.io/watch"="true"
-	kubectl delete pods -n tembo-pod-init --all
+	kubectl delete pods -n tembo-system -l app=tembo-pod-init
 
 connect-test-db:
 	echo "Please include a line in your /etc/hosts file: "
@@ -115,9 +104,8 @@ start-kind:
 	just install-tempo
 	just install-traefik
 	just install-minio
+	just install-operator
 	just install-crd
-	just install-cnpg
-	just install-tembo-pod-init
 	just annotate {{STORAGE_CLASS_NAME}}
 	kubectl wait pods --for=condition=Ready --timeout=300s --all --all-namespaces
 
@@ -129,8 +117,6 @@ install-dependencies:
 	just install-tempo
 	just install-traefik
 	just install-crd
-	just install-cnpg
-	just install-tembo-pod-init
 	just annotate {{STORAGE_CLASS_NAME}}
 	kubectl wait pods --for=condition=Ready --timeout=300s --all --all-namespaces
 

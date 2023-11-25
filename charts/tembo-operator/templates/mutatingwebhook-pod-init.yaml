@@ -1,3 +1,4 @@
+{{- if (index .Values "pod-init").enabled }}
 {{- $namespace := include "component.namespace" (list (list "pod-init" .Values .)) -}}
 {{- $fullname := include "pod-init.fullname" . -}}
 apiVersion: admissionregistration.k8s.io/v1
@@ -43,3 +44,4 @@ webhooks:
     namespaceSelector:
       matchLabels:
         {{- toYaml (index (index .Values "pod-init") "namespaceSelector" "matchLabels") | nindent 8 }}
+{{- end }}

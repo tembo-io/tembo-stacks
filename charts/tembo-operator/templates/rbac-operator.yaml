@@ -1,3 +1,4 @@
+{{- if (index .Values "controller").enabled }}
 {{- $namespace := include "component.namespace" (list (list "controller" .Values .)) -}}
 {{- $fullname := include "controller.fullname" . -}}
 apiVersion: v1
@@ -64,3 +65,4 @@ rules:
   - apiGroups: [""]
     resources: ["namespaces"]
     verbs: ["get", "list", "watch"]
+{{- end }}

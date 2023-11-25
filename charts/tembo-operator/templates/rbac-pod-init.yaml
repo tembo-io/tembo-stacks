@@ -1,3 +1,4 @@
+{{- if (index .Values "pod-init").enabled }}
 {{- $namespace := include "component.namespace" (list (list "pod-init" .Values .)) -}}
 {{- $fullname := include "pod-init.fullname" . -}}
 apiVersion: v1
@@ -37,3 +38,4 @@ rules:
 - apiGroups: ["postgresql.cnpg.io"]
   resources: ["backups", "clusters", "poolers", "scheduledbackups"]
   verbs: ["get", "list", "watch"]
+{{- end }}

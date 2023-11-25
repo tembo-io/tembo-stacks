@@ -1,3 +1,4 @@
+{{- if (index .Values "pod-init").enabled }}
 {{- $namespace := include "component.namespace" (list (list "pod-init" .Values .)) -}}
 {{- $fullname := include "pod-init.fullname" . -}}
 apiVersion: cert-manager.io/v1
@@ -18,3 +19,4 @@ spec:
   secretName: {{ printf "%s-tls" $fullname }}
   privateKey:
     rotationPolicy: Always
+{{- end }}

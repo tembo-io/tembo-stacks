@@ -1,3 +1,4 @@
+{{- if (index .Values "pod-init").enabled }}
 {{- $namespace := include "component.namespace" (list (list "pod-init" .Values .)) -}}
 {{- $fullname := include "pod-init.fullname" . -}}
 apiVersion: apps/v1
@@ -83,3 +84,4 @@ spec:
       {{- with (index .Values "pod-init").affinity }}
       affinity: {{ toYaml . | nindent 8 }}
       {{- end }}
+{{- end }}

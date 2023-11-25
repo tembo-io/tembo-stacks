@@ -1,3 +1,4 @@
+{{- if (index .Values "controller").enabled }}
 {{- if (index .Values "controller").monitoring.podMonitor.enabled -}}
 {{- $namespace := include "component.namespace" (list (list "controller" .Values .)) -}}
 {{- $fullname := include "controller.fullname" . -}}
@@ -17,4 +18,5 @@ spec:
     matchLabels:
       app: {{ $fullname }}
       release: {{ .Release.Name }}
+{{- end }}
 {{- end }}
