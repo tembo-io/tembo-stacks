@@ -1,6 +1,6 @@
 use crate::traefik::ingress_route_tcp_crd::{
-    IngressRouteTCP, IngressRouteTCPRoutes, IngressRouteTCPRoutesMiddlewares, IngressRouteTCPRoutesServices,
-    IngressRouteTCPSpec, IngressRouteTCPTls,
+    IngressRouteTCP, IngressRouteTCPRoutes, IngressRouteTCPRoutesMiddlewares,
+    IngressRouteTCPRoutesServices, IngressRouteTCPSpec, IngressRouteTCPTls,
 };
 use k8s_openapi::apimachinery::pkg::{
     apis::meta::v1::{ObjectMeta, OwnerReference},
@@ -103,7 +103,8 @@ pub async fn reconcile_extra_postgres_ing_route_tcp(
         middleware_names,
         port,
     );
-    let ingress_route_tcp_api: Api<IngressRouteTCP> = Api::namespaced(ctx.client.clone(), namespace);
+    let ingress_route_tcp_api: Api<IngressRouteTCP> =
+        Api::namespaced(ctx.client.clone(), namespace);
     if !extra_domain_names.is_empty() {
         apply_ingress_route_tcp(
             ingress_route_tcp_api,
@@ -144,7 +145,11 @@ pub async fn reconcile_ip_allowlist_middleware(
         .await
     {
         Ok(_) => {
-            debug!("Updated MiddlewareTCP {}.{}", middleware_name.clone(), &namespace);
+            debug!(
+                "Updated MiddlewareTCP {}.{}",
+                middleware_name.clone(),
+                &namespace
+            );
         }
         Err(e) => {
             // serialize then log json of middlewaretcp
@@ -504,7 +509,8 @@ fn generate_ip_allow_list_middleware_tcp(cdb: &CoreDB) -> MiddlewareTCP {
 
 pub fn valid_cidrs(source_range: &[String]) -> Vec<String> {
     // Validate each IP address or CIDR block against the regex
-    let cidr_regex = Regex::new(VALID_IPV4_CIDR_BLOCK).expect("Failed to compile regex for IPv4 CIDR block");
+    let cidr_regex =
+        Regex::new(VALID_IPV4_CIDR_BLOCK).expect("Failed to compile regex for IPv4 CIDR block");
     let mut valid_ips = Vec::new();
     for ip in source_range.iter() {
         if !cidr_regex.is_match(ip) {
@@ -535,7 +541,13 @@ mod tests {
             status: None,
         };
         let result = generate_ip_allow_list_middleware_tcp(&cdb);
-        let source_range = result.spec.ip_allow_list.clone().unwrap().source_range.unwrap();
+        let source_range = result
+            .spec
+            .ip_allow_list
+            .clone()
+            .unwrap()
+            .source_range
+            .unwrap();
         assert_eq!(source_range.len(), 1);
         assert!(
             source_range.contains(&"0.0.0.0/0".to_string()),
@@ -555,7 +567,13 @@ mod tests {
             status: None,
         };
         let result = generate_ip_allow_list_middleware_tcp(&cdb);
-        let source_range = result.spec.ip_allow_list.clone().unwrap().source_range.unwrap();
+        let source_range = result
+            .spec
+            .ip_allow_list
+            .clone()
+            .unwrap()
+            .source_range
+            .unwrap();
         assert_eq!(source_range.len(), 1);
         assert!(
             source_range.contains(&"0.0.0.0/0".to_string()),
@@ -580,7 +598,13 @@ mod tests {
         };
         let result = generate_ip_allow_list_middleware_tcp(&cdb);
         // Add assertions to ensure that the middleware contains the correct IPs and not the invalid one
-        let source_range = result.spec.ip_allow_list.clone().unwrap().source_range.unwrap();
+        let source_range = result
+            .spec
+            .ip_allow_list
+            .clone()
+            .unwrap()
+            .source_range
+            .unwrap();
         assert_eq!(source_range.len(), 3);
         assert!(
             source_range.contains(&"10.0.0.1".to_string()),

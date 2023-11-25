@@ -1,10 +1,13 @@
-use crate::{apis::coredb_types::CoreDB, ingress_route_crd::IngressRouteRoutes, Context, Error, Result};
+use crate::{
+    apis::coredb_types::CoreDB, ingress_route_crd::IngressRouteRoutes, Context, Error, Result,
+};
 use k8s_openapi::{
     api::{
         apps::v1::{Deployment, DeploymentSpec},
         core::v1::{
             Capabilities, Container, ContainerPort, EnvVar, EnvVarSource, HTTPGetAction, PodSpec,
-            PodTemplateSpec, Probe, SecretKeySelector, SecurityContext, Service, ServicePort, ServiceSpec,
+            PodTemplateSpec, Probe, SecretKeySelector, SecurityContext, Service, ServicePort,
+            ServiceSpec,
         },
     },
     apimachinery::pkg::{
@@ -352,7 +355,10 @@ async fn get_appservice_deployments(
     namespace: &str,
     coredb_name: &str,
 ) -> Result<Vec<String>, Error> {
-    let label_selector = format!("component={},coredb.io/name={}", COMPONENT_NAME, coredb_name);
+    let label_selector = format!(
+        "component={},coredb.io/name={}",
+        COMPONENT_NAME, coredb_name
+    );
     let deployent_api: Api<Deployment> = Api::namespaced(client.clone(), namespace);
     let lp = ListParams::default().labels(&label_selector).timeout(10);
     let deployments = deployent_api.list(&lp).await.map_err(Error::KubeError)?;
@@ -370,7 +376,10 @@ async fn get_appservice_services(
     namespace: &str,
     coredb_name: &str,
 ) -> Result<Vec<String>, Error> {
-    let label_selector = format!("component={},coredb.io/name={}", COMPONENT_NAME, coredb_name);
+    let label_selector = format!(
+        "component={},coredb.io/name={}",
+        COMPONENT_NAME, coredb_name
+    );
     let deployent_api: Api<Service> = Api::namespaced(client.clone(), namespace);
     let lp = ListParams::default().labels(&label_selector).timeout(10);
     let services = deployent_api.list(&lp).await.map_err(Error::KubeError)?;
@@ -516,7 +525,10 @@ pub async fn reconcile_app_services(cdb: &CoreDB, ctx: Arc<Context>) -> Result<(
                 }
                 Err(e) => {
                     has_errors = true;
-                    error!("ns: {}, Failed to delete AppService: {}, error: {}", ns, d, e);
+                    error!(
+                        "ns: {}, Failed to delete AppService: {}, error: {}",
+                        ns, d, e
+                    );
                 }
             }
         }
@@ -531,7 +543,10 @@ pub async fn reconcile_app_services(cdb: &CoreDB, ctx: Arc<Context>) -> Result<(
                 }
                 Err(e) => {
                     has_errors = true;
-                    error!("ns: {}, Failed to delete AppService: {}, error: {}", ns, d, e);
+                    error!(
+                        "ns: {}, Failed to delete AppService: {}, error: {}",
+                        ns, d, e
+                    );
                 }
             }
         }

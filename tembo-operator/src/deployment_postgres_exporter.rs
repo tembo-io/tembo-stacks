@@ -9,8 +9,9 @@ use k8s_openapi::{
     api::{
         apps::v1::{Deployment, DeploymentSpec},
         core::v1::{
-            ConfigMapVolumeSource, Container, ContainerPort, EnvVar, EnvVarSource, HTTPGetAction, PodSpec,
-            PodTemplateSpec, Probe, SecretKeySelector, SecurityContext, Volume, VolumeMount,
+            ConfigMapVolumeSource, Container, ContainerPort, EnvVar, EnvVarSource, HTTPGetAction,
+            PodSpec, PodTemplateSpec, Probe, SecretKeySelector, SecurityContext, Volume,
+            VolumeMount,
         },
         rbac::v1::PolicyRule,
     },
@@ -26,9 +27,16 @@ use tracing::instrument;
 const PROM_CFG_DIR: &str = "/prometheus";
 
 #[instrument(skip(cdb, ctx), fields(instance_name = %cdb.name_any()))]
-pub async fn reconcile_prometheus_exporter_deployment(cdb: &CoreDB, ctx: Arc<Context>) -> Result<(), Error> {
+pub async fn reconcile_prometheus_exporter_deployment(
+    cdb: &CoreDB,
+    ctx: Arc<Context>,
+) -> Result<(), Error> {
     let client = ctx.client.clone();
-    let coredb_name = cdb.metadata.name.clone().expect("should always have a name");
+    let coredb_name = cdb
+        .metadata
+        .name
+        .clone()
+        .expect("should always have a name");
     let ns = cdb.namespace().unwrap();
     let name = format!("{}-metrics", cdb.name_any());
     let mut labels: BTreeMap<String, String> = BTreeMap::new();
@@ -41,7 +49,11 @@ pub async fn reconcile_prometheus_exporter_deployment(cdb: &CoreDB, ctx: Arc<Con
     // Format the postgres-exporter connection URI
     // Check if cnpg is enabled, if so then set the URI to the cnpg service
     // Otherwise, use the old coredb service
-    let psql_uri: String = format!("{}-rw.{}.svc.cluster.local:5432/postgres", cdb.name_any(), ns);
+    let psql_uri: String = format!(
+        "{}-rw.{}.svc.cluster.local:5432/postgres",
+        cdb.name_any(),
+        ns
+    );
 
     // reconcile rbac(service account, role, role binding) for the postgres-exporter
     let rbac = reconcile_rbac(
@@ -146,7 +158,11 @@ pub async fn reconcile_prometheus_exporter_deployment(cdb: &CoreDB, ctx: Arc<Con
         if metrics.queries.is_some() {
             vec![Volume {
                 config_map: Some(ConfigMapVolumeSource {
-                    name: Some(format!("{}{}", EXPORTER_CONFIGMAP_PREFIX.to_owned(), coredb_name)),
+                    name: Some(format!(
+                        "{}{}",
+                        EXPORTER_CONFIGMAP_PREFIX.to_owned(),
+                        coredb_name
+                    )),
                     ..ConfigMapVolumeSource::default()
                 }),
                 name: EXPORTER_VOLUME.to_owned(),

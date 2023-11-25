@@ -1,11 +1,12 @@
 use crate::{
     ingress_route_crd::{
         IngressRoute, IngressRouteRoutes, IngressRouteRoutesKind, IngressRouteRoutesMiddlewares,
-        IngressRouteRoutesServices, IngressRouteRoutesServicesKind, IngressRouteSpec, IngressRouteTls,
+        IngressRouteRoutesServices, IngressRouteRoutesServicesKind, IngressRouteSpec,
+        IngressRouteTls,
     },
     traefik::middlewares_crd::{
-        Middleware as TraefikMiddleware, MiddlewareHeaders, MiddlewareReplacePathRegex, MiddlewareSpec,
-        MiddlewareStripPrefix,
+        Middleware as TraefikMiddleware, MiddlewareHeaders, MiddlewareReplacePathRegex,
+        MiddlewareSpec, MiddlewareStripPrefix,
     },
     Result,
 };
@@ -220,7 +221,8 @@ pub async fn reconcile_ingress(
     let ingress_api: Api<IngressRoute> = Api::namespaced(client.clone(), ns);
 
     let middleware_api: Api<TraefikMiddleware> = Api::namespaced(client.clone(), ns);
-    let desired_middlewares = generate_middlewares(coredb_name, ns, oref.clone(), desired_middlewares);
+    let desired_middlewares =
+        generate_middlewares(coredb_name, ns, oref.clone(), desired_middlewares);
     let actual_mw_names = get_middlewares(client.clone(), ns, coredb_name).await?;
     let desired_mw_names = desired_middlewares
         .iter()
@@ -233,7 +235,10 @@ pub async fn reconcile_ingress(
                     debug!("ns: {}, successfully deleted Middleware: {}", ns, d);
                 }
                 Err(e) => {
-                    error!("ns: {}, Failed to delete Middleware: {}, error: {}", ns, d, e);
+                    error!(
+                        "ns: {}, Failed to delete Middleware: {}, error: {}",
+                        ns, d, e
+                    );
                 }
             }
         }
@@ -241,7 +246,10 @@ pub async fn reconcile_ingress(
     for desired_mw in desired_middlewares {
         match apply_middleware(middleware_api.clone(), &desired_mw.name, &desired_mw.mw).await {
             Ok(_) => {
-                debug!("ns: {}, successfully applied Middleware: {}", ns, desired_mw.name);
+                debug!(
+                    "ns: {}, successfully applied Middleware: {}",
+                    ns, desired_mw.name
+                );
             }
             Err(e) => {
                 error!(
@@ -295,7 +303,9 @@ async fn apply_middleware(
     mw: &TraefikMiddleware,
 ) -> Result<TraefikMiddleware, kube::Error> {
     let patch_parameters = PatchParams::apply("cntrlr").force();
-    mw_api.patch(mw_name, &patch_parameters, &Patch::Apply(&mw)).await
+    mw_api
+        .patch(mw_name, &patch_parameters, &Patch::Apply(&mw))
+        .await
 }
 
 async fn apply_ingress_route(
@@ -305,7 +315,11 @@ async fn apply_ingress_route(
 ) -> Result<IngressRoute, kube::Error> {
     let patch_parameters = PatchParams::apply("cntrlr").force();
     ingress_api
-        .patch(ingress_name, &patch_parameters, &Patch::Apply(&ingress_route))
+        .patch(
+            ingress_name,
+            &patch_parameters,
+            &Patch::Apply(&ingress_route),
+        )
         .await
 }
 
@@ -314,7 +328,10 @@ async fn get_middlewares(
     namespace: &str,
     coredb_name: &str,
 ) -> Result<Vec<String>, kube::Error> {
-    let label_selector = format!("component={},coredb.io/name={}", COMPONENT_NAME, coredb_name);
+    let label_selector = format!(
+        "component={},coredb.io/name={}",
+        COMPONENT_NAME, coredb_name
+    );
     let deployent_api: Api<TraefikMiddleware> = Api::namespaced(client, namespace);
     let lp = ListParams::default().labels(&label_selector).timeout(10);
     let deployments = deployent_api.list(&lp).await?;
