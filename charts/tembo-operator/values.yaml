@@ -115,6 +115,12 @@ pod-init:
 
   extraEnv: []
 
+  # -- Namespace Selector Label confguration
+  namespaceSelector:
+    # -- Labels to match namespaces for the Mutating Webhook configuation
+    matchLabels:
+      tembo-pod-init.tembo.io/watch: "true"
+
   # -- Annotations to be added to the deployment
   annotations: {}
 

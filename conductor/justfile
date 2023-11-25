@@ -34,7 +34,7 @@ install-tempo:
 
 enable-cnpg-default-namespace:
 	kubectl label namespace default "tembo-pod-init.tembo.io/watch"="true"
-	kubectl delete pods -n tembo-system 
+	kubectl delete pods -n tembo-system -l app=tembo-pod-init
 
 update-helm-repos:
 	helm repo add cnpg https://cloudnative-pg.github.io/charts

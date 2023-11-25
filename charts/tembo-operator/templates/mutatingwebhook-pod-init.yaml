@@ -26,7 +26,7 @@ webhooks:
     admissionReviewVersions: ["v1"]
     namespaceSelector:
       matchLabels:
-        pod-init.tembo.io/watch: "true"
+        {{- toYaml (index (index .Values "pod-init") "namespaceSelector" "matchLabels") | nindent 8 }}
   - name: {{ printf "%s.%s.svc.cluster.local" $fullname $namespace }}
     clientConfig:
       service:
@@ -42,4 +42,4 @@ webhooks:
     admissionReviewVersions: ["v1"]
     namespaceSelector:
       matchLabels:
-        pod-init.tembo.io/watch: "true"
+        {{- toYaml (index (index .Values "pod-init") "namespaceSelector" "matchLabels") | nindent 8 }}
