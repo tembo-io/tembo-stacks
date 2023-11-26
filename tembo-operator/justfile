@@ -86,7 +86,7 @@ update-helm-repos:
 
 # generate and install crd into the cluster
 install-crd: generate-crd
-  helm template -s templates/crd.yaml ../charts/tembo-operator|kubectl apply -f -
+	helm template -s templates/crd.yaml ../charts/tembo-operator|kubectl apply -f -
 
 # delete kind
 delete-kind:
@@ -122,9 +122,8 @@ install-dependencies:
 
 # deploy the controller on a cluster
 install-chart:
-    kubectl create ns coredb-operator || true
-    kubectl delete crd coredbs.coredb.io || true
-    helm upgrade tembo-operator ../charts/tembo-operator --install --namespace=coredb-operator --values=testdata/tembo-operator.yaml
+	kubectl delete crd coredbs.coredb.io || true
+	helm upgrade tembo ../charts/tembo-operator --install --create-namespace --namespace=tembo-system --values=testdata/operator.yaml
 
 # run with opentelemetry
 run-telemetry: run-jaeger
@@ -132,7 +131,7 @@ run-telemetry: run-jaeger
 
 # run without opentelemetry
 run:
-  USE_SHARED_CA=1 DATA_PLANE_BASEDOMAIN=localhost ENABLE_BACKUP=false RUST_LOG=info,kube=info,controller=info cargo run
+	USE_SHARED_CA=1 DATA_PLANE_BASEDOMAIN=localhost ENABLE_BACKUP=false RUST_LOG=info,kube=info,controller=info cargo run
 
 run-jaeger:
 	docker run --rm -d --name jaeger -e COLLECTOR_OTLP_ENABLED=true -p 16686:16686 -p 4317:4317 -p 4318:4318 jaegertracing/all-in-one:latest
@@ -161,7 +160,7 @@ watch-telemetry:
 
 # format with nightly rustfmt
 fmt:
-  cargo +nightly fmt
+	cargo +nightly fmt
 
 # compile for musl (for docker image)
 compile features="":
@@ -176,13 +175,13 @@ compile features="":
 
 # docker build (requires compile step first)
 build:
-  docker build -t {{ORG}}/{{NAME}}:{{VERSION}} .
+	docker build -t {{ORG}}/{{NAME}}:{{VERSION}} .
 
 # retag the current git versioned docker tag as latest, and publish both
 tag-latest:
-  docker tag {{ORG}}/{{NAME}}:{{VERSION}} {{ORG}}/{{NAME}}:latest
-  docker push {{ORG}}/{{NAME}}:{{VERSION}}
-  docker push {{ORG}}/{{NAME}}:latest
+	docker tag {{ORG}}/{{NAME}}:{{VERSION}} {{ORG}}/{{NAME}}:latest
+	docker push {{ORG}}/{{NAME}}:{{VERSION}}
+	docker push {{ORG}}/{{NAME}}:latest
 
 # retag the current git versioned docker tag as the current semver and publish
 tag-semver:
