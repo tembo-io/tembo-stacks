@@ -1,15 +1,7 @@
 {{- if (index .Values "pod-init").enabled }}
+{{- if (index .Values "pod-init").rbac.create }}
 {{- $namespace := include "component.namespace" (list (list "pod-init" .Values .)) -}}
 {{- $fullname := include "pod-init.fullname" . -}}
-apiVersion: v1
-kind: ServiceAccount
-automountServiceAccountToken: true
-metadata:
-  name: {{ $fullname }}
-  namespace: {{ $namespace }}
-  labels:
-{{ include "pod-init-helm.labels" . | indent 4 }}
----
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRoleBinding
 metadata:
@@ -38,4 +30,5 @@ rules:
 - apiGroups: ["postgresql.cnpg.io"]
   resources: ["backups", "clusters", "poolers", "scheduledbackups"]
   verbs: ["get", "list", "watch"]
+{{- end }}
 {{- end }}

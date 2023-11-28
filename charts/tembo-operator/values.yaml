@@ -25,6 +25,10 @@ controller:
   # -- The number of replicas to set for the tembo-controller
   replicas: 1
 
+  rbac:
+    # -- Specifies whether ClusterRole and ClusterRoleBinding should be created.
+    create: true
+
   # -- The default image for the controller
   image:
     repository: quay.io/tembo/tembo-operator
@@ -107,6 +111,10 @@ pod-init:
 
   # -- The number of replicas to set for the tembo-controller
   replicas: 1
+
+  rbac:
+    # -- Specifies whether ClusterRole and ClusterRoleBinding should be created.
+    create: true
 
   # -- The default image for the pod-init deployment
   image:
