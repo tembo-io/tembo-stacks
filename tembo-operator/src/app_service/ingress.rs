@@ -58,6 +58,22 @@ fn generate_ingress(
             routes,
             tls: Some(IngressRouteTls::default()),
         },
+    };
+
+    IngressRouteTCP {
+        metadata: ObjectMeta {
+            // using coredb name, since we'll have 1x ingress per coredb
+            name: Some(coredb_name.to_owned()),
+            namespace: Some(namespace.to_owned()),
+            owner_references: Some(vec![oref]),
+            labels: Some(labels.clone()),
+            ..ObjectMeta::default()
+        },
+        spec: IngressRouteTCPSpec {
+            entry_points: routes.entry_points,
+            routes,
+            tls: Some(IngressRouteTCPTls { routes.passthrough }),
+        },
     }
 }
 
