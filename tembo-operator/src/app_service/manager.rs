@@ -34,6 +34,7 @@ struct AppServiceResources {
     name: String,
     service: Option<Service>,
     ingress_routes: Option<Vec<IngressRouteRoutes>>,
+    entry_points: Option<Vec<String>>,
 }
 
 // generates Kubernetes Deployment and Service templates for a AppService
@@ -58,11 +59,20 @@ fn generate_resource(
     );
     let ingress_routes =
         generate_ingress_routes(appsvc, &resource_name, namespace, host_matcher, coredb_name);
+    // fetch entry points from routing
+    let entry_points: Option<Vec<String>> = appsvc.routing.as_ref().map(|routes| {
+        routes
+            .iter()
+            .filter_map(|route| route.entry_points.clone())
+            .flatten()
+            .collect()
+    });
     AppServiceResources {
         deployment,
         name: resource_name,
         service,
         ingress_routes,
+        entry_points,
     }
 }
 
@@ -570,6 +580,12 @@ pub async fn reconcile_app_services(cdb: &CoreDB, ctx: Arc<Context>) -> Result<(
         .flatten()
         .collect::<Vec<Middleware>>();
 
+    let desired_entry_points = resources
+        .iter()
+        .filter_map(|r| r.entry_points.clone())
+        .flatten()
+        .collect::<Vec<String>>();
+
     match reconcile_ingress(
         client.clone(),
         &coredb_name,
@@ -577,6 +593,7 @@ pub async fn reconcile_app_services(cdb: &CoreDB, ctx: Arc<Context>) -> Result<(
         oref.clone(),
         desired_routes,
         desired_middlewares,
+        desired_entry_points,
     )
     .await
     {

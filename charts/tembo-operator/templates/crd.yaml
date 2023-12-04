@@ -179,6 +179,11 @@ spec:
                     routing:
                       items:
                         properties:
+                          entryPoints:
+                            items:
+                              type: string
+                            nullable: true
+                            type: array
                           ingressPath:
                             nullable: true
                             type: string

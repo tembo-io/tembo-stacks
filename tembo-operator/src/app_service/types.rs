@@ -76,6 +76,8 @@ pub struct Routing {
     pub ingress_path: Option<String>,
     // provide name of the middleware resources to apply to this route
     pub middlewares: Option<Vec<String>>,
+    #[serde(rename = "entryPoints")]
+    pub entry_points: Option<Vec<String>>,
 }
 
 #[allow(non_snake_case)]
@@ -109,6 +111,7 @@ pub enum Middleware {
     #[serde(rename = "replacePathRegex")]
     ReplacePathRegex(ReplacePathRegexConfig),
 }
+
 
 #[derive(Clone, Debug, Serialize, Deserialize, ToSchema, JsonSchema, PartialEq)]
 pub struct HeaderConfig {

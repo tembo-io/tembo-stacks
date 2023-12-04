@@ -13,6 +13,8 @@ spec:
       routing:
         - port: 27018
           ingressPath: /ferretdb/v1
+          entryPoints:
+            - ferretdb
       env:
         - name: FERRETDB_POSTGRESQL_URL
           valueFromPlatform: ReadWriteConnection

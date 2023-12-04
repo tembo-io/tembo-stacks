@@ -71,6 +71,7 @@ fn generate_ingress_tcp(
     namespace: &str,
     oref: OwnerReference,
     routes: Vec<IngressRouteRoutes>,
+    entry_points: Vec<String>,
 ) -> IngressRouteTCP {
     let mut selector_labels: BTreeMap<String, String> = BTreeMap::new();
 
@@ -93,7 +94,7 @@ fn generate_ingress_tcp(
             ..ObjectMeta::default()
         },
         spec: IngressRouteTCPSpec {
-            entry_points: Some(vec!["ferretdb".to_string()]),
+            entry_points: Some(entry_points),
             routes,
             tls: Some(IngressRouteTCPTls {
                 passthrough: Some(true),
@@ -302,6 +303,7 @@ pub async fn reconcile_ingress(
     oref: OwnerReference,
     desired_routes: Vec<IngressRouteRoutes>,
     desired_middlewares: Vec<Middleware>,
+    desired_entry_points: Vec<String>,
 ) -> Result<(), kube::Error> {
     let ingress_api: Api<IngressRoute> = Api::namespaced(client.clone(), ns);
     let ingress_tcp_api: Api<IngressRouteTCP> = Api::namespaced(client.clone(), ns);
@@ -339,7 +341,24 @@ pub async fn reconcile_ingress(
         }
     }
 
-    let ingress = generate_ingress(coredb_name, ns, oref, desired_routes.clone());
+    // example logic to see if ferretdb is enabled or disabled
+
+    if desired_entry_points.contains(&"ferretdb".to_string()) {
+        println!("FERRETDB ENABLED!!!");
+    } else {
+        println!("FERRETDB DISABLED!!!");
+        println!("DESIRED ENTRY POINTS: {:?}", desired_entry_points);
+    }
+
+    // if desired_entry_points.contains(&"ferretdb".to_string()) and does not contain websecure,
+    // then we want to create an IngressRouteTCP with apply_ingress_route_tcp
+    let ingress = generate_ingress(
+        coredb_name,
+        ns,
+        oref,
+        desired_routes.clone(),
+        // desired_entry_points.clone(), we'll need this for when we call generate_ingress_tcp
+    );
     if desired_routes.is_empty() {
         // we don't need an IngressRoute when there are no routes
         match ingress_api.get_opt(coredb_name).await {
@@ -361,6 +380,8 @@ pub async fn reconcile_ingress(
             }
         }
     }
+    // if desired_entry_points.contains(&"ferretdb".to_string()) and does not contain websecure,
+    // then we want to create an IngressRouteTCP with apply_ingress_route_tcp
     match apply_ingress_route(ingress_api, coredb_name, &ingress).await {
         Ok(_) => {
             debug!("Updated/applied ingress for {}.{}", ns, coredb_name,);
