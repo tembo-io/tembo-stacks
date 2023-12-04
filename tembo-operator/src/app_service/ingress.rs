@@ -24,6 +24,10 @@ use super::{
     types::{AppService, Middleware, COMPONENT_NAME},
 };
 
+use crate::traefik::ingress_route_tcp_crd::{
+    IngressRouteTCP, IngressRouteTCPRoutes, IngressRouteTCPSpec, IngressRouteTCPTls,
+};
+
 #[derive(Clone, Debug)]
 pub struct MiddleWareWrapper {
     pub name: String,
@@ -58,7 +62,22 @@ fn generate_ingress(
             routes,
             tls: Some(IngressRouteTls::default()),
         },
-    };
+    }
+}
+
+fn generate_ingress_tcp(
+    coredb_name: &str,
+    namespace: &str,
+    oref: OwnerReference,
+    routes: Vec<IngressRouteTCPRoutes>,
+) -> IngressRouteTCP {
+    let mut selector_labels: BTreeMap<String, String> = BTreeMap::new();
+
+    selector_labels.insert("component".to_owned(), COMPONENT_NAME.to_string());
+    selector_labels.insert("coredb.io/name".to_owned(), coredb_name.to_string());
+
+    let mut labels = selector_labels.clone();
+    labels.insert("component".to_owned(), COMPONENT_NAME.to_owned());
 
     IngressRouteTCP {
         metadata: ObjectMeta {
@@ -70,9 +89,12 @@ fn generate_ingress(
             ..ObjectMeta::default()
         },
         spec: IngressRouteTCPSpec {
-            entry_points: routes.entry_points,
+            entry_points: Some(vec!["ferretdb".to_string()]),
             routes,
-            tls: Some(IngressRouteTCPTls { routes.passthrough }),
+            tls: Some(IngressRouteTCPTls {
+                passthrough: Some(true),
+                ..IngressRouteTCPTls::default()
+            }),
         },
     }
 }

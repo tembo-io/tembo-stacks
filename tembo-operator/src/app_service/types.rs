@@ -76,8 +76,6 @@ pub struct Routing {
     pub ingress_path: Option<String>,
     // provide name of the middleware resources to apply to this route
     pub middlewares: Option<Vec<String>>,
-    pub entry_points: Option<Vec<String>>,
-    pub passthrough: Option<bool>,
 }
 
 #[allow(non_snake_case)]
