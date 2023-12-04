@@ -39,7 +39,7 @@ spec:
                       storage: 1Gi
           - name: ferretdb-certs
             secret:
-              secretName: ferretdb-certs
+              secretName: sample-document-server1
         volumeMounts:
             - name: ferretdb-data
               mountPath: /state
