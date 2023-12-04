@@ -351,7 +351,7 @@ pub async fn reconcile_ingress(
     }
 
     // if desired_entry_points.contains(&"ferretdb".to_string()) and does not contain websecure,
-    // then we want to create an IngressRouteTCP with apply_ingress_route_tcp
+    // then we want to create an IngressRouteTCP with generate_ingress_tcp
     let ingress = generate_ingress(
         coredb_name,
         ns,
