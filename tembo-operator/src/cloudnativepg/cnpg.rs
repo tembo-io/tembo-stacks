@@ -2287,13 +2287,15 @@ mod tests {
     #[test]
     fn test_generate_restore_destination_path() {
         // Define test cases
-        let test_cases = [(
+        let test_cases = [
+            (
                 "s3://cdb-plat-use1-dev-instance-backups/coredb/coredb/org-coredb-inst-test-testing-test-1",
                 "s3://cdb-plat-use1-dev-instance-backups/coredb/coredb",
             ),
             ("s3://path/with/multiple/segments", "s3://path/with/multiple"),
             ("s3://short/path", "s3://short"),
-            ("single_segment", "")];
+            ("single_segment", ""),
+        ];
 
         for (input, expected) in test_cases.iter() {
             assert_eq!(generate_restore_destination_path(input), *expected);
