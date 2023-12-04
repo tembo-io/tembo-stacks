@@ -25,7 +25,8 @@ use super::{
 };
 
 use crate::traefik::ingress_route_tcp_crd::{
-    IngressRouteTCP, IngressRouteTCPRoutes, IngressRouteTCPSpec, IngressRouteTCPTls,
+    IngressRouteTCP, IngressRouteTCPRoutes, IngressRouteTCPRoutesMiddlewares, IngressRouteTCPRoutesServices,
+    IngressRouteTCPSpec, IngressRouteTCPTls,
 };
 
 #[derive(Clone, Debug)]
@@ -69,7 +70,7 @@ fn generate_ingress_tcp(
     coredb_name: &str,
     namespace: &str,
     oref: OwnerReference,
-    routes: Vec<IngressRouteTCPRoutes>,
+    routes: Vec<IngressRouteRoutes>,
 ) -> IngressRouteTCP {
     let mut selector_labels: BTreeMap<String, String> = BTreeMap::new();
 
@@ -78,6 +79,9 @@ fn generate_ingress_tcp(
 
     let mut labels = selector_labels.clone();
     labels.insert("component".to_owned(), COMPONENT_NAME.to_owned());
+
+    // convert IngressRouteRoutes to IngressRouteTCPRoutes
+    let routes = convert_routes_to_tcp(routes);
 
     IngressRouteTCP {
         metadata: ObjectMeta {
@@ -97,6 +101,50 @@ fn generate_ingress_tcp(
             }),
         },
     }
+}
+
+// fn to convert IngressRouteRoutes to IngressRouteTCPRoutes
+fn convert_routes_to_tcp(routes: Vec<IngressRouteRoutes>) -> Vec<IngressRouteTCPRoutes> {
+    let mut tcp_routes: Vec<IngressRouteTCPRoutes> = Vec::new();
+
+    // convert IngressRouteRoutesServices to IngressRouteTCPRoutesServices
+    let mut tcp_services: Vec<IngressRouteTCPRoutesServices> = Vec::new();
+    for svc in routes.clone() {
+        if svc.services.is_none() {
+            continue;
+        }
+        let tcp_svc = IngressRouteTCPRoutesServices {
+            name: svc.services.clone().unwrap()[0].name.clone(),
+            port: svc.services.clone().unwrap()[0].port.clone().unwrap_or_default(),
+            namespace: svc.services.unwrap()[0].namespace.clone(),
+            ..IngressRouteTCPRoutesServices::default()
+        };
+        tcp_services.push(tcp_svc);
+    }
+
+    // convert IngressRouteTCPRoutesMiddlewares to IngressRouteRoutesMiddlewares
+    let mut tcp_middlewares: Vec<IngressRouteTCPRoutesMiddlewares> = Vec::new();
+    for mw in routes.clone() {
+        if mw.middlewares.is_none() {
+            continue;
+        }
+        let tcp_mw = IngressRouteTCPRoutesMiddlewares {
+            name: mw.middlewares.clone().unwrap()[0].name.clone(),
+            namespace: mw.middlewares.clone().unwrap()[0].namespace.clone(),
+        };
+        tcp_middlewares.push(tcp_mw);
+    }
+
+    for route in routes {
+        let tcp_route = IngressRouteTCPRoutes {
+            r#match: route.r#match,
+            services: Some(tcp_services.clone()),
+            priority: route.priority,
+            middlewares: Some(tcp_middlewares.clone()),
+        };
+        tcp_routes.push(tcp_route);
+    }
+    tcp_routes
 }
 
 // creates traefik middleware objects
@@ -256,6 +304,7 @@ pub async fn reconcile_ingress(
     desired_middlewares: Vec<Middleware>,
 ) -> Result<(), kube::Error> {
     let ingress_api: Api<IngressRoute> = Api::namespaced(client.clone(), ns);
+    let ingress_tcp_api: Api<IngressRouteTCP> = Api::namespaced(client.clone(), ns);
 
     let middleware_api: Api<TraefikMiddleware> = Api::namespaced(client.clone(), ns);
     let desired_middlewares = generate_middlewares(coredb_name, ns, oref.clone(), desired_middlewares);
@@ -344,6 +393,17 @@ async fn apply_ingress_route(
     let patch_parameters = PatchParams::apply("cntrlr").force();
     ingress_api
         .patch(ingress_name, &patch_parameters, &Patch::Apply(&ingress_route))
+        .await
+}
+
+async fn apply_ingress_route_tcp(
+    ingress_api: Api<IngressRouteTCP>,
+    ingress_name: &str,
+    ingress_route_tcp: &IngressRouteTCP,
+) -> Result<IngressRouteTCP, kube::Error> {
+    let patch_parameters = PatchParams::apply("cntrlr").force();
+    ingress_api
+        .patch(ingress_name, &patch_parameters, &Patch::Apply(&ingress_route_tcp))
         .await
 }
 
