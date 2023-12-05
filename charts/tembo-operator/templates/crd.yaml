@@ -180,6 +180,8 @@ spec:
                       items:
                         properties:
                           entryPoints:
+                            default:
+                            - websecure
                             items:
                               type: string
                             nullable: true

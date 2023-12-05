@@ -70,7 +70,7 @@ fn generate_ingress_tcp(
     coredb_name: &str,
     namespace: &str,
     oref: OwnerReference,
-    routes: Vec<IngressRouteRoutes>,
+    routes: Vec<IngressRouteTCPRoutes>,
     entry_points: Vec<String>,
 ) -> IngressRouteTCP {
     let mut selector_labels: BTreeMap<String, String> = BTreeMap::new();
@@ -80,9 +80,6 @@ fn generate_ingress_tcp(
 
     let mut labels = selector_labels.clone();
     labels.insert("component".to_owned(), COMPONENT_NAME.to_owned());
-
-    // convert IngressRouteRoutes to IngressRouteTCPRoutes
-    let routes = convert_routes_to_tcp(routes);
 
     IngressRouteTCP {
         metadata: ObjectMeta {
@@ -102,50 +99,6 @@ fn generate_ingress_tcp(
             }),
         },
     }
-}
-
-// fn to convert IngressRouteRoutes to IngressRouteTCPRoutes
-fn convert_routes_to_tcp(routes: Vec<IngressRouteRoutes>) -> Vec<IngressRouteTCPRoutes> {
-    let mut tcp_routes: Vec<IngressRouteTCPRoutes> = Vec::new();
-
-    // convert IngressRouteRoutesServices to IngressRouteTCPRoutesServices
-    let mut tcp_services: Vec<IngressRouteTCPRoutesServices> = Vec::new();
-    for svc in routes.clone() {
-        if svc.services.is_none() {
-            continue;
-        }
-        let tcp_svc = IngressRouteTCPRoutesServices {
-            name: svc.services.clone().unwrap()[0].name.clone(),
-            port: svc.services.clone().unwrap()[0].port.clone().unwrap_or_default(),
-            namespace: svc.services.unwrap()[0].namespace.clone(),
-            ..IngressRouteTCPRoutesServices::default()
-        };
-        tcp_services.push(tcp_svc);
-    }
-
-    // convert IngressRouteTCPRoutesMiddlewares to IngressRouteRoutesMiddlewares
-    let mut tcp_middlewares: Vec<IngressRouteTCPRoutesMiddlewares> = Vec::new();
-    for mw in routes.clone() {
-        if mw.middlewares.is_none() {
-            continue;
-        }
-        let tcp_mw = IngressRouteTCPRoutesMiddlewares {
-            name: mw.middlewares.clone().unwrap()[0].name.clone(),
-            namespace: mw.middlewares.clone().unwrap()[0].namespace.clone(),
-        };
-        tcp_middlewares.push(tcp_mw);
-    }
-
-    for route in routes {
-        let tcp_route = IngressRouteTCPRoutes {
-            r#match: route.r#match,
-            services: Some(tcp_services.clone()),
-            priority: route.priority,
-            middlewares: Some(tcp_middlewares.clone()),
-        };
-        tcp_routes.push(tcp_route);
-    }
-    tcp_routes
 }
 
 // creates traefik middleware objects
@@ -255,6 +208,13 @@ pub fn generate_ingress_routes(
             for route in routings.iter() {
                 match route.ingress_path.clone() {
                     Some(path) => {
+                        if route.entry_points.clone()?.contains(&"ferretdb".to_string()) {
+                            // Do not create IngressRouteRoutes for ferretdb. Needs IngressRouteTCPRoute.
+                            println!("Skipping IngressRouteRoutes for ferretdb");
+                            println!("ENTRY POINTS: {:?}", route.entry_points.clone()?);
+                            println!("ROUTE: {:?}", route);
+                            continue;
+                        }
                         let matcher = format!("{host_matcher} && PathPrefix(`{}`)", path);
                         let middlewares: Option<Vec<IngressRouteRoutesMiddlewares>> =
                             route.middlewares.clone().map(|names| {
@@ -296,6 +256,62 @@ pub fn generate_ingress_routes(
     }
 }
 
+pub fn generate_ingress_tcp_routes(
+    appsvc: &AppService,
+    resource_name: &str,
+    namespace: &str,
+    host_matcher: String,
+    coredb_name: &str,
+) -> Option<Vec<IngressRouteTCPRoutes>> {
+    match appsvc.routing.clone() {
+        Some(routings) => {
+            let mut routes: Vec<IngressRouteTCPRoutes> = Vec::new();
+            for route in routings.iter() {
+                match route.ingress_path.clone() {
+                    Some(path) => {
+                        if !route.entry_points.clone()?.contains(&"ferretdb".to_string()) {
+                            // Do not create IngressRouteTCPRoutes for non-ferretdb routes.
+                            continue;
+                        }
+                        let matcher = format!("{host_matcher} && PathPrefix(`{}`)", path);
+                        let middlewares: Option<Vec<IngressRouteTCPRoutesMiddlewares>> =
+                            route.middlewares.clone().map(|names| {
+                                names
+                                    .into_iter()
+                                    .map(|m| IngressRouteTCPRoutesMiddlewares {
+                                        name: format!("{}-{}", &coredb_name, m),
+                                        namespace: Some(namespace.to_owned()),
+                                    })
+                                    .collect()
+                            });
+                        let route = IngressRouteTCPRoutes {
+                            r#match: matcher.clone(),
+                            services: Some(vec![IngressRouteTCPRoutesServices {
+                                name: resource_name.to_string(),
+                                port: IntOrString::Int(route.port as i32),
+                                // namespace attribute is NOT a kubernetes namespace
+                                // it is the Traefik provider namespace: https://doc.traefik.io/traefik/v3.0/providers/overview/#provider-namespace
+                                // https://doc.traefik.io/traefik/v3.0/routing/providers/kubernetes-crd/#kind-middleware
+                                namespace: None,
+                                ..IngressRouteTCPRoutesServices::default()
+                            }]),
+                            middlewares,
+                            priority: None,
+                        };
+                        routes.push(route);
+                    }
+                    None => {
+                        // do not create ingress when there is no path provided
+                        continue;
+                    }
+                }
+            }
+            Some(routes)
+        }
+        None => None,
+    }
+}
+
 pub async fn reconcile_ingress(
     client: Client,
     coredb_name: &str,
@@ -303,10 +319,8 @@ pub async fn reconcile_ingress(
     oref: OwnerReference,
     desired_routes: Vec<IngressRouteRoutes>,
     desired_middlewares: Vec<Middleware>,
-    desired_entry_points: Vec<String>,
 ) -> Result<(), kube::Error> {
     let ingress_api: Api<IngressRoute> = Api::namespaced(client.clone(), ns);
-    let ingress_tcp_api: Api<IngressRouteTCP> = Api::namespaced(client.clone(), ns);
 
     let middleware_api: Api<TraefikMiddleware> = Api::namespaced(client.clone(), ns);
     let desired_middlewares = generate_middlewares(coredb_name, ns, oref.clone(), desired_middlewares);
@@ -341,74 +355,122 @@ pub async fn reconcile_ingress(
         }
     }
 
-    // if desired_entry_points contains ferretdb and does not contain websecure,
-    // then we want to create an IngressRouteTCP. Otherwise, we want to create an IngressRoute.
-    println!("DESIRED_ENTRY_POINTS: {:?}", desired_entry_points);
 
-    // @evanhstanton here is where we're looking at the collection of desired entry points.
-    // I think we should be looking at a single entry point instead
-    // example when there are two app services defined - one with ferretdb and one with websecure:
-    // DESIRED_ENTRY_POINTS: ["websecure", "ferretdb"]
-    // In this case, the IngressRouteTCP is skipped because the other app contains websecure.
-
-    if desired_entry_points.contains(&"ferretdb".to_string())
-        && !desired_entry_points.contains(&"websecure".to_string())
-    {
-        let ingress_tcp = generate_ingress_tcp(
-            coredb_name,
-            ns,
-            oref.clone(),
-            desired_routes.clone(),
-            desired_entry_points.clone(),
-        );
-        match apply_ingress_route_tcp(ingress_tcp_api, coredb_name, &ingress_tcp).await {
-            Ok(_) => {
-                debug!("Updated/applied IngressRouteTCP for {}.{}", ns, coredb_name,);
-                Ok(())
+    let ingress = generate_ingress(coredb_name, ns, oref, desired_routes.clone());
+    if desired_routes.is_empty() {
+        // we don't need an IngressRoute when there are no routes
+        match ingress_api.get_opt(coredb_name).await {
+            Ok(Some(_)) => {
+                debug!("Deleting IngressRoute {}.{}", ns, coredb_name);
+                ingress_api.delete(coredb_name, &Default::default()).await?;
+                return Ok(());
+            }
+            Ok(None) => {
+                warn!("No IngressRoute {}.{} found to delete", ns, coredb_name);
+                return Ok(());
             }
             Err(e) => {
                 error!(
-                    "Failed to update/apply IngressRouteTCP {}.{}: {}",
+                    "Error retrieving IngressRoute, {}.{}, error: {}",
                     ns, coredb_name, e
                 );
-                Err(e)
+                return Err(e);
             }
         }
-    } else {
-        let ingress = generate_ingress(coredb_name, ns, oref, desired_routes.clone());
-        if desired_routes.is_empty() {
-            // we don't need an IngressRoute when there are no routes
-            match ingress_api.get_opt(coredb_name).await {
-                Ok(Some(_)) => {
-                    debug!("Deleting IngressRoute {}.{}", ns, coredb_name);
-                    ingress_api.delete(coredb_name, &Default::default()).await?;
-                    return Ok(());
-                }
-                Ok(None) => {
-                    warn!("No IngressRoute {}.{} found to delete", ns, coredb_name);
-                    return Ok(());
+    }
+    match apply_ingress_route(ingress_api, coredb_name, &ingress).await {
+        Ok(_) => {
+            debug!("Updated/applied IngressRoute for {}.{}", ns, coredb_name,);
+            Ok(())
+        }
+        Err(e) => {
+            error!(
+                "Failed to update/apply IngressRoute {}.{}: {}",
+                ns, coredb_name, e
+            );
+            Err(e)
+        }
+    }
+}
+
+pub async fn reconcile_ingress_tcp(
+    client: Client,
+    coredb_name: &str,
+    ns: &str,
+    oref: OwnerReference,
+    desired_routes: Vec<IngressRouteTCPRoutes>,
+    desired_middlewares: Vec<Middleware>,
+    entry_points_tcp: Vec<String>,
+) -> Result<(), kube::Error> {
+    let ingress_api: Api<IngressRouteTCP> = Api::namespaced(client.clone(), ns);
+
+    let middleware_api: Api<TraefikMiddleware> = Api::namespaced(client.clone(), ns);
+    let desired_middlewares = generate_middlewares(coredb_name, ns, oref.clone(), desired_middlewares);
+    let actual_mw_names = get_middlewares(client.clone(), ns, coredb_name).await?;
+    let desired_mw_names = desired_middlewares
+        .iter()
+        .map(|mw| mw.name.clone())
+        .collect::<Vec<String>>();
+    if let Some(to_delete) = to_delete(desired_mw_names, actual_mw_names) {
+        for d in to_delete {
+            match middleware_api.delete(&d, &Default::default()).await {
+                Ok(_) => {
+                    debug!("ns: {}, successfully deleted Middleware: {}", ns, d);
                 }
                 Err(e) => {
-                    error!(
-                        "Error retrieving IngressRoute, {}.{}, error: {}",
-                        ns, coredb_name, e
-                    );
-                    return Err(e);
+                    error!("ns: {}, Failed to delete Middleware: {}, error: {}", ns, d, e);
                 }
             }
         }
-        match apply_ingress_route(ingress_api, coredb_name, &ingress).await {
+    }
+    for desired_mw in desired_middlewares {
+        match apply_middleware(middleware_api.clone(), &desired_mw.name, &desired_mw.mw).await {
             Ok(_) => {
-                debug!("Updated/applied ingress for {}.{}", ns, coredb_name,);
-                Ok(())
+                debug!("ns: {}, successfully applied Middleware: {}", ns, desired_mw.name);
             }
             Err(e) => {
                 error!(
-                    "Failed to update/apply IngressRoute {}.{}: {}",
+                    "ns: {}, Failed to apply Middleware: {}, error: {}",
+                    ns, desired_mw.name, e
+                );
+            }
+        }
+    }
+
+
+    let ingress = generate_ingress_tcp(coredb_name, ns, oref, desired_routes.clone(), entry_points_tcp);
+    if desired_routes.is_empty() {
+        // we don't need an IngressRouteTCP when there are no routes
+        match ingress_api.get_opt(coredb_name).await {
+            Ok(Some(_)) => {
+                debug!("Deleting IngressRouteTCP {}.{}", ns, coredb_name);
+                ingress_api.delete(coredb_name, &Default::default()).await?;
+                return Ok(());
+            }
+            Ok(None) => {
+                warn!("No IngressRouteTCP {}.{} found to delete", ns, coredb_name);
+                return Ok(());
+            }
+            Err(e) => {
+                error!(
+                    "Error retrieving IngressRouteTCP, {}.{}, error: {}",
                     ns, coredb_name, e
                 );
-                Err(e)
+                return Err(e);
             }
+        }
+    }
+    match apply_ingress_route_tcp(ingress_api, coredb_name, &ingress).await {
+        Ok(_) => {
+            debug!("Updated/applied IngressRouteTCP for {}.{}", ns, coredb_name,);
+            Ok(())
+        }
+        Err(e) => {
+            error!(
+                "Failed to update/apply IngressRouteTCP {}.{}: {}",
+                ns, coredb_name, e
+            );
+            Err(e)
         }
     }
 }
