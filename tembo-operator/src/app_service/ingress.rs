@@ -343,6 +343,14 @@ pub async fn reconcile_ingress(
 
     // if desired_entry_points contains ferretdb and does not contain websecure,
     // then we want to create an IngressRouteTCP. Otherwise, we want to create an IngressRoute.
+    println!("DESIRED_ENTRY_POINTS: {:?}", desired_entry_points);
+
+    // @evanhstanton here is where we're looking at the collection of desired entry points.
+    // I think we should be looking at a single entry point instead
+    // example when there are two app services defined - one with ferretdb and one with websecure:
+    // DESIRED_ENTRY_POINTS: ["websecure", "ferretdb"]
+    // In this case, the IngressRouteTCP is skipped because the other app contains websecure.
+
     if desired_entry_points.contains(&"ferretdb".to_string())
         && !desired_entry_points.contains(&"websecure".to_string())
     {
@@ -353,27 +361,6 @@ pub async fn reconcile_ingress(
             desired_routes.clone(),
             desired_entry_points.clone(),
         );
-        if desired_routes.is_empty() {
-            // we don't need an IngressRouteTCP when there are no routes
-            match ingress_tcp_api.get_opt(coredb_name).await {
-                Ok(Some(_)) => {
-                    debug!("Deleting IngressRouteTCP {}.{}", ns, coredb_name);
-                    ingress_tcp_api.delete(coredb_name, &Default::default()).await?;
-                    return Ok(());
-                }
-                Ok(None) => {
-                    warn!("No IngressRouteTCP {}.{} found to delete", ns, coredb_name);
-                    return Ok(());
-                }
-                Err(e) => {
-                    error!(
-                        "Error retrieving IngressRouteTCP, {}.{}, error: {}",
-                        ns, coredb_name, e
-                    );
-                    return Err(e);
-                }
-            }
-        }
         match apply_ingress_route_tcp(ingress_tcp_api, coredb_name, &ingress_tcp).await {
             Ok(_) => {
                 debug!("Updated/applied IngressRouteTCP for {}.{}", ns, coredb_name,);

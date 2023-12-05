@@ -112,7 +112,6 @@ pub enum Middleware {
     ReplacePathRegex(ReplacePathRegexConfig),
 }
 
-
 #[derive(Clone, Debug, Serialize, Deserialize, ToSchema, JsonSchema, PartialEq)]
 pub struct HeaderConfig {
     pub name: String,
