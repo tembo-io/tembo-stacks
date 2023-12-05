@@ -352,49 +352,97 @@ pub async fn reconcile_ingress(
 
     // if desired_entry_points.contains(&"ferretdb".to_string()) and does not contain websecure,
     // then we want to create an IngressRouteTCP with generate_ingress_tcp
-    let ingress = generate_ingress(
-        coredb_name,
-        ns,
-        oref,
-        desired_routes.clone(),
-        // desired_entry_points.clone(), we'll need this for when we call generate_ingress_tcp
-    );
-    if desired_routes.is_empty() {
-        // we don't need an IngressRoute when there are no routes
-        match ingress_api.get_opt(coredb_name).await {
-            Ok(Some(_)) => {
-                debug!("Deleting IngressRoute {}.{}", ns, coredb_name);
-                ingress_api.delete(coredb_name, &Default::default()).await?;
-                return Ok(());
+    //
+    if desired_entry_points.contains(&"ferretdb".to_string())
+        && !desired_entry_points.contains(&"websecure".to_string())
+    {
+        let ingress_tcp = generate_ingress_tcp(
+            coredb_name,
+            ns,
+            oref.clone(),
+            desired_routes.clone(),
+            desired_entry_points.clone(),
+        );
+        if desired_routes.is_empty() {
+            // we don't need an IngressRouteTCP when there are no routes
+            match ingress_tcp_api.get_opt(coredb_name).await {
+                Ok(Some(_)) => {
+                    debug!("Deleting IngressRouteTCP {}.{}", ns, coredb_name);
+                    ingress_tcp_api.delete(coredb_name, &Default::default()).await?;
+                    return Ok(());
+                }
+                Ok(None) => {
+                    warn!("No IngressRouteTCP {}.{} found to delete", ns, coredb_name);
+                    return Ok(());
+                }
+                Err(e) => {
+                    error!(
+                        "Error retrieving IngressRouteTCP, {}.{}, error: {}",
+                        ns, coredb_name, e
+                    );
+                    return Err(e);
+                }
             }
-            Ok(None) => {
-                warn!("No IngressRoute {}.{} found to delete", ns, coredb_name);
-                return Ok(());
+        }
+        match apply_ingress_route_tcp(ingress_tcp_api, coredb_name, &ingress_tcp).await {
+            Ok(_) => {
+                debug!("Updated/applied IngressRouteTCP for {}.{}", ns, coredb_name,);
+                Ok(())
             }
             Err(e) => {
                 error!(
-                    "Error retrieving IngressRoute, {}.{}, error: {}",
+                    "Failed to update/apply IngressRouteTCP {}.{}: {}",
                     ns, coredb_name, e
                 );
-                return Err(e);
+                Err(e)
+            }
+        }
+    } else {
+        let ingress = generate_ingress(
+            coredb_name,
+            ns,
+            oref,
+            desired_routes.clone(),
+            // desired_entry_points.clone(), we'll need this for when we call generate_ingress_tcp
+        );
+        if desired_routes.is_empty() {
+            // we don't need an IngressRoute when there are no routes
+            match ingress_api.get_opt(coredb_name).await {
+                Ok(Some(_)) => {
+                    debug!("Deleting IngressRoute {}.{}", ns, coredb_name);
+                    ingress_api.delete(coredb_name, &Default::default()).await?;
+                    return Ok(());
+                }
+                Ok(None) => {
+                    warn!("No IngressRoute {}.{} found to delete", ns, coredb_name);
+                    return Ok(());
+                }
+                Err(e) => {
+                    error!(
+                        "Error retrieving IngressRoute, {}.{}, error: {}",
+                        ns, coredb_name, e
+                    );
+                    return Err(e);
+                }
+            }
+        }
+        match apply_ingress_route(ingress_api, coredb_name, &ingress).await {
+            Ok(_) => {
+                debug!("Updated/applied ingress for {}.{}", ns, coredb_name,);
+                Ok(())
+            }
+            Err(e) => {
+                error!(
+                    "Failed to update/apply IngressRoute {}.{}: {}",
+                    ns, coredb_name, e
+                );
+                Err(e)
             }
         }
     }
+
     // if desired_entry_points.contains(&"ferretdb".to_string()) and does not contain websecure,
     // then we want to create an IngressRouteTCP with apply_ingress_route_tcp
-    match apply_ingress_route(ingress_api, coredb_name, &ingress).await {
-        Ok(_) => {
-            debug!("Updated/applied ingress for {}.{}", ns, coredb_name,);
-            Ok(())
-        }
-        Err(e) => {
-            error!(
-                "Failed to update/apply IngressRoute {}.{}: {}",
-                ns, coredb_name, e
-            );
-            Err(e)
-        }
-    }
 }
 
 async fn apply_middleware(
