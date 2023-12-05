@@ -341,18 +341,8 @@ pub async fn reconcile_ingress(
         }
     }
 
-    // example logic to see if ferretdb is enabled or disabled
-
-    if desired_entry_points.contains(&"ferretdb".to_string()) {
-        println!("FERRETDB ENABLED!!!");
-    } else {
-        println!("FERRETDB DISABLED!!!");
-        println!("DESIRED ENTRY POINTS: {:?}", desired_entry_points);
-    }
-
-    // if desired_entry_points.contains(&"ferretdb".to_string()) and does not contain websecure,
-    // then we want to create an IngressRouteTCP with generate_ingress_tcp
-    //
+    // if desired_entry_points contains ferretdb and does not contain websecure,
+    // then we want to create an IngressRouteTCP. Otherwise, we want to create an IngressRoute.
     if desired_entry_points.contains(&"ferretdb".to_string())
         && !desired_entry_points.contains(&"websecure".to_string())
     {
@@ -403,7 +393,6 @@ pub async fn reconcile_ingress(
             ns,
             oref,
             desired_routes.clone(),
-            // desired_entry_points.clone(), we'll need this for when we call generate_ingress_tcp
         );
         if desired_routes.is_empty() {
             // we don't need an IngressRoute when there are no routes
@@ -440,9 +429,6 @@ pub async fn reconcile_ingress(
             }
         }
     }
-
-    // if desired_entry_points.contains(&"ferretdb".to_string()) and does not contain websecure,
-    // then we want to create an IngressRouteTCP with apply_ingress_route_tcp
 }
 
 async fn apply_middleware(
