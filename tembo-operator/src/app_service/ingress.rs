@@ -388,12 +388,7 @@ pub async fn reconcile_ingress(
             }
         }
     } else {
-        let ingress = generate_ingress(
-            coredb_name,
-            ns,
-            oref,
-            desired_routes.clone(),
-        );
+        let ingress = generate_ingress(coredb_name, ns, oref, desired_routes.clone());
         if desired_routes.is_empty() {
             // we don't need an IngressRoute when there are no routes
             match ingress_api.get_opt(coredb_name).await {
