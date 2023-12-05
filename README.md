@@ -1,3 +1,3 @@
 # Repository moved
 
-Please find the latest in the [Tembo](https://github.com/tembo-io/tembo-stacks/) repository
+Please find the latest in the [Tembo](https://github.com/tembo-io/tembo/) repository
